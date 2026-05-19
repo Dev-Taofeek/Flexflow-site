@@ -1,15 +1,3 @@
 {
-    "framework": "nextjs",
-    "buildCommand": "pnpm --filter web build",
-    "installCommand": "pnpm install --no-frozen-lockfile",
-    "outputDirectory": "apps/web/.next",
-    "headers": [
-        {
-            "source": "/api/(.*)",
-            "headers": [
-                { "key": "X-Content-Type-Options", "value": "nosniff" },
-                { "key": "X-Frame-Options", "value": "DENY" }
-            ]
-        }
-    ]
+    "framework": "nextjs"
 }
