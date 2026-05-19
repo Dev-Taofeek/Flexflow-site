@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm install -g pnpm", "pnpm install --no-frozen-lockfile"]
+cmds = ["corepack enable pnpm", "pnpm install --no-frozen-lockfile"]
 
 [phases.build]
 cmds = ["pnpm prisma generate"]
