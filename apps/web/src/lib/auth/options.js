@@ -1,4 +1,3 @@
-import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 
@@ -6,7 +5,7 @@ import { loginSchema } from "@/lib/auth/schemas";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
-async function loginWithCredentials(credentials) {
+async function authorize(credentials) {
     const parsed = loginSchema.safeParse(credentials);
     if (!parsed.success) return null;
 
@@ -18,12 +17,10 @@ async function loginWithCredentials(credentials) {
         });
 
         if (!res.ok) return null;
-
         const json = await res.json();
         if (!json.success || !json.data) return null;
 
         const { user, accessToken, refreshToken, organizations } = json.data;
-
         return {
             id: user.id,
             name: user.name,
@@ -39,7 +36,7 @@ async function loginWithCredentials(credentials) {
     }
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const authOptions = {
     session: { strategy: "jwt" },
     pages: { signIn: "/login" },
     providers: [
@@ -53,7 +50,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 email: { label: "Email", type: "email" },
                 password: { label: "Password", type: "password" },
             },
-            authorize: loginWithCredentials,
+            authorize,
         }),
     ],
     callbacks: {
@@ -78,4 +75,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return session;
         },
     },
-});
+};
