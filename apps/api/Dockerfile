@@ -1,33 +1,23 @@
-FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+FROM node:20-alpine
 WORKDIR /app
 
-# Install dependencies
-FROM base AS deps
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile --prod
+# Install pnpm globally
+RUN npm install -g pnpm@9
 
-# Generate Prisma client
-FROM base AS prisma
-COPY package.json pnpm-lock.yaml* ./
+# Copy package manifest and install all dependencies
+# No lockfile here (monorepo lockfile lives at repo root), so skip frozen check
+COPY package.json ./
+RUN pnpm install --no-frozen-lockfile
+
+# Copy Prisma schema and generate the client
 COPY prisma ./prisma
-RUN pnpm install --frozen-lockfile
 RUN pnpm prisma generate
 
-# Final image
-FROM node:20-alpine AS runner
-RUN corepack enable && corepack prepare pnpm@latest --activate
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=prisma /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=prisma /app/node_modules/@prisma ./node_modules/@prisma
-COPY package.json ./
-COPY prisma ./prisma
+# Copy application source
 COPY src ./src
 
+ENV NODE_ENV=production
 EXPOSE 4000
 
-CMD ["pnpm", "start:migrate"]
+# Run migrations then start the server
+CMD ["sh", "-c", "pnpm prisma migrate deploy && node src/server.js"]
