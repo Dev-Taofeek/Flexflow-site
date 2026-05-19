@@ -10,31 +10,38 @@ import { router } from "./routes/index.js";
 
 const app = express();
 
-// Build allowed origins list from env
-const allowedOrigins = new Set([env.CLIENT_ORIGIN]);
-if (process.env.ADDITIONAL_ORIGINS) {
-    process.env.ADDITIONAL_ORIGINS.split(",").forEach((o) => allowedOrigins.add(o.trim()));
-}
+// Build allowed origins — normalize to strip trailing slashes
+const allowedOrigins = new Set(
+    [env.CLIENT_ORIGIN, process.env.ADDITIONAL_ORIGINS]
+        .filter(Boolean)
+        .flatMap((o) => o.split(","))
+        .map((o) => o.trim().replace(/\/$/, ""))
+);
+
+const corsOptions = {
+    origin(origin, callback) {
+        // Allow server-to-server / curl (no origin header)
+        if (!origin) return callback(null, true);
+        const normalized = origin.replace(/\/$/, "");
+        if (allowedOrigins.has(normalized)) return callback(null, true);
+        // Reject without throwing so CORS headers are still sent on the response
+        return callback(null, false);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 200,
+};
+
+// Handle OPTIONS preflight for every route BEFORE any other middleware
+app.options("*", cors(corsOptions));
+
+app.use(cors(corsOptions));
 
 app.use(
     pinoHttp({
         transport: env.NODE_ENV === "development" ? { target: "pino-pretty" } : undefined,
         autoLogging: env.NODE_ENV === "development",
-    }),
-);
-
-app.use(
-    cors({
-        origin(origin, callback) {
-            // Allow requests with no origin (mobile apps, curl, server-to-server)
-            if (!origin || allowedOrigins.has(origin)) {
-                return callback(null, true);
-            }
-            callback(new Error(`CORS: origin ${origin} not allowed`));
-        },
-        credentials: true,
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"],
     }),
 );
 
