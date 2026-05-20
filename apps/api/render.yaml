@@ -3,8 +3,8 @@ services:
     name: flexflow-api
     runtime: node
     rootDir: apps/api
-    buildCommand: corepack enable pnpm && pnpm install --no-frozen-lockfile && pnpm prisma generate
-    startCommand: pnpm prisma migrate deploy && node src/server.js
+    buildCommand: apt-get install -y openssl libssl-dev && corepack enable pnpm && pnpm install --no-frozen-lockfile && pnpm prisma generate
+    startCommand: apt-get install -y openssl libssl-dev && pnpm prisma migrate deploy && node src/server.js
     envVars:
       - key: NODE_ENV
         value: production
