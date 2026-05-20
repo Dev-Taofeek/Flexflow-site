@@ -1,4 +1,3 @@
-import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -10,33 +9,37 @@ import { router } from "./routes/index.js";
 
 const app = express();
 
-// Build allowed origins — normalize to strip trailing slashes
-const allowedOrigins = new Set(
-    [env.CLIENT_ORIGIN, process.env.ADDITIONAL_ORIGINS]
-        .filter(Boolean)
-        .flatMap((o) => o.split(","))
-        .map((o) => o.trim().replace(/\/$/, ""))
-);
+// Build allowed origins list
+const allowedOrigins = [
+    env.CLIENT_ORIGIN,
+    ...(process.env.ADDITIONAL_ORIGINS
+        ? process.env.ADDITIONAL_ORIGINS.split(",").map((o) => o.trim())
+        : []),
+].map((o) => o.replace(/\/$/, "").toLowerCase());
 
-const corsOptions = {
-    origin(origin, callback) {
-        // Allow server-to-server / curl (no origin header)
-        if (!origin) return callback(null, true);
-        const normalized = origin.replace(/\/$/, "");
-        if (allowedOrigins.has(normalized)) return callback(null, true);
-        // Reject without throwing so CORS headers are still sent on the response
-        return callback(null, false);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    optionsSuccessStatus: 200,
-};
+// Manual CORS middleware — runs before everything else
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    const normalized = origin ? origin.replace(/\/$/, "").toLowerCase() : "";
 
-// Handle OPTIONS preflight for every route BEFORE any other middleware
-app.options("*", cors(corsOptions));
+    if (!origin || allowedOrigins.includes(normalized)) {
+        if (origin) {
+            res.setHeader("Access-Control-Allow-Origin", origin);
+            res.setHeader("Access-Control-Allow-Credentials", "true");
+            res.setHeader("Vary", "Origin");
+        }
+    }
 
-app.use(cors(corsOptions));
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+
+    // Respond immediately to preflight
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
+
+    next();
+});
 
 app.use(
     pinoHttp({
