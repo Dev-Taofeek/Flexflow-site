@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: flexflow-api
+    runtime: node
+    rootDir: apps/api
+    buildCommand: corepack enable pnpm && pnpm install --no-frozen-lockfile && pnpm prisma generate
+    startCommand: pnpm prisma migrate deploy && node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
