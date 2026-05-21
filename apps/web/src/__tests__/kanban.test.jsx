@@ -6,6 +6,10 @@ jest.mock("@/lib/projects-api", () => ({
     updateIssueStatus: jest.fn(),
 }));
 
+jest.mock("@/lib/api-client", () => ({
+    apiRequest: jest.fn(),
+}));
+
 jest.mock("@/lib/socket", () => ({
     socket: {
         connect: jest.fn(),
@@ -16,11 +20,16 @@ jest.mock("@/lib/socket", () => ({
     },
 }));
 
+jest.mock("next/link", () => ({
+    __esModule: true,
+    default: ({ href, children, ...rest }) => <a href={href} {...rest}>{children}</a>,
+}));
+
 const MOCK_ISSUES = [
-    { id: "i1", title: "Fix login bug", status: "TODO", priority: "HIGH", assignee: null, labels: [] },
-    { id: "i2", title: "Add dark mode", status: "IN_PROGRESS", priority: "MEDIUM", assignee: null, labels: [] },
-    { id: "i3", title: "Write tests", status: "IN_REVIEW", priority: "LOW", assignee: null, labels: [] },
-    { id: "i4", title: "Deploy to prod", status: "DONE", priority: "URGENT", assignee: null, labels: [] },
+    { id: "i1", title: "Fix login bug",  status: "TODO",        priority: "HIGH",   assignee: null, dueDate: null, labels: [] },
+    { id: "i2", title: "Add dark mode",  status: "IN_PROGRESS", priority: "MEDIUM", assignee: null, dueDate: null, labels: [] },
+    { id: "i3", title: "Write tests",    status: "IN_REVIEW",   priority: "LOW",    assignee: null, dueDate: null, labels: [] },
+    { id: "i4", title: "Deploy to prod", status: "DONE",        priority: "URGENT", assignee: null, dueDate: null, labels: [] },
 ];
 
 describe("KanbanBoard", () => {

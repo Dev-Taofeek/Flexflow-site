@@ -7,12 +7,15 @@ jest.mock("@/lib/roles-api", () => ({
     updatePermission: jest.fn(),
 }));
 
-const ROLES = ["ADMIN", "MEMBER", "VIEWER"];
-const RESOURCES = ["issues", "projects"];
+const ROLES = ["Admin", "Member", "Viewer"];
+const RESOURCES = [
+    { id: "issues",   label: "Issues",   actions: ["create", "read", "update", "delete"] },
+    { id: "projects", label: "Projects", actions: ["create", "read", "update", "delete"] },
+];
 const INITIAL_PERMISSIONS = {
-    ADMIN: { issues: ["create", "edit", "delete"], projects: ["create", "edit"] },
-    MEMBER: { issues: ["create", "edit"], projects: [] },
-    VIEWER: { issues: [], projects: [] },
+    Admin:  { issues: ["create", "read", "update", "delete"], projects: ["create", "read", "update", "delete"] },
+    Member: { issues: ["create", "read", "update"],           projects: ["read"] },
+    Viewer: { issues: ["read"],                               projects: ["read"] },
 };
 
 describe("PermissionMatrix", () => {
@@ -20,48 +23,40 @@ describe("PermissionMatrix", () => {
         updatePermission.mockReset();
     });
 
-    it("renders a checkbox for every role × resource × action combination", () => {
-        render(
+    function renderMatrix() {
+        return render(
             <PermissionMatrix
                 roles={ROLES}
                 resources={RESOURCES}
                 initialPermissions={INITIAL_PERMISSIONS}
             />
         );
-        const checkboxes = screen.getAllByRole("checkbox");
-        expect(checkboxes.length).toBeGreaterThan(0);
+    }
+
+    it("renders a toggle button for every role × resource × action combination", () => {
+        renderMatrix();
+        // 2 resources × 4 actions × 3 roles = 24 buttons
+        const btns = screen.getAllByRole("button", { name: /enable|disable/i });
+        expect(btns.length).toBe(2 * 4 * 3);
     });
 
-    it("ADMIN delete-issues checkbox is checked, VIEWER is not", () => {
-        render(
-            <PermissionMatrix
-                roles={ROLES}
-                resources={RESOURCES}
-                initialPermissions={INITIAL_PERMISSIONS}
-            />
-        );
-        const checked = screen.getAllByRole("checkbox", { checked: true });
-        const unchecked = screen.getAllByRole("checkbox", { checked: false });
-        expect(checked.length).toBeGreaterThan(0);
-        expect(unchecked.length).toBeGreaterThan(0);
+    it("Admin has more 'Disable' buttons than Viewer (Admin has more permissions)", () => {
+        renderMatrix();
+        const disable = screen.getAllByRole("button", { name: /disable admin/i });
+        const viewerDisable = screen.getAllByRole("button", { name: /disable viewer/i });
+        expect(disable.length).toBeGreaterThan(viewerDisable.length);
     });
 
-    it("calls updatePermission when a checkbox is toggled", async () => {
+    it("calls updatePermission when a toggle is clicked", async () => {
         const user = userEvent.setup();
         updatePermission.mockResolvedValue({
             data: { permissions: INITIAL_PERMISSIONS },
         });
+        renderMatrix();
 
-        render(
-            <PermissionMatrix
-                roles={ROLES}
-                resources={RESOURCES}
-                initialPermissions={INITIAL_PERMISSIONS}
-            />
-        );
-
-        const unchecked = screen.getAllByRole("checkbox", { checked: false });
-        await user.click(unchecked[0]);
+        // Click an "Enable" button (a permission Viewer doesn't have)
+        const enableBtns = screen.getAllByRole("button", { name: /enable viewer/i });
+        await user.click(enableBtns[0]);
 
         await waitFor(() => {
             expect(updatePermission).toHaveBeenCalledTimes(1);
@@ -71,25 +66,23 @@ describe("PermissionMatrix", () => {
         });
     });
 
-    it("optimistically toggles the checkbox before the API responds", async () => {
+    it("optimistically flips the button label before the API responds", async () => {
         const user = userEvent.setup();
-        let resolvePermission;
-        updatePermission.mockReturnValue(new Promise((r) => { resolvePermission = r; }));
+        let resolve;
+        updatePermission.mockReturnValue(new Promise((r) => { resolve = r; }));
+        renderMatrix();
 
-        render(
-            <PermissionMatrix
-                roles={ROLES}
-                resources={RESOURCES}
-                initialPermissions={INITIAL_PERMISSIONS}
-            />
-        );
+        const enableBtns = screen.getAllByRole("button", { name: /enable viewer/i });
+        const target = enableBtns[0];
+        const label = target.getAttribute("aria-label");
 
-        const unchecked = screen.getAllByRole("checkbox", { checked: false });
-        const target = unchecked[0];
         await user.click(target);
-        expect(target).toBeChecked();
+        // After optimistic update the button label should flip
+        await waitFor(() => {
+            expect(target.getAttribute("aria-label")).not.toBe(label);
+        });
 
-        resolvePermission({ data: { permissions: INITIAL_PERMISSIONS } });
+        resolve({ data: { permissions: INITIAL_PERMISSIONS } });
     });
 });
 
@@ -98,19 +91,19 @@ describe("RBAC role hierarchy — pure logic", () => {
         return permissions[role]?.[resource]?.includes(action) ?? false;
     }
 
-    it("ADMIN can delete issues", () => {
-        expect(canPerform("ADMIN", INITIAL_PERMISSIONS, "issues", "delete")).toBe(true);
+    it("Admin can delete issues", () => {
+        expect(canPerform("Admin", INITIAL_PERMISSIONS, "issues", "delete")).toBe(true);
     });
 
-    it("MEMBER cannot delete issues", () => {
-        expect(canPerform("MEMBER", INITIAL_PERMISSIONS, "issues", "delete")).toBe(false);
+    it("Member cannot delete issues", () => {
+        expect(canPerform("Member", INITIAL_PERMISSIONS, "issues", "delete")).toBe(false);
     });
 
-    it("VIEWER cannot create issues", () => {
-        expect(canPerform("VIEWER", INITIAL_PERMISSIONS, "issues", "create")).toBe(false);
+    it("Viewer cannot create issues", () => {
+        expect(canPerform("Viewer", INITIAL_PERMISSIONS, "issues", "create")).toBe(false);
     });
 
-    it("MEMBER can edit issues", () => {
-        expect(canPerform("MEMBER", INITIAL_PERMISSIONS, "issues", "edit")).toBe(true);
+    it("Member can update issues", () => {
+        expect(canPerform("Member", INITIAL_PERMISSIONS, "issues", "update")).toBe(true);
     });
 });

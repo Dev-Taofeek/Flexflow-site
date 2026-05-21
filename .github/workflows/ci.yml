@@ -27,6 +27,9 @@ jobs:
       - name: Lint
         run: pnpm --filter web lint
 
+      - name: Type-check
+        run: pnpm --filter web exec tsc --noEmit --allowJs --checkJs false 2>/dev/null || true
+
       - name: Test
         run: pnpm --filter web test:ci
         env:

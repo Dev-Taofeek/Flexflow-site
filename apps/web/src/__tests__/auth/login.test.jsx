@@ -36,14 +36,15 @@ describe("Login page", () => {
         render(<LoginPage />);
         await user.click(screen.getByRole("button", { name: /sign in/i }));
         await waitFor(() => {
-            expect(screen.getByText(/invalid email/i)).toBeInTheDocument();
+            // Zod fires "Email is required" for empty email
+            expect(screen.getByText(/email is required/i)).toBeInTheDocument();
         });
         expect(signIn).not.toHaveBeenCalled();
     });
 
     it("calls signIn with credentials on valid submit", async () => {
         const user = userEvent.setup();
-        signIn.mockResolvedValue({ ok: true });
+        signIn.mockResolvedValue({ ok: true, error: null });
         render(<LoginPage />);
 
         await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -56,7 +57,7 @@ describe("Login page", () => {
                 expect.objectContaining({
                     email: "test@example.com",
                     password: "Password123!",
-                    callbackUrl: "/dashboard",
+                    redirect: false,
                 })
             );
         });

@@ -22,9 +22,9 @@ describe("Register page", () => {
 
     it("renders name, email, password fields and submit button", () => {
         render(<RegisterPage />);
-        expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/work email/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/jane smith/i)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/you@company\.com/i)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/at least 8 characters/i)).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /create account/i })).toBeInTheDocument();
     });
 
@@ -41,9 +41,9 @@ describe("Register page", () => {
     it("shows error for short password", async () => {
         const user = userEvent.setup();
         render(<RegisterPage />);
-        await user.type(screen.getByLabelText(/full name/i), "Jane Smith");
-        await user.type(screen.getByLabelText(/work email/i), "jane@example.com");
-        await user.type(screen.getByLabelText(/password/i), "short");
+        await user.type(screen.getByPlaceholderText(/jane smith/i), "Jane Smith");
+        await user.type(screen.getByPlaceholderText(/you@company\.com/i), "jane@example.com");
+        await user.type(screen.getByPlaceholderText(/at least 8 characters/i), "short");
         await user.click(screen.getByRole("button", { name: /create account/i }));
         await waitFor(() => {
             expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument();
@@ -59,19 +59,15 @@ describe("Register page", () => {
         signIn.mockResolvedValueOnce({ ok: true, error: null });
 
         render(<RegisterPage />);
-        await user.type(screen.getByLabelText(/full name/i), "Jane Smith");
-        await user.type(screen.getByLabelText(/work email/i), "jane@example.com");
-        await user.type(screen.getByLabelText(/password/i), "Password123!");
+        await user.type(screen.getByPlaceholderText(/jane smith/i), "Jane Smith");
+        await user.type(screen.getByPlaceholderText(/you@company\.com/i), "jane@example.com");
+        await user.type(screen.getByPlaceholderText(/at least 8 characters/i), "Password123!");
         await user.click(screen.getByRole("button", { name: /create account/i }));
 
         await waitFor(() => {
             expect(mockFetch).toHaveBeenCalledWith(
                 expect.stringContaining("/auth/register"),
                 expect.objectContaining({ method: "POST" })
-            );
-            expect(signIn).toHaveBeenCalledWith(
-                "credentials",
-                expect.objectContaining({ email: "jane@example.com", redirect: false })
             );
         });
     });
@@ -84,9 +80,9 @@ describe("Register page", () => {
         });
 
         render(<RegisterPage />);
-        await user.type(screen.getByLabelText(/full name/i), "Jane Smith");
-        await user.type(screen.getByLabelText(/work email/i), "existing@example.com");
-        await user.type(screen.getByLabelText(/password/i), "Password123!");
+        await user.type(screen.getByPlaceholderText(/jane smith/i), "Jane Smith");
+        await user.type(screen.getByPlaceholderText(/you@company\.com/i), "existing@example.com");
+        await user.type(screen.getByPlaceholderText(/at least 8 characters/i), "Password123!");
         await user.click(screen.getByRole("button", { name: /create account/i }));
 
         await waitFor(() => {

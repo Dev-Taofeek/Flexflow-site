@@ -1,7 +1,11 @@
+import { createRequire } from "module";
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { authenticator } from "otplib";
 import QRCode from "qrcode";
+
+// otplib v13 ESM exports don't expose named exports in Node 20 — load via CJS
+const require = createRequire(import.meta.url);
+const { authenticator } = require("otplib");
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";

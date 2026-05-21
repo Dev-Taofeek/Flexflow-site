@@ -5,7 +5,9 @@ const createJestConfig = nextJest({ dir: "./" });
 /** @type {import('jest').Config} */
 const config = {
     testEnvironment: "jest-environment-jsdom",
-    setupFilesAfterFramework: ["<rootDir>/jest.setup.js"],
+    setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
+    clearMocks: true,
+    restoreMocks: true,
     moduleNameMapper: {
         "^@/(.*)$": "<rootDir>/src/$1",
         "^socket.io-client$": "<rootDir>/src/__mocks__/socket.io-client.js",
