@@ -51,32 +51,34 @@ export default function ProjectDetailPage() {
     const total = issues.length;
     const done = issues.filter((i) => i.status === "DONE").length;
     const progress = total ? Math.round((done / total) * 100) : 0;
+    const members = project.workspace?.members || [];
 
     return (
         <div className="space-y-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between rounded-xl border border-(--border) bg-(--bg-elevated) p-5">
-                <div className="flex items-start gap-3">
-                    <div className="mt-0.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: project.color || "#6366f1" }} />
-                    <div>
-                        <h1 className="text-lg font-semibold text-(--text-primary)">{project.name}</h1>
+            {/* Project header */}
+            <div className="flex flex-col gap-3 rounded-xl border border-(--border) bg-(--bg-elevated) p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+                <div className="flex items-start gap-3 min-w-0">
+                    <div className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: project.color || "#6366f1" }} />
+                    <div className="min-w-0">
+                        <h1 className="text-base font-semibold text-(--text-primary) sm:text-lg">{project.name}</h1>
                         {project.description && (
-                            <p className="mt-1 text-sm text-(--text-secondary) max-w-xl">{project.description}</p>
+                            <p className="mt-1 text-sm text-(--text-secondary) line-clamp-2">{project.description}</p>
                         )}
                     </div>
                 </div>
-                <div className="flex items-center gap-4 text-right shrink-0">
-                    <div>
+                <div className="flex items-center gap-4 shrink-0">
+                    <div className="text-center">
                         <p className="text-xs text-(--text-muted)">Progress</p>
-                        <p className="text-2xl font-semibold text-(--text-primary)">{progress}%</p>
+                        <p className="text-xl font-semibold text-(--text-primary)">{progress}%</p>
                     </div>
-                    <div>
+                    <div className="text-center">
                         <p className="text-xs text-(--text-muted)">Issues</p>
-                        <p className="text-2xl font-semibold text-(--text-primary)">{total}</p>
+                        <p className="text-xl font-semibold text-(--text-primary)">{total}</p>
                     </div>
                 </div>
             </div>
 
-            <KanbanBoard projectId={project.id} initialIssues={issues} token={accessToken} />
+            <KanbanBoard projectId={project.id} initialIssues={issues} token={accessToken} members={members} />
         </div>
     );
 }

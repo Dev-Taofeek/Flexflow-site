@@ -4,7 +4,9 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -17,8 +19,21 @@ import { Input } from "@/components/ui/Input";
 
 import { loginSchema } from "@/lib/auth/schemas";
 
+const ERROR_MESSAGES = {
+  CredentialsSignin: "Invalid email or password.",
+  session_expired:   "Your session expired — please sign in again.",
+  OAuthAccountNotLinked: "This email is already registered with a different sign-in method.",
+};
+
 export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlError = searchParams.get("error");
+
   const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState(
+    urlError ? (ERROR_MESSAGES[urlError] ?? "Sign-in failed — please try again.") : ""
+  );
 
   const {
     register,
@@ -26,19 +41,21 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+    defaultValues: { email: "", password: "" },
   });
 
   async function onSubmit(values) {
-    await signIn("credentials", {
+    setAuthError("");
+    const result = await signIn("credentials", {
       email: values.email,
       password: values.password,
-      redirect: true,
-      callbackUrl: "/dashboard",
+      redirect: false,
     });
+    if (result?.error) {
+      setAuthError(ERROR_MESSAGES[result.error] ?? "Invalid email or password.");
+    } else {
+      router.push("/dashboard");
+    }
   }
 
   return (
@@ -47,6 +64,11 @@ export default function LoginPage() {
       description="Sign in to your workspace and continue managing projects with your team."
     >
       <div className="space-y-6">
+        {authError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {authError}
+          </div>
+        )}
         <OAuthButtons />
 
         <div className="relative">

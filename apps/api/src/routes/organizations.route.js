@@ -289,7 +289,7 @@ router.post("/:orgId/invite", async (req, res) => {
 
         if (resend) {
             await resend.emails.send({
-                from: "FlexFlow <noreply@flexflow.app>",
+                from: "FlexFlow <onboarding@resend.dev>",
                 to: email,
                 subject: `You've been invited to ${org.name} on FlexFlow`,
                 html: `<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">

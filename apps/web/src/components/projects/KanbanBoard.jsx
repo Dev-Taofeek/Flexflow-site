@@ -1,327 +1,371 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  closestCorners,
-  useDroppable,
-  useSensor,
-  useSensors,
+    DndContext, DragOverlay, PointerSensor,
+    closestCorners, useDroppable, useSensor, useSensors,
 } from "@dnd-kit/core";
 import {
-  SortableContext,
-  arrayMove,
-  useSortable,
-  verticalListSortingStrategy,
+    SortableContext, arrayMove, useSortable, verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { CalendarDays, GripVertical, Loader2, Plus, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
 import { updateIssueStatus } from "@/lib/projects-api";
+import { apiRequest } from "@/lib/api-client";
 import { socket } from "@/lib/socket";
 
-const columns = [
-  {
-    id: "TODO",
-    title: "To Do",
-  },
-  {
-    id: "IN_PROGRESS",
-    title: "In Progress",
-  },
-  {
-    id: "IN_REVIEW",
-    title: "In Review",
-  },
-  {
-    id: "DONE",
-    title: "Done",
-  },
+const COLUMNS = [
+    { id: "TODO",        title: "To Do",       color: "bg-zinc-400" },
+    { id: "IN_PROGRESS", title: "In Progress",  color: "bg-blue-500" },
+    { id: "IN_REVIEW",   title: "In Review",    color: "bg-amber-500" },
+    { id: "DONE",        title: "Done",         color: "bg-emerald-500" },
 ];
 
-const priorityVariantMap = {
-  LOW: "secondary",
-  MEDIUM: "secondary",
-  HIGH: "destructive",
-  URGENT: "destructive",
+const PRIORITY_STYLE = {
+    LOW:    "text-zinc-500 bg-zinc-100",
+    MEDIUM: "text-blue-600 bg-blue-50",
+    HIGH:   "text-orange-600 bg-orange-50",
+    URGENT: "text-red-600 bg-red-50",
 };
 
-function groupIssuesByStatus(issues) {
-  return columns.reduce((accumulator, column) => {
-    accumulator[column.id] = issues.filter((issue) => issue.status === column.id);
-
-    return accumulator;
-  }, {});
+function groupByStatus(issues) {
+    return COLUMNS.reduce((acc, col) => {
+        acc[col.id] = issues.filter((i) => i.status === col.id);
+        return acc;
+    }, {});
 }
 
-function KanbanColumn({ column, issues, children }) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: column.id,
-  });
-
-  return (
-    <section
-      ref={setNodeRef}
-      className={[
-        "border-border bg-surface dark:border-border-dark dark:bg-surface-dark min-h-140 rounded-3xl border p-4 transition-colors",
-        isOver ? "border-brand-500 bg-brand-50 dark:bg-brand-500/10" : "",
-      ].join(" ")}
-    >
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-foreground dark:text-foreground-dark text-sm font-semibold">
-          {column.title}
-        </h2>
-
-        <Badge variant="secondary">{issues.length}</Badge>
-      </div>
-
-      {children}
-    </section>
-  );
+function formatDate(d) {
+    if (!d) return null;
+    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function IssueCard({ issue, isDragging = false }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
-    id: issue.id,
-    data: {
-      type: "issue",
-      issue,
-    },
-  });
+// ── Inline create form per column ──────────────────────────────────────────
+function QuickCreate({ projectId, status, members, token, onCreated, onCancel }) {
+    const [title, setTitle] = useState("");
+    const [assigneeId, setAssigneeId] = useState("");
+    const [priority, setPriority] = useState("MEDIUM");
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState("");
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <article
-      ref={setNodeRef}
-      style={style}
-      className={[
-        "border-border bg-background dark:border-border-dark dark:bg-background-dark rounded-2xl border p-4 shadow-sm transition-all",
-        isDragging ? "opacity-50" : "hover:border-brand-500/40",
-      ].join(" ")}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-foreground dark:text-foreground-dark text-sm leading-5 font-medium">
-            {issue.title}
-          </h3>
-
-          <p className="text-muted-foreground dark:text-muted-foreground-dark mt-2 line-clamp-2 text-xs leading-relaxed">
-            {issue.description}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="text-muted-foreground hover:bg-muted hover:text-foreground dark:text-muted-foreground-dark dark:hover:bg-muted-dark dark:hover:text-foreground-dark cursor-grab rounded-md p-1 active:cursor-grabbing"
-          aria-label={`Drag ${issue.title}`}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="h-4 w-4" strokeWidth={1.5} />
-        </button>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <Badge variant={priorityVariantMap[issue.priority]}>{issue.priority}</Badge>
-
-        <span className="text-muted-foreground dark:text-muted-foreground-dark truncate text-xs">
-          {issue.assignee}
-        </span>
-      </div>
-    </article>
-  );
-}
-
-export function KanbanBoard({ projectId, initialIssues, token }) {
-  const [issuesByStatus, setIssuesByStatus] = useState(() => groupIssuesByStatus(initialIssues));
-  const [activeIssue, setActiveIssue] = useState(null);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
-
-  const issueLookup = useMemo(() => {
-    return Object.values(issuesByStatus)
-      .flat()
-      .reduce((accumulator, issue) => {
-        accumulator[issue.id] = issue;
-
-        return accumulator;
-      }, {});
-  }, [issuesByStatus]);
-
-  useEffect(() => {
-    socket.connect();
-    socket.emit("project:join", projectId);
-
-    function handleStatusUpdated(payload) {
-      if (payload.projectId !== projectId) {
-        return;
-      }
-
-      setIssuesByStatus((current) => {
-        const next = Object.fromEntries(
-          Object.entries(current).map(([status, issues]) => [
-            status,
-            issues.filter((issue) => issue.id !== payload.issue.id),
-          ])
-        );
-
-        next[payload.issue.status] = [payload.issue, ...(next[payload.issue.status] || [])];
-
-        return next;
-      });
+    async function submit(e) {
+        e.preventDefault();
+        if (!title.trim()) { setErr("Title required"); return; }
+        setLoading(true);
+        try {
+            const issue = await apiRequest("/issues", {
+                method: "POST",
+                token,
+                body: { projectId, title: title.trim(), status, priority, assigneeId: assigneeId || null },
+            });
+            onCreated(issue);
+        } catch (ex) {
+            setErr(ex.message);
+        } finally {
+            setLoading(false);
+        }
     }
 
-    socket.on("issue:status-updated", handleStatusUpdated);
-
-    return () => {
-      socket.emit("project:leave", projectId);
-      socket.off("issue:status-updated", handleStatusUpdated);
-      socket.disconnect();
-    };
-  }, [projectId]);
-
-  function findColumn(issueIdOrColumnId) {
-    if (issuesByStatus[issueIdOrColumnId]) {
-      return issueIdOrColumnId;
-    }
-
-    return Object.keys(issuesByStatus).find((status) =>
-      issuesByStatus[status].some((issue) => issue.id === issueIdOrColumnId)
+    return (
+        <form onSubmit={submit} className="mt-2 rounded-xl border border-indigo-300 bg-(--bg-elevated) p-3 space-y-2 shadow-sm">
+            <input
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Issue title…"
+                className="w-full rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
+            />
+            <div className="grid grid-cols-2 gap-2">
+                <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    className="rounded-lg border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--text-secondary) focus:outline-none"
+                >
+                    {["LOW","MEDIUM","HIGH","URGENT"].map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                    ))}
+                </select>
+                <select
+                    value={assigneeId}
+                    onChange={(e) => setAssigneeId(e.target.value)}
+                    className="rounded-lg border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--text-secondary) focus:outline-none"
+                >
+                    <option value="">Unassigned</option>
+                    {members.map((m) => (
+                        <option key={m.user.id} value={m.user.id}>{m.user.name}</option>
+                    ))}
+                </select>
+            </div>
+            {err && <p className="text-xs text-red-500">{err}</p>}
+            <div className="flex items-center justify-end gap-1.5">
+                <button type="button" onClick={onCancel} className="rounded-lg p-1.5 text-(--text-muted) hover:bg-(--bg-overlay)">
+                    <X className="h-4 w-4" />
+                </button>
+                <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                >
+                    {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    Add
+                </button>
+            </div>
+        </form>
     );
-  }
+}
 
-  function handleDragStart(event) {
-    const issue = issueLookup[event.active.id];
-
-    if (issue) {
-      setActiveIssue(issue);
-    }
-  }
-
-  function handleDragOver(event) {
-    const { active, over } = event;
-
-    if (!over) {
-      return;
-    }
-
-    const activeColumn = findColumn(active.id);
-    const overColumn = findColumn(over.id);
-
-    if (!activeColumn || !overColumn || activeColumn === overColumn) {
-      return;
-    }
-
-    setIssuesByStatus((current) => {
-      const activeItems = current[activeColumn];
-      const overItems = current[overColumn];
-
-      const activeIndex = activeItems.findIndex((item) => item.id === active.id);
-
-      const movedIssue = {
-        ...activeItems[activeIndex],
-        status: overColumn,
-      };
-
-      return {
-        ...current,
-        [activeColumn]: activeItems.filter((item) => item.id !== active.id),
-        [overColumn]: [movedIssue, ...overItems],
-      };
+// ── Issue card ─────────────────────────────────────────────────────────────
+function IssueCard({ issue, isDragging = false, projectId }) {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+        id: issue.id,
+        data: { type: "issue", issue },
     });
-  }
 
-  async function handleDragEnd(event) {
-    const { active, over } = event;
+    const style = { transform: CSS.Transform.toString(transform), transition };
 
-    setActiveIssue(null);
+    const dueDate = formatDate(issue.dueDate);
+    const isOverdue = issue.dueDate && new Date(issue.dueDate) < new Date() && issue.status !== "DONE";
 
-    if (!over) {
-      return;
+    return (
+        <article
+            ref={setNodeRef}
+            style={style}
+            className={[
+                "group rounded-xl border bg-(--bg-elevated) p-3 shadow-sm transition-all",
+                isDragging ? "opacity-40 scale-95" : "border-(--border) hover:border-indigo-300 hover:shadow-md",
+            ].join(" ")}
+        >
+            {/* Top row: title + drag handle */}
+            <div className="flex items-start gap-2">
+                <Link
+                    href={`/projects/${projectId}/issues/${issue.id}`}
+                    className="flex-1 min-w-0"
+                >
+                    <p className="text-sm font-medium text-(--text-primary) leading-snug line-clamp-2 hover:text-indigo-600 transition-colors">
+                        {issue.title}
+                    </p>
+                </Link>
+                <button
+                    type="button"
+                    aria-label={`Drag ${issue.title}`}
+                    className="mt-0.5 shrink-0 cursor-grab rounded-md p-0.5 text-(--text-muted) opacity-0 group-hover:opacity-100 hover:bg-(--bg-overlay) active:cursor-grabbing transition-opacity"
+                    {...attributes}
+                    {...listeners}
+                >
+                    <GripVertical className="h-4 w-4" />
+                </button>
+            </div>
+
+            {/* Bottom row: priority + assignee + due date */}
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${PRIORITY_STYLE[issue.priority]}`}>
+                    {issue.priority}
+                </span>
+
+                {issue.assignee && (
+                    <div className="flex items-center gap-1">
+                        <div className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-bold text-indigo-700 shrink-0">
+                            {issue.assignee.name?.[0]?.toUpperCase()}
+                        </div>
+                        <span className="text-[11px] text-(--text-muted) truncate max-w-20">{issue.assignee.name}</span>
+                    </div>
+                )}
+
+                {dueDate && (
+                    <span className={`flex items-center gap-0.5 text-[11px] ${isOverdue ? "text-red-500 font-medium" : "text-(--text-muted)"}`}>
+                        <CalendarDays className="h-3 w-3" />
+                        {dueDate}
+                    </span>
+                )}
+            </div>
+        </article>
+    );
+}
+
+// ── Column ─────────────────────────────────────────────────────────────────
+function KanbanColumn({ column, issues, children, projectId, members, token, onCreated }) {
+    const { setNodeRef, isOver } = useDroppable({ id: column.id });
+    const [creating, setCreating] = useState(false);
+
+    return (
+        <section
+            ref={setNodeRef}
+            className={[
+                "flex w-72 shrink-0 flex-col rounded-2xl border bg-(--bg-elevated) md:w-auto md:min-w-0",
+                isOver ? "border-indigo-400 bg-indigo-50/30" : "border-(--border)",
+            ].join(" ")}
+        >
+            {/* Column header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
+                <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${column.color}`} />
+                    <h2 className="text-sm font-semibold text-(--text-primary)">{column.title}</h2>
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-(--bg-overlay) px-1 text-[11px] font-medium text-(--text-muted)">
+                        {issues.length}
+                    </span>
+                </div>
+                <button
+                    aria-label={`Add issue to ${column.title}`}
+                    onClick={() => setCreating(true)}
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-(--text-muted) hover:bg-(--bg-overlay) hover:text-indigo-600 transition-colors"
+                >
+                    <Plus className="h-3.5 w-3.5" />
+                </button>
+            </div>
+
+            {/* Cards */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[calc(100vh-16rem)]">
+                {children}
+
+                {creating && (
+                    <QuickCreate
+                        projectId={projectId}
+                        status={column.id}
+                        members={members}
+                        token={token}
+                        onCreated={(issue) => { onCreated(issue, column.id); setCreating(false); }}
+                        onCancel={() => setCreating(false)}
+                    />
+                )}
+
+                {issues.length === 0 && !creating && (
+                    <button
+                        onClick={() => setCreating(true)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-(--border) py-6 text-xs text-(--text-muted) transition-colors hover:border-indigo-300 hover:text-indigo-500"
+                    >
+                        <Plus className="h-3.5 w-3.5" /> Add issue
+                    </button>
+                )}
+            </div>
+        </section>
+    );
+}
+
+// ── Board ─────────────────────────────────────────────────────────────────
+export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
+    const [issuesByStatus, setIssuesByStatus] = useState(() => groupByStatus(initialIssues));
+    const [activeIssue, setActiveIssue] = useState(null);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    );
+
+    const issueLookup = useMemo(() => (
+        Object.values(issuesByStatus).flat().reduce((acc, i) => { acc[i.id] = i; return acc; }, {})
+    ), [issuesByStatus]);
+
+    useEffect(() => {
+        socket.connect();
+        socket.emit("project:join", projectId);
+        function onStatusUpdated(payload) {
+            if (payload.projectId !== projectId) return;
+            setIssuesByStatus((cur) => {
+                const next = Object.fromEntries(
+                    Object.entries(cur).map(([s, issues]) => [s, issues.filter((i) => i.id !== payload.issue.id)])
+                );
+                next[payload.issue.status] = [payload.issue, ...(next[payload.issue.status] || [])];
+                return next;
+            });
+        }
+        socket.on("issue:status-updated", onStatusUpdated);
+        return () => {
+            socket.emit("project:leave", projectId);
+            socket.off("issue:status-updated", onStatusUpdated);
+            socket.disconnect();
+        };
+    }, [projectId]);
+
+    function findColumn(id) {
+        if (issuesByStatus[id]) return id;
+        return Object.keys(issuesByStatus).find((s) => issuesByStatus[s].some((i) => i.id === id));
     }
 
-    const activeColumn = findColumn(active.id);
-    const overColumn = findColumn(over.id);
-
-    if (!activeColumn || !overColumn) {
-      return;
+    function handleDragStart({ active }) {
+        setActiveIssue(issueLookup[active.id] || null);
     }
 
-    if (activeColumn === overColumn) {
-      setIssuesByStatus((current) => {
-        const columnIssues = current[activeColumn];
+    function handleDragOver({ active, over }) {
+        if (!over) return;
+        const fromCol = findColumn(active.id);
+        const toCol = findColumn(over.id);
+        if (!fromCol || !toCol || fromCol === toCol) return;
+        setIssuesByStatus((cur) => ({
+            ...cur,
+            [fromCol]: cur[fromCol].filter((i) => i.id !== active.id),
+            [toCol]: [{ ...issueLookup[active.id], status: toCol }, ...cur[toCol]],
+        }));
+    }
 
-        const oldIndex = columnIssues.findIndex((issue) => issue.id === active.id);
-        const newIndex = columnIssues.findIndex((issue) => issue.id === over.id);
+    async function handleDragEnd({ active, over }) {
+        setActiveIssue(null);
+        if (!over) return;
+        const fromCol = findColumn(active.id);
+        const toCol = findColumn(over.id);
+        if (!fromCol || !toCol) return;
 
-        if (oldIndex === -1 || newIndex === -1) {
-          return current;
+        if (fromCol === toCol) {
+            setIssuesByStatus((cur) => {
+                const items = cur[fromCol];
+                const oi = items.findIndex((i) => i.id === active.id);
+                const ni = items.findIndex((i) => i.id === over.id);
+                if (oi === -1 || ni === -1) return cur;
+                return { ...cur, [fromCol]: arrayMove(items, oi, ni) };
+            });
+            return;
         }
 
-        return {
-          ...current,
-          [activeColumn]: arrayMove(columnIssues, oldIndex, newIndex),
-        };
-      });
-
-      return;
+        try {
+            await updateIssueStatus({ projectId, issueId: active.id, status: toCol, token });
+        } catch {
+            setIssuesByStatus(groupByStatus(initialIssues));
+        }
     }
 
-    try {
-      await updateIssueStatus({
-        projectId,
-        issueId: active.id,
-        status: overColumn,
-        token,
-      });
-    } catch (error) {
-      setIssuesByStatus(groupIssuesByStatus(initialIssues));
+    function handleCreated(issue, colId) {
+        setIssuesByStatus((cur) => ({
+            ...cur,
+            [colId]: [issue, ...(cur[colId] || [])],
+        }));
     }
-  }
 
-  return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="grid gap-4 xl:grid-cols-4">
-        {columns.map((column) => {
-          const columnIssues = issuesByStatus[column.id] || [];
+    return (
+        <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+        >
+            {/* Horizontal scroll on mobile, 4-col grid on xl */}
+            <div className="flex gap-4 overflow-x-auto pb-4 md:grid md:grid-cols-2 xl:grid-cols-4">
+                {COLUMNS.map((col) => {
+                    const colIssues = issuesByStatus[col.id] || [];
+                    return (
+                        <KanbanColumn
+                            key={col.id}
+                            column={col}
+                            issues={colIssues}
+                            projectId={projectId}
+                            members={members}
+                            token={token}
+                            onCreated={handleCreated}
+                        >
+                            <SortableContext items={colIssues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                                {colIssues.map((issue) => (
+                                    <IssueCard key={issue.id} issue={issue} projectId={projectId} />
+                                ))}
+                            </SortableContext>
+                        </KanbanColumn>
+                    );
+                })}
+            </div>
 
-          return (
-            <KanbanColumn key={column.id} column={column} issues={columnIssues}>
-              <SortableContext
-                items={columnIssues.map((issue) => issue.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-3">
-                  {columnIssues.map((issue) => (
-                    <IssueCard key={issue.id} issue={issue} />
-                  ))}
-                </div>
-              </SortableContext>
-            </KanbanColumn>
-          );
-        })}
-      </div>
-
-      <DragOverlay>{activeIssue ? <IssueCard issue={activeIssue} isDragging /> : null}</DragOverlay>
-    </DndContext>
-  );
+            <DragOverlay>
+                {activeIssue ? <IssueCard issue={activeIssue} projectId={projectId} isDragging /> : null}
+            </DragOverlay>
+        </DndContext>
+    );
 }

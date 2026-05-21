@@ -1,138 +1,122 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { CheckCircle2, Eye, EyeOff, LockKeyhole } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useSearchParams } from "next/navigation";
 
 import { AuthShell } from "@/components/auth/AuthShell";
 import { FormField } from "@/components/auth/FormField";
-
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
-import { resetPasswordSchema } from "@/lib/auth/schemas";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function ResetPasswordPage() {
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const searchParams = useSearchParams();
+    const token = searchParams.get("token");
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: {
-      password: "",
-      confirmPassword: "",
-    },
-  });
+    const [password, setPassword] = useState("");
+    const [confirm, setConfirm] = useState("");
+    const [showPw, setShowPw] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [done, setDone] = useState(false);
+    const [error, setError] = useState("");
 
-  async function onSubmit() {
-    setIsSubmitted(true);
-  }
+    async function onSubmit(e) {
+        e.preventDefault();
+        if (password.length < 8) { setError("Password must be at least 8 characters"); return; }
+        if (password !== confirm) { setError("Passwords do not match"); return; }
+        if (!token) { setError("Reset token missing — request a new link"); return; }
+        setError("");
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/auth/reset-password`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token, password }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error?.message || "Failed to reset password");
+            setDone(true);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
 
-  return (
-    <AuthShell
-      title="Create new password"
-      description="Choose a strong password to secure your FlexFlow account."
-    >
-      {isSubmitted ? (
-        <motion.div
-          initial={{
-            opacity: 0,
-            y: 16,
-          }}
-          animate={{
-            opacity: 1,
-            y: 0,
-          }}
-          transition={{
-            duration: 0.25,
-            ease: "easeOut",
-          }}
-          className="space-y-6"
+    return (
+        <AuthShell
+            title="Create new password"
+            description="Choose a strong password to secure your FlexFlow account."
         >
-          <div className="bg-success-100 text-success-700 dark:bg-success-500/10 dark:text-success-300 flex h-12 w-12 items-center justify-center rounded-xl">
-            <CheckCircle2 className="h-5 w-5" />
-          </div>
+            {done ? (
+                <div className="space-y-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                        <CheckCircle2 className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-(--text-primary)">Password updated</h3>
+                        <p className="mt-2 text-sm text-(--text-secondary)">
+                            Your password has been changed. You can now sign in with your new credentials.
+                        </p>
+                    </div>
+                    <Button asChild className="w-full">
+                        <Link href="/login">Sign in</Link>
+                    </Button>
+                </div>
+            ) : !token ? (
+                <div className="space-y-4 text-center">
+                    <p className="text-sm text-(--text-muted)">Invalid or missing reset link.</p>
+                    <Button asChild variant="outline" className="w-full">
+                        <Link href="/forgot-password">Request a new link</Link>
+                    </Button>
+                </div>
+            ) : (
+                <form onSubmit={onSubmit} className="space-y-5">
+                    <FormField id="password" label="New password">
+                        <div className="relative">
+                            <Input
+                                id="password"
+                                type={showPw ? "text" : "password"}
+                                placeholder="At least 8 characters"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="pr-10"
+                                required
+                            />
+                            <button
+                                type="button"
+                                aria-label={showPw ? "Hide password" : "Show password"}
+                                onClick={() => setShowPw((s) => !s)}
+                                className="absolute top-1/2 right-3 -translate-y-1/2 text-(--text-muted) hover:text-(--text-secondary)"
+                            >
+                                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                        </div>
+                    </FormField>
 
-          <div>
-            <h3 className="text-foreground dark:text-foreground-dark text-lg font-semibold">
-              Password updated
-            </h3>
+                    <FormField id="confirm" label="Confirm password">
+                        <Input
+                            id="confirm"
+                            type="password"
+                            placeholder="Re-enter password"
+                            value={confirm}
+                            onChange={(e) => setConfirm(e.target.value)}
+                            required
+                        />
+                    </FormField>
 
-            <p className="text-muted-foreground dark:text-muted-foreground-dark mt-2 text-sm leading-relaxed">
-              Your password has been changed successfully. You can now sign in with your new
-              credentials.
-            </p>
-          </div>
+                    {error && (
+                        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+                    )}
 
-          <Button className="w-full">
-            <Link href="/login">Continue to login</Link>
-          </Button>
-        </motion.div>
-      ) : (
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 flex h-12 w-12 items-center justify-center rounded-xl">
-            <LockKeyhole className="h-5 w-5" />
-          </div>
-
-          <FormField id="password" label="New password" error={errors.password}>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter a strong password"
-                className="pr-12"
-                isInvalid={Boolean(errors.password)}
-                {...register("password")}
-              />
-
-              <button
-                type="button"
-                onClick={() => setShowPassword((previous) => !previous)}
-                className="text-muted-foreground hover:text-foreground dark:text-muted-foreground-dark dark:hover:text-foreground-dark absolute top-1/2 right-3 inline-flex -translate-y-1/2 items-center justify-center transition-colors"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-
-                <span className="sr-only">Toggle password visibility</span>
-              </button>
-            </div>
-          </FormField>
-
-          <FormField id="confirmPassword" label="Confirm password" error={errors.confirmPassword}>
-            <div className="relative">
-              <Input
-                id="confirmPassword"
-                type={showConfirmPassword ? "text" : "password"}
-                placeholder="Confirm your new password"
-                className="pr-12"
-                isInvalid={Boolean(errors.confirmPassword)}
-                {...register("confirmPassword")}
-              />
-
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword((previous) => !previous)}
-                className="text-muted-foreground hover:text-foreground dark:text-muted-foreground-dark dark:hover:text-foreground-dark absolute top-1/2 right-3 inline-flex -translate-y-1/2 items-center justify-center transition-colors"
-              >
-                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-
-                <span className="sr-only">Toggle confirm password visibility</span>
-              </button>
-            </div>
-          </FormField>
-
-          <Button type="submit" className="w-full" isLoading={isSubmitting}>
-            Update password
-          </Button>
-        </form>
-      )}
-    </AuthShell>
-  );
+                    <Button type="submit" className="w-full" isLoading={loading}>
+                        Update password
+                    </Button>
+                </form>
+            )}
+        </AuthShell>
+    );
 }

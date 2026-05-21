@@ -17,6 +17,17 @@ export async function apiRequest(path, { token, method = "GET", body, params } =
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
 
+    // Auto sign-out on 401 — token expired or invalid, force re-login
+    if (res.status === 401) {
+        if (typeof window !== "undefined") {
+            // Dynamically import to avoid SSR issues
+            import("next-auth/react").then(({ signOut }) => {
+                signOut({ callbackUrl: "/login?error=session_expired" });
+            });
+        }
+        throw new Error("Session expired — please sign in again");
+    }
+
     const json = await res.json();
     if (!res.ok || !json.success) {
         throw new Error(json.error?.message || `Request failed: ${res.status}`);

@@ -57,9 +57,13 @@ model User {
   bio            String?
   timezone       String?
   status         UserStatus         @default(ACTIVE)
-  onboarded      Boolean            @default(false)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  onboarded          Boolean            @default(false)
+  twoFactorEnabled     Boolean            @default(false)
+  twoFactorSecret      String?
+  passwordResetToken   String?            @unique
+  passwordResetExpiry  DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   organizations  OrganizationMember[]
   workspaces     WorkspaceMember[]

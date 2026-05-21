@@ -172,4 +172,63 @@ router.delete("/:workspaceId/members/:userId", async (req, res) => {
     }
 });
 
+// GET /api/workspaces/:workspaceId/labels
+router.get("/:workspaceId/labels", async (req, res) => {
+    try {
+        const member = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId: req.params.workspaceId, userId: req.user.id } },
+        });
+        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
+
+        const labels = await prisma.label.findMany({
+            where: { workspaceId: req.params.workspaceId },
+            orderBy: { createdAt: "asc" },
+        });
+        return res.status(200).json(successResponse(labels));
+    } catch (error) {
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch labels"));
+    }
+});
+
+// POST /api/workspaces/:workspaceId/labels
+router.post("/:workspaceId/labels", async (req, res) => {
+    try {
+        const member = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId: req.params.workspaceId, userId: req.user.id } },
+        });
+        if (!member || !["OWNER", "ADMIN"].includes(member.role)) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
+        }
+
+        const { name, color } = req.body;
+        if (!name?.trim() || !color) {
+            return res.status(422).json(errorResponse("VALIDATION_ERROR", "name and color are required"));
+        }
+
+        const label = await prisma.label.create({
+            data: { workspaceId: req.params.workspaceId, name: name.trim(), color },
+        });
+        return res.status(201).json(successResponse(label));
+    } catch (error) {
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to create label"));
+    }
+});
+
+// DELETE /api/workspaces/:workspaceId/labels/:labelId
+router.delete("/:workspaceId/labels/:labelId", async (req, res) => {
+    try {
+        const member = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId: req.params.workspaceId, userId: req.user.id } },
+        });
+        if (!member || !["OWNER", "ADMIN"].includes(member.role)) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
+        }
+
+        await prisma.label.delete({ where: { id: req.params.labelId } });
+        return res.status(200).json(successResponse({ deleted: true }));
+    } catch (error) {
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to delete label"));
+    }
+});
+
 export { router as workspacesRouter };
