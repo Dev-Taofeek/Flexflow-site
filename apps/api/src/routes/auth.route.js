@@ -11,11 +11,11 @@ import { successResponse, errorResponse } from "../utils/api-response.js";
 const router = Router();
 
 function signAccessToken(userId) {
-    return jwt.sign({ userId }, env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
+    return jwt.sign({ userId }, env.JWT_ACCESS_SECRET, { expiresIn: "24h" });
 }
 
 function signRefreshToken(userId) {
-    return jwt.sign({ userId }, env.JWT_REFRESH_SECRET, { expiresIn: "7d" });
+    return jwt.sign({ userId }, env.JWT_REFRESH_SECRET, { expiresIn: "30d" });
 }
 
 // OAuth upsert — called by NextAuth after Google/GitHub sign-in

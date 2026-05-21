@@ -31,6 +31,7 @@ export function TeamClient({
   const [role, setRole] = useState("MEMBER");
   const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState("");
+  const [inviteResult, setInviteResult] = useState(null); // { emailSent, inviteUrl }
 
   const canManage = currentUserRole && ["OWNER", "ADMIN"].includes(currentUserRole);
 
@@ -41,10 +42,14 @@ export function TeamClient({
       return;
     }
     setInviteError("");
+    setInviteResult(null);
     setIsInviting(true);
     try {
       const invite = await onInvite?.({ email, role });
-      if (invite) setInvitations((prev) => [invite, ...prev]);
+      if (invite) {
+        setInvitations((prev) => [invite, ...prev]);
+        setInviteResult({ emailSent: invite.emailSent, inviteUrl: invite.inviteUrl });
+      }
       setEmail("");
       setRole("MEMBER");
     } catch (err) {
@@ -129,6 +134,35 @@ export function TeamClient({
               Send invite
             </Button>
           </form>
+
+          {/* Post-invite feedback */}
+          {inviteResult && (
+            <div className={`mt-3 rounded-lg border px-3 py-2.5 text-sm ${inviteResult.emailSent ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+              {inviteResult.emailSent ? (
+                "Invite email sent successfully."
+              ) : (
+                <div className="space-y-1">
+                  <p className="font-medium">Email not sent — RESEND_API_KEY not configured on the server.</p>
+                  <p className="text-xs">Share this invite link manually:</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      readOnly
+                      value={inviteResult.inviteUrl}
+                      className="flex-1 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-zinc-700 focus:outline-none"
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(inviteResult.inviteUrl)}
+                      className="rounded px-2 py-1 text-xs font-medium bg-amber-100 hover:bg-amber-200 transition-colors"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 

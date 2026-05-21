@@ -287,21 +287,35 @@ router.post("/:orgId/invite", async (req, res) => {
 
         const inviteUrl = `${process.env.CLIENT_ORIGIN}/join?token=${invite.token}`;
 
+        let emailSent = false;
+        let emailError = null;
+
         if (resend) {
-            await resend.emails.send({
-                from: "FlexFlow <onboarding@resend.dev>",
-                to: email,
-                subject: `You've been invited to ${org.name} on FlexFlow`,
-                html: `<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
-                  <h2 style="font-size:20px;font-weight:600;color:#18181b;margin:0 0 8px">You've been invited</h2>
-                  <p style="color:#52525b;margin:0 0 24px">${req.user.name} invited you to join <strong>${org.name}</strong> on FlexFlow as ${role}.</p>
-                  <a href="${inviteUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:500">Accept Invitation</a>
-                  <p style="color:#a1a1aa;font-size:12px;margin-top:24px">This invitation expires in 7 days.</p>
-                </div>`,
-            });
+            try {
+                await resend.emails.send({
+                    from: "FlexFlow <onboarding@resend.dev>",
+                    to: email,
+                    subject: `You've been invited to ${org.name} on FlexFlow`,
+                    html: `<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+  <h2 style="font-size:20px;font-weight:600;color:#18181b;margin:0 0 8px">You've been invited</h2>
+  <p style="color:#52525b;margin:0 0 24px">${req.user.name} invited you to join <strong>${org.name}</strong> on FlexFlow as ${role}.</p>
+  <a href="${inviteUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:500">Accept Invitation</a>
+  <p style="color:#a1a1aa;font-size:12px;margin-top:24px">This invitation expires in 7 days. If the button doesn't work, copy this link:<br/>${inviteUrl}</p>
+</div>`,
+                });
+                emailSent = true;
+            } catch (emailErr) {
+                emailError = emailErr.message;
+                console.error("Invite email failed:", emailErr);
+            }
         }
 
-        return res.status(201).json(successResponse(invite));
+        return res.status(201).json(successResponse({
+            ...invite,
+            inviteUrl,
+            emailSent,
+            emailError: emailError || (!resend ? "RESEND_API_KEY not configured" : null),
+        }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to send invite"));

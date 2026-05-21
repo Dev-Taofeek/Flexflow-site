@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 
 const AppContext = createContext(null);
 
@@ -14,6 +14,13 @@ export function AppProvider({ children }) {
     const organizations = session?.user?.organizations || [];
     const currentOrg = organizations.find((o) => o.id === currentOrgId) || organizations[0] || null;
     const currentWorkspace = currentOrg?.workspaces?.find((w) => w.id === currentWorkspaceId) || currentOrg?.workspaces?.[0] || null;
+
+    // If the refresh token itself expired, sign the user out gracefully
+    useEffect(() => {
+        if (session?.error === "RefreshAccessTokenError") {
+            signOut({ callbackUrl: "/login?error=session_expired" });
+        }
+    }, [session?.error]);
 
     // Hydrate from localStorage
     useEffect(() => {

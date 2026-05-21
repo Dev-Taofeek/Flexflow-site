@@ -6,6 +6,9 @@ import { loginSchema } from "@/lib/auth/schemas";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
+// Access token lifetime: 23h so refresh happens once a day max
+const ACCESS_TOKEN_TTL_MS = 23 * 60 * 60 * 1000;
+
 async function authorize(credentials) {
     const parsed = loginSchema.safeParse(credentials);
     if (!parsed.success) return null;
@@ -37,7 +40,6 @@ async function authorize(credentials) {
     }
 }
 
-// Called on every OAuth sign-in to upsert the user in our DB and get JWTs
 async function oauthLogin({ email, name, image }) {
     try {
         const res = await fetch(`${API_URL}/auth/oauth`, {
@@ -54,8 +56,33 @@ async function oauthLogin({ email, name, image }) {
     }
 }
 
+async function refreshAccessToken(token) {
+    try {
+        const res = await fetch(`${API_URL}/auth/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken: token.refreshToken }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) throw new Error("Refresh failed");
+
+        return {
+            ...token,
+            accessToken: json.data.accessToken,
+            accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
+            error: null,
+        };
+    } catch {
+        // Refresh token is also expired — force re-login
+        return { ...token, error: "RefreshAccessTokenError" };
+    }
+}
+
 export const authOptions = {
-    session: { strategy: "jwt" },
+    session: {
+        strategy: "jwt",
+        maxAge: 30 * 24 * 60 * 60, // 30 days — user stays logged in for a month
+    },
     pages: { signIn: "/login" },
     providers: [
         Google({
@@ -76,35 +103,47 @@ export const authOptions = {
         }),
     ],
     callbacks: {
-        async jwt({ token, user, account, profile }) {
-            // Credentials login — user object already has tokens
+        async jwt({ token, user, account }) {
+            // ── Initial login ──────────────────────────────────────────────
             if (user && account?.provider === "credentials") {
-                token.id = user.id;
-                token.accessToken = user.accessToken;
-                token.refreshToken = user.refreshToken;
-                token.onboarded = user.onboarded;
-                token.organizations = user.organizations;
+                return {
+                    ...token,
+                    id: user.id,
+                    accessToken: user.accessToken,
+                    refreshToken: user.refreshToken,
+                    accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
+                    onboarded: user.onboarded,
+                    organizations: user.organizations,
+                    error: null,
+                };
             }
 
-            // OAuth (Google / GitHub) — upsert into our DB, get tokens
             if (account && (account.provider === "google" || account.provider === "github")) {
-                const data = await oauthLogin({
-                    email: user.email,
-                    name: user.name,
-                    image: user.image,
-                });
+                const data = await oauthLogin({ email: user.email, name: user.name, image: user.image });
                 if (data) {
-                    token.id = data.user.id;
-                    token.accessToken = data.accessToken;
-                    token.refreshToken = data.refreshToken;
-                    token.onboarded = data.user.onboarded;
-                    token.organizations = data.organizations || [];
+                    return {
+                        ...token,
+                        id: data.user.id,
+                        accessToken: data.accessToken,
+                        refreshToken: data.refreshToken,
+                        accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
+                        onboarded: data.user.onboarded,
+                        organizations: data.organizations || [],
+                        error: null,
+                    };
                 }
             }
 
-            return token;
+            // ── Subsequent requests: refresh if within 5 min of expiry ──────
+            if (token.accessTokenExpiry && Date.now() < token.accessTokenExpiry - 5 * 60 * 1000) {
+                return token; // Still valid, no refresh needed
+            }
+
+            return refreshAccessToken(token);
         },
+
         async session({ session, token }) {
+            session.error = token.error || null;
             if (session.user) {
                 session.user.id = token.id;
                 session.user.accessToken = token.accessToken;
