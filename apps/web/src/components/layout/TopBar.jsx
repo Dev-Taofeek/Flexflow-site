@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Building2, Check, ChevronDown, Command, LayoutGrid, Loader2, Menu, Plus, Search, X } from "lucide-react";
+import { apiRequest } from "@/lib/api-client";
 import { useApp } from "@/contexts/AppContext";
 import { SearchModal } from "@/components/search/SearchModal";
 import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
@@ -231,6 +232,81 @@ function MobileOrgSheet({ open, onClose }) {
     );
 }
 
+// ── Desktop New-Workspace Popover ───────────────────────────────────────────
+function NewWorkspacePopover() {
+    const { currentOrg, accessToken, refreshOrganizations, switchWorkspace } = useApp();
+    const [open, setOpen] = useState(false);
+    const [name, setName] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState("");
+    const ref = useRef(null);
+
+    useEffect(() => {
+        function handler(e) {
+            if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+        }
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, []);
+
+    async function submit(e) {
+        e.preventDefault();
+        if (!name.trim()) { setErr("Name required"); return; }
+        setLoading(true); setErr("");
+        try {
+            const ws = await apiRequest("/workspaces", {
+                method: "POST", token: accessToken,
+                body: { name: name.trim(), organizationId: currentOrg?.id },
+            });
+            await refreshOrganizations();
+            switchWorkspace(ws.id);
+            setName(""); setOpen(false);
+        } catch (ex) {
+            setErr(ex.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    if (!currentOrg) return null;
+
+    return (
+        <div ref={ref} className="relative">
+            <button
+                aria-label="New workspace"
+                onClick={() => { setOpen((o) => !o); setErr(""); }}
+                className="flex h-5 w-5 items-center justify-center rounded-md text-(--text-muted) hover:bg-(--bg-overlay) hover:text-indigo-600 transition-colors"
+            >
+                <Plus className="h-3.5 w-3.5" />
+            </button>
+
+            {open && (
+                <div className="absolute left-0 top-7 z-50 w-60 rounded-xl border border-(--border) bg-(--bg-elevated) p-3 shadow-lg">
+                    <p className="mb-2 text-xs font-semibold text-(--text-primary)">New workspace in {currentOrg.name}</p>
+                    <form onSubmit={submit} className="space-y-2">
+                        <input
+                            autoFocus
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="Workspace name"
+                            className="w-full rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
+                        />
+                        {err && <p className="text-xs text-red-500">{err}</p>}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                        >
+                            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                            Create workspace
+                        </button>
+                    </form>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ── TopBar ──────────────────────────────────────────────────────────────────
 export function TopBar({ onMenuClick }) {
     const pathname = usePathname();
@@ -285,7 +361,7 @@ export function TopBar({ onMenuClick }) {
                     <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
 
-                {/* Page title — desktop */}
+                {/* Page title + workspace — desktop */}
                 <div className="hidden md:flex flex-1 min-w-0 items-center gap-2">
                     <h1 className="text-sm font-semibold text-(--text-primary)">{label}</h1>
                     {currentWorkspace && (
@@ -294,6 +370,7 @@ export function TopBar({ onMenuClick }) {
                             <span className="text-sm text-(--text-muted) truncate max-w-32">{currentWorkspace.name}</span>
                         </>
                     )}
+                    <NewWorkspacePopover />
                 </div>
 
                 {/* Page title — mobile (centered) */}

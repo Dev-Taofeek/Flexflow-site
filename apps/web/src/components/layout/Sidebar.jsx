@@ -117,13 +117,20 @@ function OrgSwitcher({ collapsed }) {
 }
 
 function WorkspaceSwitcher({ collapsed }) {
-  const { currentOrg, currentWorkspace, switchWorkspace } = useApp();
+  const { currentOrg, currentWorkspace, switchWorkspace, accessToken, refreshOrganizations } = useApp();
   const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [wsName, setWsName] = useState("");
+  const [wsLoading, setWsLoading] = useState(false);
+  const [wsErr, setWsErr] = useState("");
   const ref = useRef(null);
 
   useEffect(() => {
     function handler(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setCreating(false);
+      }
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -131,6 +138,27 @@ function WorkspaceSwitcher({ collapsed }) {
 
   if (!currentOrg) return null;
   const workspaces = currentOrg.workspaces || [];
+
+  async function handleCreateWorkspace(e) {
+    e.preventDefault();
+    if (!wsName.trim()) { setWsErr("Name required"); return; }
+    setWsLoading(true); setWsErr("");
+    try {
+      const { apiRequest } = await import("@/lib/api-client");
+      const ws = await apiRequest("/workspaces", {
+        method: "POST",
+        token: accessToken,
+        body: { name: wsName.trim(), organizationId: currentOrg.id },
+      });
+      await refreshOrganizations();
+      switchWorkspace(ws.id);
+      setWsName(""); setCreating(false); setOpen(false);
+    } catch (err) {
+      setWsErr(err.message);
+    } finally {
+      setWsLoading(false);
+    }
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -158,7 +186,7 @@ function WorkspaceSwitcher({ collapsed }) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-1 w-52 rounded-xl border border-(--border) bg-(--bg-elevated) py-1 shadow-lg">
+        <div className="absolute top-full left-0 z-50 mt-1 w-56 rounded-xl border border-(--border) bg-(--bg-elevated) py-1 shadow-lg">
           <div className="px-3 py-1.5">
             <p className="text-[11px] font-medium tracking-wider text-(--text-muted) uppercase">
               Workspaces
@@ -167,16 +195,52 @@ function WorkspaceSwitcher({ collapsed }) {
           {workspaces.map((ws) => (
             <button
               key={ws.id}
-              onClick={() => {
-                switchWorkspace(ws.id);
-                setOpen(false);
-              }}
+              onClick={() => { switchWorkspace(ws.id); setOpen(false); }}
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-(--bg-overlay)"
             >
               <span className="flex-1 truncate text-(--text-primary)">{ws.name}</span>
               {currentWorkspace?.id === ws.id && <Check className="h-3.5 w-3.5 text-indigo-500" />}
             </button>
           ))}
+
+          <div className="mt-1 border-t border-(--border) pt-1">
+            {creating ? (
+              <form onSubmit={handleCreateWorkspace} className="px-3 py-2 space-y-2">
+                <input
+                  autoFocus
+                  value={wsName}
+                  onChange={(e) => setWsName(e.target.value)}
+                  placeholder="Workspace name"
+                  className="w-full rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-xs text-(--text-primary) focus:border-indigo-500 focus:outline-none"
+                />
+                {wsErr && <p className="text-[11px] text-red-500">{wsErr}</p>}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="submit"
+                    disabled={wsLoading}
+                    className="flex-1 rounded-lg bg-indigo-600 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {wsLoading ? "Creating…" : "Create"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCreating(false); setWsErr(""); }}
+                    className="rounded-lg border border-(--border) px-2.5 py-1.5 text-xs text-(--text-secondary) hover:bg-(--bg-overlay)"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                onClick={() => setCreating(true)}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
+              >
+                <Plus className="h-4 w-4" />
+                New workspace
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
