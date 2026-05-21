@@ -60,7 +60,7 @@ export function TopBar() {
                     <span className="hidden sm:inline">New</span>
                 </Link>
 
-                <button className="flex h-8 w-8 items-center justify-center rounded-lg text-(--text-tertiary) hover:bg-(--bg-overlay) hover:text-(--text-secondary) transition-colors">
+                <button aria-label="View notifications" className="flex h-8 w-8 items-center justify-center rounded-lg text-(--text-tertiary) hover:bg-(--bg-overlay) hover:text-(--text-secondary) transition-colors">
                     <Bell className="h-4 w-4" />
                 </button>
             </div>

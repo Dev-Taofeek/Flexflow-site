@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useApp } from "@/contexts/AppContext";
 import { fetchProject } from "@/lib/projects-api";
-import { KanbanBoard } from "@/components/projects/KanbanBoard";
+import dynamic from "next/dynamic";
+
+const KanbanBoard = dynamic(
+    () => import("@/components/projects/KanbanBoard").then((m) => m.KanbanBoard),
+    {
+        loading: () => <div className="h-96 animate-pulse rounded-xl bg-(--border)" />,
+        ssr: false,
+    }
+);
 
 export default function ProjectDetailPage() {
     const { projectId } = useParams();

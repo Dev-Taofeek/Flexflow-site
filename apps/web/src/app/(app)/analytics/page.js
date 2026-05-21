@@ -3,7 +3,19 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { fetchAnalytics } from "@/lib/analytics-api";
-import { AnalyticsDashboard } from "@/components/analytics/AnalyticsDashboard";
+import dynamic from "next/dynamic";
+
+const AnalyticsDashboard = dynamic(
+    () => import("@/components/analytics/AnalyticsDashboard").then((m) => m.AnalyticsDashboard),
+    {
+        loading: () => (
+            <div className="space-y-4">
+                {[1, 2, 3, 4].map((i) => <div key={i} className="h-56 animate-pulse rounded-xl bg-(--border)" />)}
+            </div>
+        ),
+        ssr: false,
+    }
+);
 
 export default function AnalyticsPage() {
     const { currentWorkspace, accessToken, isReady } = useApp();

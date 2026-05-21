@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { Calendar, Clock3, MessageSquare, Tag, User2 } from "lucide-react";
 
-import { RichTextEditor } from "@/components/issues/RichTextEditor";
+import dynamic from "next/dynamic";
+
+const RichTextEditor = dynamic(
+    () => import("@/components/issues/RichTextEditor").then((m) => m.RichTextEditor),
+    {
+        loading: () => <div className="h-32 animate-pulse rounded-lg bg-(--border)" />,
+        ssr: false,
+    }
+);
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";

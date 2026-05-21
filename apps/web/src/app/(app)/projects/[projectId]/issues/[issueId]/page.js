@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useApp } from "@/contexts/AppContext";
 import { fetchIssue } from "@/lib/issues-api";
-import { IssueDetailView } from "@/components/issues/IssueDetailView";
+import dynamic from "next/dynamic";
+
+const IssueDetailView = dynamic(
+    () => import("@/components/issues/IssueDetailView").then((m) => m.IssueDetailView),
+    {
+        loading: () => <div className="h-96 animate-pulse rounded-xl bg-(--border)" />,
+        ssr: false,
+    }
+);
 
 export default function IssueDetailPage() {
     const { projectId, issueId } = useParams();

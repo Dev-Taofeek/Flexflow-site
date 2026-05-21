@@ -280,6 +280,7 @@ export default function OrganizationSettingsPage() {
                     ))}
                   </select>
                   <button
+                    aria-label={`Remove ${m.user?.name ?? "member"}`}
                     onClick={() => handleRemoveMember(m.user?.id)}
                     className="flex h-7 w-7 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-red-50 hover:text-red-500"
                   >
