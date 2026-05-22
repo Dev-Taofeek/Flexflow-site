@@ -7,6 +7,7 @@ import {
     Filter, Loader2, Plus, RefreshCw, X,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { useRole } from "@/hooks/useRole";
 import { apiRequest } from "@/lib/api-client";
 import { fetchProjects } from "@/lib/projects-api";
 
@@ -116,6 +117,7 @@ function MultiAssigneePicker({ members, selected, onChange }) {
 
 export default function IssuesPage() {
     const { currentWorkspace, currentWorkspaceId, currentOrg, accessToken, isReady } = useApp();
+    const { canWrite } = useRole();
 
     const [issues, setIssues] = useState([]);
     const [projects, setProjects] = useState([]);
@@ -217,13 +219,15 @@ export default function IssuesPage() {
                         <RefreshCw className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Refresh</span>
                     </button>
-                    <button
-                        onClick={() => setShowCreate((s) => !s)}
-                        className="flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
-                    >
-                        <Plus className="h-4 w-4" />
-                        <span>New Issue</span>
-                    </button>
+                    {canWrite && (
+                        <button
+                            onClick={() => setShowCreate((s) => !s)}
+                            className="flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+                        >
+                            <Plus className="h-4 w-4" />
+                            <span>New Issue</span>
+                        </button>
+                    )}
                 </div>
             </div>
 

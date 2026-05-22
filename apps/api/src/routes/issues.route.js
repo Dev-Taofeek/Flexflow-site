@@ -86,6 +86,7 @@ router.post("/", async (req, res) => {
             where: { workspaceId_userId: { workspaceId: project.workspaceId, userId: req.user.id } },
         });
         if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
+        if (member.role === "VIEWER") return res.status(403).json(errorResponse("FORBIDDEN", "Viewers cannot create issues"));
 
         const ids = Array.isArray(assigneeIds) ? assigneeIds.filter(Boolean) : [assigneeIds].filter(Boolean);
         const primaryAssigneeId = ids[0] || null;
@@ -144,6 +145,7 @@ router.patch("/:issueId/assignees", async (req, res) => {
             where: { workspaceId_userId: { workspaceId: issue.project.workspaceId, userId: req.user.id } },
         });
         if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
+        if (member.role === "VIEWER") return res.status(403).json(errorResponse("FORBIDDEN", "Viewers cannot modify issue assignees"));
 
         const ids = [...new Set(assigneeIds.filter(Boolean))];
         const primaryId = ids[0] || null;

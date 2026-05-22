@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { CheckCircle2, Loader2, QrCode, ShieldCheck, ShieldOff } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { apiRequest } from "@/lib/api-client";
+import { useRole } from "@/hooks/useRole";
 
 function Field({ label, id, children }) {
     return (
@@ -28,6 +29,7 @@ const inputCls = "w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2
 export function ProfileSettingsClient() {
     const { data: session, update } = useSession();
     const { accessToken } = useApp();
+    const { isOwner } = useRole();
 
     const user = session?.user;
     const avatarRef = useRef(null);
@@ -209,8 +211,15 @@ export function ProfileSettingsClient() {
                 </form>
             </section>
 
-            {/* 2FA */}
+            {/* 2FA — owner only */}
             <section className="rounded-xl border border-(--border) bg-(--bg-elevated) p-6">
+                {!isOwner && (
+                    <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>Two-factor authentication can only be configured by the organization <strong>Owner</strong>.</span>
+                    </div>
+                )}
+
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <h2 className="flex items-center gap-2 text-base font-semibold text-(--text-primary)">
@@ -230,8 +239,8 @@ export function ProfileSettingsClient() {
                     {twoFA.enabled ? (
                         <button
                             onClick={disable2FA}
-                            disabled={twoFA.loading}
-                            className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-60"
+                            disabled={twoFA.loading || !isOwner}
+                            className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             <ShieldOff className="h-4 w-4" /> Disable 2FA
                         </button>
@@ -262,8 +271,8 @@ export function ProfileSettingsClient() {
                     ) : (
                         <button
                             onClick={setup2FA}
-                            disabled={twoFA.loading}
-                            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                            disabled={twoFA.loading || !isOwner}
+                            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             {twoFA.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
                             Set up 2FA

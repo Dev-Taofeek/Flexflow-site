@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { Lock } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PremiumModal } from "@/components/ui/PremiumModal";
+import { useRole } from "@/hooks/useRole";
 
 export function WorkspaceSettingsClient() {
+  const { isOwner, canManage } = useRole();
+  const [premiumModal, setPremiumModal] = useState({ open: false, feature: "", description: "" });
   const [columns, setColumns] = useState(["To Do", "In Progress", "In Review", "Done"]);
 
   const [labels, setLabels] = useState([
@@ -363,10 +368,24 @@ export function WorkspaceSettingsClient() {
           </div>
         </div>
 
+        {!isOwner && (
+          <div className="mt-4 flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+            <Lock className="h-3.5 w-3.5 shrink-0" />
+            Only the organization <strong>Owner</strong> can configure integrations.
+          </div>
+        )}
+
         <div className="mt-6 flex justify-end">
-          <Button type="button">Save integrations</Button>
+          <Button type="button" disabled={!isOwner}>Save integrations</Button>
         </div>
       </section>
+
+      <PremiumModal
+        open={premiumModal.open}
+        onClose={() => setPremiumModal((s) => ({ ...s, open: false }))}
+        feature={premiumModal.feature}
+        description={premiumModal.description}
+      />
     </div>
   );
 }

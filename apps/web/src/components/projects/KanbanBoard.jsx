@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/Badge";
 import { updateIssueStatus } from "@/lib/projects-api";
 import { apiRequest } from "@/lib/api-client";
 import { socket } from "@/lib/socket";
+import { useRole } from "@/hooks/useRole";
 
 const COLUMNS = [
     { id: "TODO",        title: "To Do",       color: "bg-zinc-400" },
@@ -203,6 +204,7 @@ function IssueCard({ issue, isDragging = false, projectId }) {
 // ── Column ─────────────────────────────────────────────────────────────────
 function KanbanColumn({ column, issues, children, projectId, members, token, onCreated }) {
     const { setNodeRef, isOver } = useDroppable({ id: column.id });
+    const { canWrite } = useRole();
     const [creating, setCreating] = useState(false);
 
     return (
@@ -222,13 +224,15 @@ function KanbanColumn({ column, issues, children, projectId, members, token, onC
                         {issues.length}
                     </span>
                 </div>
-                <button
-                    aria-label={`Add issue to ${column.title}`}
-                    onClick={() => setCreating(true)}
-                    className="flex h-6 w-6 items-center justify-center rounded-md text-(--text-muted) hover:bg-(--bg-overlay) hover:text-indigo-600 transition-colors"
-                >
-                    <Plus className="h-3.5 w-3.5" />
-                </button>
+                {canWrite && (
+                    <button
+                        aria-label={`Add issue to ${column.title}`}
+                        onClick={() => setCreating(true)}
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-(--text-muted) hover:bg-(--bg-overlay) hover:text-indigo-600 transition-colors"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                    </button>
+                )}
             </div>
 
             {/* Cards */}
@@ -246,7 +250,7 @@ function KanbanColumn({ column, issues, children, projectId, members, token, onC
                     />
                 )}
 
-                {issues.length === 0 && !creating && (
+                {issues.length === 0 && !creating && canWrite && (
                     <button
                         onClick={() => setCreating(true)}
                         className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-(--border) py-6 text-xs text-(--text-muted) transition-colors hover:border-indigo-300 hover:text-indigo-500"

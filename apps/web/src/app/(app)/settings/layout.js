@@ -2,16 +2,34 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ShieldOff } from "lucide-react";
+import { useRole } from "@/hooks/useRole";
 
 export default function SettingsLayout({ children }) {
     const pathname = usePathname();
+    const { role, isViewer, isAdmin, isOwner } = useRole();
+
+    if (isViewer) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100">
+                    <ShieldOff className="h-8 w-8 text-zinc-400" />
+                </div>
+                <h2 className="mt-5 text-lg font-semibold text-(--text-primary)">Access restricted</h2>
+                <p className="mt-2 max-w-sm text-sm text-(--text-muted)">
+                    Your role is <span className="font-medium text-(--text-secondary)">Viewer</span>. You can view content but
+                    cannot access settings. Contact an Admin or Owner to change your role.
+                </p>
+            </div>
+        );
+    }
 
     const NAV = [
-        { href: "/settings/profile",      label: "Profile" },
-        { href: "/settings/organization", label: "Organization" },
-        { href: "/settings/workspace",    label: "Workspace" },
-        { href: "/settings/roles",        label: "Roles & Permissions" },
-    ];
+        { href: "/settings/profile",      label: "Profile",             show: true },
+        { href: "/settings/organization", label: "Organization",        show: isAdmin },
+        { href: "/settings/workspace",    label: "Workspace",           show: isAdmin },
+        { href: "/settings/roles",        label: "Roles & Permissions", show: isAdmin },
+    ].filter((n) => n.show);
 
     return (
         <div className="space-y-6">

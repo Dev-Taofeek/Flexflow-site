@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Bell, Building2, Check, ChevronDown, Command, LayoutGrid, Loader2, Menu, Plus, Search, X } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { useApp } from "@/contexts/AppContext";
+import { useRole } from "@/hooks/useRole";
+import { PremiumModal } from "@/components/ui/PremiumModal";
 import { SearchModal } from "@/components/search/SearchModal";
 import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
 import { fetchNotifications } from "@/lib/notifications-api";
@@ -35,16 +37,34 @@ function getLabel(pathname) {
 function MobileOrgSheet({ open, onClose }) {
     const router = useRouter();
     const { organizations, currentOrg, currentWorkspace, switchOrg, switchWorkspace, accessToken, refreshOrganizations } = useApp();
+    const { canManage, ownsAnyOrg } = useRole();
 
     const [tab, setTab] = useState("orgs"); // "orgs" | "workspaces" | "new-org" | "new-ws"
     const [orgForm, setOrgForm] = useState({ name: "", workspaceName: "General" });
     const [wsForm, setWsForm] = useState({ name: "" });
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
+    const [premiumModal, setPremiumModal] = useState({ open: false, feature: "", description: "" });
 
     useEffect(() => {
         if (open) { setTab("orgs"); setErr(""); }
     }, [open]);
+
+    function openNewOrg() {
+        if (ownsAnyOrg) {
+            setPremiumModal({ open: true, feature: "Multiple Organizations", description: "The free plan lets you create 1 organization. Upgrade to Premium to create unlimited organizations." });
+            return;
+        }
+        setTab("new-org");
+    }
+
+    function openNewWorkspace() {
+        if ((currentOrg?.workspaces?.length ?? 0) >= 3) {
+            setPremiumModal({ open: true, feature: "More Workspaces", description: "The free plan includes 3 workspaces per organization. Upgrade to Premium for unlimited workspaces." });
+            return;
+        }
+        setTab("new-ws");
+    }
 
     async function createOrg(e) {
         e.preventDefault();
@@ -135,11 +155,12 @@ function MobileOrgSheet({ open, onClose }) {
                             )}
 
                             <button
-                                onClick={() => setTab("new-org")}
+                                onClick={openNewOrg}
                                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-indigo-600 transition-colors hover:bg-indigo-50 mt-1"
                             >
                                 <Plus className="h-4 w-4" />
                                 <span className="text-sm font-medium">New organization</span>
+                                {ownsAnyOrg && <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">PRO</span>}
                             </button>
                         </div>
                     )}
@@ -163,13 +184,16 @@ function MobileOrgSheet({ open, onClose }) {
                                     {currentWorkspace?.id === ws.id && <Check className="h-4 w-4 shrink-0 text-indigo-600" />}
                                 </button>
                             ))}
-                            <button
-                                onClick={() => setTab("new-ws")}
-                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-indigo-600 hover:bg-indigo-50 mt-1"
-                            >
-                                <Plus className="h-4 w-4" />
-                                <span className="text-sm font-medium">New workspace</span>
-                            </button>
+                            {canManage && (
+                                <button
+                                    onClick={openNewWorkspace}
+                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-indigo-600 hover:bg-indigo-50 mt-1"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                    <span className="text-sm font-medium">New workspace</span>
+                                    {(currentOrg?.workspaces?.length ?? 0) >= 3 && <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">PRO</span>}
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -250,16 +274,25 @@ function MobileOrgSheet({ open, onClose }) {
                 </div>
             </div>
         </div>
+
+        <PremiumModal
+            open={premiumModal.open}
+            onClose={() => setPremiumModal((s) => ({ ...s, open: false }))}
+            feature={premiumModal.feature}
+            description={premiumModal.description}
+        />
     );
 }
 
 // ── Desktop New-Workspace Popover ───────────────────────────────────────────
 function NewWorkspacePopover() {
     const { currentOrg, accessToken, refreshOrganizations, switchWorkspace } = useApp();
+    const { canManage } = useRole();
     const [open, setOpen] = useState(false);
     const [name, setName] = useState("");
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
+    const [premiumModal, setPremiumModal] = useState({ open: false, feature: "", description: "" });
     const ref = useRef(null);
 
     useEffect(() => {
@@ -289,13 +322,28 @@ function NewWorkspacePopover() {
         }
     }
 
-    if (!currentOrg) return null;
+    if (!currentOrg || !canManage) return null;
+
+    function handleOpenPopover() {
+        if ((currentOrg?.workspaces?.length ?? 0) >= 3) {
+            setPremiumModal({ open: true, feature: "More Workspaces", description: "The free plan includes 3 workspaces per organization. Upgrade to Premium for unlimited workspaces." });
+            return;
+        }
+        setOpen((o) => !o);
+        setErr("");
+    }
 
     return (
         <div ref={ref} className="relative">
+            <PremiumModal
+                open={premiumModal.open}
+                onClose={() => setPremiumModal((s) => ({ ...s, open: false }))}
+                feature={premiumModal.feature}
+                description={premiumModal.description}
+            />
             <button
                 aria-label="New workspace"
-                onClick={() => { setOpen((o) => !o); setErr(""); }}
+                onClick={handleOpenPopover}
                 className="flex h-5 w-5 items-center justify-center rounded-md text-(--text-muted) hover:bg-(--bg-overlay) hover:text-indigo-600 transition-colors"
             >
                 <Plus className="h-3.5 w-3.5" />

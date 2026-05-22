@@ -355,7 +355,7 @@ router.post("/:projectId/issues/:issueId/comments", async (req, res) => {
         if (!issue) return res.status(404).json(errorResponse("NOT_FOUND", "Issue not found"));
 
         const member = await assertWorkspaceAccess(issue.project.workspaceId, req.user.id);
-        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
+        if (!member || member.role === "VIEWER") return res.status(403).json(errorResponse("FORBIDDEN", "Viewers cannot post comments"));
 
         const { content } = req.body;
         if (!content?.trim()) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Content is required"));
