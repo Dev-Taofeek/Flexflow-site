@@ -99,7 +99,7 @@ router.post("/register", async (req, res) => {
         return res.status(201).json(successResponse({ user, accessToken, refreshToken }));
     } catch (error) {
         console.error("Register error:", error);
-        return res.status(500).json(errorResponse("SERVER_ERROR", "Registration failed"));
+        return res.status(500).json(errorResponse("SERVER_ERROR", error.message || "Registration failed"));
     }
 });
 
