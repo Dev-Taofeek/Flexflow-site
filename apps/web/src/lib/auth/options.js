@@ -103,7 +103,14 @@ export const authOptions = {
         }),
     ],
     callbacks: {
-        async jwt({ token, user, account }) {
+        async jwt({ token, user, account, trigger, session }) {
+            // ── session.update() calls from client (e.g. after onboarding) ─
+            if (trigger === "update" && session) {
+                if (session.onboarded !== undefined) token.onboarded = session.onboarded;
+                if (session.organizations !== undefined) token.organizations = session.organizations;
+                return token;
+            }
+
             // ── Initial login ──────────────────────────────────────────────
             if (user && account?.provider === "credentials") {
                 return {

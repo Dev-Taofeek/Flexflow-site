@@ -115,7 +115,7 @@ function MultiAssigneePicker({ members, selected, onChange }) {
 }
 
 export default function IssuesPage() {
-    const { currentWorkspace, currentWorkspaceId, accessToken, isReady } = useApp();
+    const { currentWorkspace, currentWorkspaceId, currentOrg, accessToken, isReady } = useApp();
 
     const [issues, setIssues] = useState([]);
     const [projects, setProjects] = useState([]);
@@ -162,10 +162,12 @@ export default function IssuesPage() {
         fetchProjects({ workspaceId: currentWorkspaceId, token: accessToken })
             .then(setProjects)
             .catch(() => {});
-        apiRequest(`/workspaces/${currentWorkspaceId}/members`, { token: accessToken })
-            .then((data) => setMembers(data.members || []))
-            .catch(() => {});
-    }, [isReady, currentWorkspaceId, accessToken]);
+        if (currentOrg?.id) {
+            apiRequest(`/organizations/${currentOrg.id}/members`, { token: accessToken })
+                .then((data) => setMembers((data.members || []).map((m) => ({ user: m.user, role: m.role }))))
+                .catch(() => {});
+        }
+    }, [isReady, currentWorkspaceId, currentOrg?.id, accessToken]);
 
     async function handleCreate(e) {
         e.preventDefault();

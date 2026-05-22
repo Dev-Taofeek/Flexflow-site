@@ -28,7 +28,7 @@ router.get("/", async (req, res) => {
                 where: { project: { workspaceId } },
                 include: { user: { select: { id: true, name: true, avatarUrl: true } }, project: { select: { name: true } }, issue: { select: { title: true } } },
                 orderBy: { createdAt: "desc" },
-                take: 20,
+                take: 5,
             }),
             prisma.project.findMany({
                 where: { workspaceId },

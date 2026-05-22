@@ -322,7 +322,7 @@ export function WorkspaceSettingsClient() {
             </Badge>
           </div>
 
-          <div className="border-border bg-background dark:border-border-dark dark:bg-background-dark rounded-2xl border p-5">
+          <div className="border-border bg-background dark:border-border-dark dark:bg-background-dark rounded-2xl border p-5 opacity-75">
             <div className="flex items-center gap-3">
               <svg
                 className="text-brand-500 h-5 w-5"
@@ -336,10 +336,15 @@ export function WorkspaceSettingsClient() {
                 <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
               </svg>
 
-              <div>
-                <p className="text-foreground dark:text-foreground-dark text-sm font-semibold">
-                  GitHub sync
-                </p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-foreground dark:text-foreground-dark text-sm font-semibold">
+                    GitHub sync
+                  </p>
+                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 uppercase tracking-wide">
+                    Premium
+                  </span>
+                </div>
 
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
                   Link commits and pull requests to issues.
@@ -347,12 +352,10 @@ export function WorkspaceSettingsClient() {
               </div>
             </div>
 
-            <Input
-              value={githubRepo}
-              onChange={(event) => setGithubRepo(event.target.value)}
-              placeholder="owner/repository"
-              className="mt-4"
-            />
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <p className="font-semibold">Upgrade to unlock</p>
+              <p className="mt-0.5">GitHub sync is available on the Premium plan.</p>
+            </div>
 
             <Badge variant="secondary" className="mt-4">
               Not connected

@@ -25,6 +25,11 @@ router.post("/", async (req, res) => {
             return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
         }
 
+        const wsCount = await prisma.workspace.count({ where: { organizationId } });
+        if (wsCount >= 3) {
+            return res.status(403).json(errorResponse("WORKSPACE_LIMIT_REACHED", "Free plan allows 3 workspaces per organization. Upgrade to Premium for unlimited workspaces."));
+        }
+
         const baseSlug = slugify(name);
         let slug = baseSlug;
         let counter = 1;

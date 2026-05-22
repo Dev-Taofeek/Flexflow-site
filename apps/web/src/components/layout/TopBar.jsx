@@ -10,6 +10,10 @@ import { SearchModal } from "@/components/search/SearchModal";
 import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
 import { fetchNotifications } from "@/lib/notifications-api";
 
+function isUpgradeError(msg) {
+    return msg?.includes("Upgrade to Premium") || msg?.includes("Free plan");
+}
+
 const PAGE_LABELS = {
     "/dashboard": "Dashboard",
     "/issues":    "Issues",
@@ -188,7 +192,16 @@ function MobileOrgSheet({ open, onClose }) {
                                 onChange={(e) => setOrgForm((f) => ({ ...f, workspaceName: e.target.value }))}
                                 className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
                             />
-                            {err && <p className="text-xs text-red-500">{err}</p>}
+                            {err && (
+                                isUpgradeError(err) ? (
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                                        <p className="font-semibold">Free plan limit reached</p>
+                                        <p className="mt-0.5">{err}</p>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-red-500">{err}</p>
+                                )
+                            )}
                             <button
                                 type="submit"
                                 disabled={loading}
@@ -214,7 +227,16 @@ function MobileOrgSheet({ open, onClose }) {
                                 onChange={(e) => setWsForm({ name: e.target.value })}
                                 className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
                             />
-                            {err && <p className="text-xs text-red-500">{err}</p>}
+                            {err && (
+                                isUpgradeError(err) ? (
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                                        <p className="font-semibold">Free plan limit reached</p>
+                                        <p className="mt-0.5">{err}</p>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-red-500">{err}</p>
+                                )
+                            )}
                             <button
                                 type="submit"
                                 disabled={loading}
@@ -290,7 +312,16 @@ function NewWorkspacePopover() {
                             placeholder="Workspace name"
                             className="w-full rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
                         />
-                        {err && <p className="text-xs text-red-500">{err}</p>}
+                        {err && (
+                            isUpgradeError(err) ? (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                                    <p className="font-semibold">Free plan limit reached</p>
+                                    <p className="mt-0.5">{err}</p>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-red-500">{err}</p>
+                            )
+                        )}
                         <button
                             type="submit"
                             disabled={loading}

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { CheckCircle2, Loader2, QrCode, ShieldCheck, ShieldOff } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
@@ -44,6 +44,16 @@ export function ProfileSettingsClient() {
     const [pwLoading, setPwLoading] = useState(false);
 
     const [twoFA, setTwoFA] = useState({ enabled: false, qrCode: "", secret: "", code: "", loading: false, msg: { ok: true, text: "" } });
+
+    useEffect(() => {
+        if (!accessToken) return;
+        apiRequest("/profile", { token: accessToken })
+            .then((data) => {
+                setTwoFA((s) => ({ ...s, enabled: data.twoFactorEnabled || false }));
+                if (data.bio) setBio(data.bio);
+            })
+            .catch(() => {});
+    }, [accessToken]);
 
     function handleAvatarFile(e) {
         const file = e.target.files?.[0];

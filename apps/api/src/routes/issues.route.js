@@ -1,7 +1,10 @@
 import { Router } from "express";
+import { Resend } from "resend";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const router = Router();
 router.use(authenticate);
@@ -130,7 +133,10 @@ router.patch("/:issueId/assignees", async (req, res) => {
 
         const issue = await prisma.issue.findUnique({
             where: { id: issueId },
-            include: { project: { select: { workspaceId: true } } },
+            include: {
+                project: { select: { workspaceId: true } },
+                assignees: { select: { userId: true } },
+            },
         });
         if (!issue) return res.status(404).json(errorResponse("NOT_FOUND", "Issue not found"));
 
@@ -150,6 +156,43 @@ router.patch("/:issueId/assignees", async (req, res) => {
                 : []),
             prisma.issue.update({ where: { id: issueId }, data: { assigneeId: primaryId } }),
         ]);
+
+        // Notify newly added assignees
+        const oldIds = new Set((issue.assignees || []).map((a) => a.userId));
+        const newlyAdded = ids.filter((id) => !oldIds.has(id));
+
+        if (newlyAdded.length > 0) {
+            await Promise.all(newlyAdded.map((userId) =>
+                prisma.notification.create({
+                    data: {
+                        userId,
+                        title: "You've been assigned to an issue",
+                        message: `You were assigned to: ${issue.title}`,
+                        type: "ISSUE_ASSIGNED",
+                    },
+                })
+            ));
+
+            if (resend) {
+                const assigneeUsers = await prisma.user.findMany({
+                    where: { id: { in: newlyAdded } },
+                    select: { email: true, name: true },
+                });
+                await Promise.all(assigneeUsers.map((u) =>
+                    resend.emails.send({
+                        from: "FlexFlow <onboarding@resend.dev>",
+                        to: u.email,
+                        subject: `You've been assigned: ${issue.title}`,
+                        html: `<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+  <h2 style="font-size:20px;font-weight:600;color:#18181b;margin:0 0 8px">New assignment</h2>
+  <p style="color:#52525b;margin:0 0 8px">Hi ${u.name},</p>
+  <p style="color:#52525b;margin:0 0 24px">You've been assigned to the issue: <strong>${issue.title}</strong></p>
+  <p style="color:#a1a1aa;font-size:12px;margin-top:24px">Log in to FlexFlow to view this issue.</p>
+</div>`,
+                    }).catch(() => {})
+                ));
+            }
+        }
 
         const updated = await prisma.issue.findUnique({ where: { id: issueId }, include: ISSUE_INCLUDE });
         return res.status(200).json(successResponse(updated));

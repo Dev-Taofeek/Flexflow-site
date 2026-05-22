@@ -50,6 +50,13 @@ router.post("/", async (req, res) => {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Organization name is required"));
         }
 
+        const existingOwned = await prisma.organizationMember.count({
+            where: { userId: req.user.id, role: "OWNER" },
+        });
+        if (existingOwned >= 1) {
+            return res.status(403).json(errorResponse("ORG_LIMIT_REACHED", "Free plan allows creating 1 organization. Upgrade to Premium to create more."));
+        }
+
         const baseSlug = slugify(name);
         let slug = baseSlug;
         let counter = 1;
@@ -350,6 +357,18 @@ router.post("/join", async (req, res) => {
 
             await prisma.user.update({ where: { id: req.user.id }, data: { onboarded: true } });
 
+            const firstWorkspace = org.workspaces?.[0];
+            if (firstWorkspace) {
+                const alreadyInWs = await prisma.workspaceMember.findUnique({
+                    where: { workspaceId_userId: { workspaceId: firstWorkspace.id, userId: req.user.id } },
+                });
+                if (!alreadyInWs) {
+                    await prisma.workspaceMember.create({
+                        data: { workspaceId: firstWorkspace.id, userId: req.user.id, role: "MEMBER" },
+                    });
+                }
+            }
+
             return res.status(200).json(successResponse({ ...org, role: invite.role }));
         }
 
@@ -370,6 +389,18 @@ router.post("/join", async (req, res) => {
             });
 
             await prisma.user.update({ where: { id: req.user.id }, data: { onboarded: true } });
+
+            const firstWorkspaceCode = org.workspaces?.[0];
+            if (firstWorkspaceCode) {
+                const alreadyInWs = await prisma.workspaceMember.findUnique({
+                    where: { workspaceId_userId: { workspaceId: firstWorkspaceCode.id, userId: req.user.id } },
+                });
+                if (!alreadyInWs) {
+                    await prisma.workspaceMember.create({
+                        data: { workspaceId: firstWorkspaceCode.id, userId: req.user.id, role: "MEMBER" },
+                    });
+                }
+            }
 
             return res.status(200).json(successResponse({ ...org, role: "MEMBER" }));
         }

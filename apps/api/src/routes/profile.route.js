@@ -14,6 +14,21 @@ import { successResponse, errorResponse } from "../utils/api-response.js";
 const router = Router();
 router.use(authenticate);
 
+// GET /api/profile — fetch current user profile
+router.get("/", async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: { id: true, name: true, email: true, avatarUrl: true, bio: true, timezone: true, twoFactorEnabled: true },
+        });
+        if (!user) return res.status(404).json(errorResponse("NOT_FOUND", "User not found"));
+        return res.status(200).json(successResponse(user));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch profile"));
+    }
+});
+
 // PATCH /api/profile — update name, bio, avatarUrl, timezone
 router.patch("/", async (req, res) => {
     try {
