@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { MobileBottomTabs } from "@/components/layout/MobileBottomTabs";
+import { ScrollToTop } from "@/components/layout/ScrollToTop";
 
 export function AppShell({ children }) {
     const [collapsed, setCollapsed] = useState(false);
@@ -21,6 +22,7 @@ export function AppShell({ children }) {
 
     return (
         <div className="min-h-screen bg-(--bg)">
+            <ScrollToTop />
             <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
 
             <div

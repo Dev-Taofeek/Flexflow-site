@@ -113,6 +113,39 @@ router.get("/:projectId", async (req, res) => {
     }
 });
 
+// GET /api/projects/:projectId/activity?limit=5&skip=0
+router.get("/:projectId/activity", async (req, res) => {
+    try {
+        const project = await prisma.project.findUnique({ where: { id: req.params.projectId } });
+        if (!project) return res.status(404).json(errorResponse("NOT_FOUND", "Project not found"));
+
+        const member = await assertWorkspaceAccess(project.workspaceId, req.user.id);
+        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
+
+        const limit = Math.min(Number(req.query.limit) || 5, 100);
+        const skip = Number(req.query.skip) || 0;
+
+        const [activities, total] = await Promise.all([
+            prisma.activityLog.findMany({
+                where: { projectId: req.params.projectId },
+                include: {
+                    user: { select: USER_SELECT },
+                    issue: { select: { id: true, title: true } },
+                },
+                orderBy: { createdAt: "desc" },
+                take: limit,
+                skip,
+            }),
+            prisma.activityLog.count({ where: { projectId: req.params.projectId } }),
+        ]);
+
+        return res.status(200).json(successResponse({ activities, total }));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch project activity"));
+    }
+});
+
 router.patch("/:projectId", async (req, res) => {
     try {
         const project = await prisma.project.findUnique({ where: { id: req.params.projectId } });
@@ -175,7 +208,7 @@ router.get("/:projectId/issues/:issueId", async (req, res) => {
                     include: { user: { select: USER_SELECT } },
                     orderBy: { createdAt: "desc" },
                 },
-                project: { include: { workspace: { include: { members: { include: { user: { select: USER_SELECT } } } } } } },
+                project: { include: { workspace: true } },
             },
         });
 
@@ -186,12 +219,18 @@ router.get("/:projectId/issues/:issueId", async (req, res) => {
 
         const labels = await prisma.label.findMany({ where: { workspaceId: issue.project.workspaceId } });
 
+        // Fetch org members for the assignee picker
+        const orgMembers = await prisma.organizationMember.findMany({
+            where: { organizationId: issue.project.workspace.organizationId },
+            include: { user: { select: USER_SELECT } },
+        });
+
         return res.status(200).json(successResponse({
             issue,
             project: issue.project,
             comments: issue.comments,
             activityLog: issue.activities,
-            people: issue.project.workspace.members.map((m) => m.user),
+            people: orgMembers.map((m) => m.user),
             availableLabels: labels,
         }));
     } catch (error) {
