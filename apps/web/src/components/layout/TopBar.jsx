@@ -101,6 +101,7 @@ function MobileOrgSheet({ open, onClose }) {
     if (!open) return null;
 
     return (
+        <>
         <div className="fixed inset-0 z-50 flex items-end md:hidden" onClick={onClose}>
             <div className="fixed inset-0 bg-black/40" />
             <div
@@ -281,6 +282,7 @@ function MobileOrgSheet({ open, onClose }) {
             feature={premiumModal.feature}
             description={premiumModal.description}
         />
+        </>
     );
 }
 
