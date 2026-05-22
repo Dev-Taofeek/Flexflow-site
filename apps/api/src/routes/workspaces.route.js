@@ -118,6 +118,26 @@ router.delete("/:workspaceId", async (req, res) => {
     }
 });
 
+// GET /api/workspaces/:workspaceId/members
+router.get("/:workspaceId/members", async (req, res) => {
+    try {
+        const member = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId: req.params.workspaceId, userId: req.user.id } },
+        });
+        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
+
+        const members = await prisma.workspaceMember.findMany({
+            where: { workspaceId: req.params.workspaceId },
+            include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+            orderBy: { createdAt: "asc" },
+        });
+        return res.status(200).json(successResponse({ members }));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch members"));
+    }
+});
+
 router.post("/:workspaceId/members", async (req, res) => {
     try {
         const actor = await prisma.workspaceMember.findUnique({

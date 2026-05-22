@@ -67,7 +67,8 @@ model User {
 
   organizations  OrganizationMember[]
   workspaces     WorkspaceMember[]
-  assignedIssues Issue[]            @relation("AssignedIssues")
+  assignedIssues   Issue[]            @relation("AssignedIssues")
+  issueAssignments IssueAssignee[]    @relation("IssueAssignees")
   comments       Comment[]
   notifications  Notification[]
   activities     ActivityLog[]
@@ -187,6 +188,18 @@ model Issue {
   comments        Comment[]
   labels          IssueLabel[]
   activities      ActivityLog[]
+  assignees       IssueAssignee[]
+}
+
+model IssueAssignee {
+  issueId    String
+  userId     String
+  assignedAt DateTime @default(now())
+
+  issue      Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user       User  @relation("IssueAssignees", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, userId])
 }
 
 model Comment {

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Calendar, Clock3, MessageSquare, Tag, User2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Calendar, Check, Clock3, MessageSquare, Tag, User2, X } from "lucide-react";
+import { apiRequest } from "@/lib/api-client";
 
 import dynamic from "next/dynamic";
 
@@ -23,6 +24,101 @@ const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
 function getInitials(name) {
     return name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "?";
+}
+
+function AssigneePicker({ issue, people, token, onUpdated }) {
+    const [open, setOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const ref = useRef(null);
+
+    // Current assignee IDs from the junction table
+    const currentIds = new Set(
+        (issue.assignees || []).map((a) => a.userId || a.user?.id).filter(Boolean)
+    );
+
+    useEffect(() => {
+        function handler(e) {
+            if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+        }
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, []);
+
+    async function toggle(userId) {
+        const next = new Set(currentIds);
+        if (next.has(userId)) next.delete(userId); else next.add(userId);
+        setSaving(true);
+        try {
+            const updated = await apiRequest(`/issues/${issue.id}/assignees`, {
+                method: "PATCH",
+                token,
+                body: { assigneeIds: [...next] },
+            });
+            onUpdated(updated);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    const assigned = (issue.assignees || []).map((a) => a.user || { id: a.userId, name: "Unknown" });
+
+    return (
+        <div ref={ref} className="relative">
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-(--text-muted)">
+                <User2 className="h-3 w-3" /> Assignees
+            </label>
+
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                className="flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-left text-sm transition-colors hover:border-indigo-400"
+            >
+                {assigned.length === 0 ? (
+                    <span className="text-(--text-muted) text-sm">Unassigned</span>
+                ) : (
+                    assigned.map((u) => (
+                        <span key={u.id} className="flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-200 text-[9px] font-bold">
+                                {u.name?.[0]?.toUpperCase()}
+                            </span>
+                            {u.name}
+                        </span>
+                    ))
+                )}
+            </button>
+
+            {open && (
+                <div className="absolute left-0 top-full z-50 mt-1 w-full rounded-xl border border-(--border) bg-(--bg-elevated) py-1 shadow-lg">
+                    {people.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-(--text-muted)">No members in this workspace</p>
+                    ) : (
+                        people.map((p) => {
+                            const id = p.id ?? p;
+                            const name = p.name ?? p;
+                            const checked = currentIds.has(id);
+                            return (
+                                <button
+                                    key={id}
+                                    type="button"
+                                    onClick={() => toggle(id)}
+                                    disabled={saving}
+                                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-(--bg-overlay) disabled:opacity-50"
+                                >
+                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">
+                                        {name?.[0]?.toUpperCase()}
+                                    </div>
+                                    <span className="flex-1 text-(--text-primary)">{name}</span>
+                                    {checked && <Check className="h-3.5 w-3.5 text-indigo-600" />}
+                                </button>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+        </div>
+    );
 }
 
 export function IssueDetailView({
@@ -230,22 +326,13 @@ export function IssueDetailView({
                             </select>
                         </div>
 
-                        {/* Assignee */}
-                        <div>
-                            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-(--text-muted)">
-                                <User2 className="h-3 w-3" /> Assignee
-                            </label>
-                            <select
-                                value={issue.assigneeId ?? issue.assignee?.id ?? ""}
-                                onChange={(e) => { saveIssue({ assigneeId: e.target.value || null }); }}
-                                className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
-                            >
-                                <option value="">Unassigned</option>
-                                {people.map((p) => (
-                                    <option key={p.id ?? p} value={p.id ?? p}>{p.name ?? p}</option>
-                                ))}
-                            </select>
-                        </div>
+                        {/* Assignees — multi-select */}
+                        <AssigneePicker
+                            issue={issue}
+                            people={people}
+                            token={token}
+                            onUpdated={(updated) => setIssue(updated)}
+                        />
 
                         {/* Due date */}
                         <div>

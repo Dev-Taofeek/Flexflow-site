@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
-    AlertCircle, CalendarDays, ChevronDown, CircleDot,
+    AlertCircle, CalendarDays, Check, ChevronDown, CircleDot,
     Filter, Loader2, Plus, RefreshCw, X,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
@@ -37,11 +37,89 @@ function formatDate(d) {
     return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function AssigneeAvatars({ issue }) {
+    const people = (issue.assignees || []).map((a) => a.user).filter(Boolean);
+    if (people.length === 0 && issue.assignee) people.push(issue.assignee);
+    if (people.length === 0) return null;
+    return (
+        <span className="flex items-center gap-1">
+            <div className="flex -space-x-1">
+                {people.slice(0, 3).map((u) => (
+                    <div
+                        key={u.id}
+                        title={u.name}
+                        className="flex h-4 w-4 items-center justify-center rounded-full border border-(--bg-elevated) bg-indigo-100 text-[9px] font-bold text-indigo-700"
+                    >
+                        {u.name?.[0]?.toUpperCase()}
+                    </div>
+                ))}
+            </div>
+            {people.length === 1
+                ? <span className="truncate max-w-24">{people[0].name}</span>
+                : <span>{people.length} assignees</span>
+            }
+        </span>
+    );
+}
+
+function MultiAssigneePicker({ members, selected, onChange }) {
+    const [open, setOpen] = useState(false);
+
+    function toggle(id) {
+        onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+    }
+
+    const label = selected.length === 0
+        ? "Unassigned"
+        : selected.length === 1
+            ? (members.find((m) => m.user.id === selected[0])?.user.name ?? "1 assignee")
+            : `${selected.length} assignees`;
+
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                className="flex w-full items-center justify-between gap-1 rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-secondary) focus:outline-none"
+            >
+                <span className="truncate">{label}</span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-(--text-muted)" />
+            </button>
+            {open && (
+                <div className="absolute left-0 top-full z-50 mt-1 w-full rounded-xl border border-(--border) bg-(--bg-elevated) py-1 shadow-lg">
+                    {members.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-(--text-muted)">No members</p>
+                    ) : (
+                        members.map((m) => {
+                            const checked = selected.includes(m.user.id);
+                            return (
+                                <button
+                                    key={m.user.id}
+                                    type="button"
+                                    onClick={() => toggle(m.user.id)}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-(--bg-overlay)"
+                                >
+                                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700 shrink-0">
+                                        {m.user.name?.[0]?.toUpperCase()}
+                                    </div>
+                                    <span className="flex-1 text-left text-(--text-primary)">{m.user.name}</span>
+                                    {checked && <Check className="h-3.5 w-3.5 text-indigo-600" />}
+                                </button>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function IssuesPage() {
     const { currentWorkspace, currentWorkspaceId, accessToken, isReady } = useApp();
 
     const [issues, setIssues] = useState([]);
     const [projects, setProjects] = useState([]);
+    const [members, setMembers] = useState([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -54,7 +132,8 @@ export default function IssuesPage() {
     // create form
     const [showCreate, setShowCreate] = useState(false);
     const [creating, setCreating] = useState(false);
-    const [form, setForm] = useState({ title: "", description: "", projectId: "", priority: "MEDIUM", status: "TODO", assigneeId: "", dueDate: "" });
+    const [form, setForm] = useState({ title: "", description: "", projectId: "", priority: "MEDIUM", status: "TODO", dueDate: "" });
+    const [assigneeIds, setAssigneeIds] = useState([]);
     const [formError, setFormError] = useState("");
 
     const loadIssues = useCallback(async () => {
@@ -76,14 +155,15 @@ export default function IssuesPage() {
         }
     }, [isReady, currentWorkspaceId, accessToken, statusFilter, priorityFilter, assigneeFilter]);
 
-    useEffect(() => {
-        loadIssues();
-    }, [loadIssues]);
+    useEffect(() => { loadIssues(); }, [loadIssues]);
 
     useEffect(() => {
         if (!isReady || !currentWorkspaceId || !accessToken) return;
         fetchProjects({ workspaceId: currentWorkspaceId, token: accessToken })
             .then(setProjects)
+            .catch(() => {});
+        apiRequest(`/workspaces/${currentWorkspaceId}/members`, { token: accessToken })
+            .then((data) => setMembers(data.members || []))
             .catch(() => {});
     }, [isReady, currentWorkspaceId, accessToken]);
 
@@ -99,13 +179,14 @@ export default function IssuesPage() {
                 token: accessToken,
                 body: {
                     ...form,
-                    assigneeId: form.assigneeId || null,
+                    assigneeIds,
                     dueDate: form.dueDate || null,
                 },
             });
             setIssues((prev) => [issue, ...prev]);
             setTotal((t) => t + 1);
-            setForm({ title: "", description: "", projectId: "", priority: "MEDIUM", status: "TODO", assigneeId: "", dueDate: "" });
+            setForm({ title: "", description: "", projectId: "", priority: "MEDIUM", status: "TODO", dueDate: "" });
+            setAssigneeIds([]);
             setShowCreate(false);
         } catch (err) {
             setFormError(err.message);
@@ -170,6 +251,9 @@ export default function IssuesPage() {
                 >
                     <option value="">All assignees</option>
                     <option value="me">Assigned to me</option>
+                    {members.map((m) => (
+                        <option key={m.user.id} value={m.user.id}>{m.user.name}</option>
+                    ))}
                 </select>
                 {hasFilters && (
                     <button
@@ -232,6 +316,14 @@ export default function IssuesPage() {
                             onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
                             className="rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-secondary) focus:outline-none"
                         />
+                        <div className="sm:col-span-2">
+                            <p className="mb-1 text-xs text-(--text-muted)">Assignees</p>
+                            <MultiAssigneePicker
+                                members={members}
+                                selected={assigneeIds}
+                                onChange={setAssigneeIds}
+                            />
+                        </div>
                     </div>
                     {formError && (
                         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{formError}</p>
@@ -281,10 +373,8 @@ export default function IssuesPage() {
                                 idx > 0 ? "border-t border-(--border)" : "",
                             ].join(" ")}
                         >
-                            {/* Status dot */}
                             <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_COLOR[issue.status]}`} />
 
-                            {/* Content */}
                             <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <p className="text-sm font-medium text-(--text-primary) leading-snug">{issue.title}</p>
@@ -299,17 +389,17 @@ export default function IssuesPage() {
                                     </span>
                                     <span className="text-(--text-muted)">·</span>
                                     <span>{issue.project.name}</span>
-                                    {issue.assignee && (
-                                        <>
-                                            <span className="text-(--text-muted)">·</span>
-                                            <span className="flex items-center gap-1">
-                                                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-bold text-indigo-700">
-                                                    {issue.assignee.name?.[0]?.toUpperCase()}
-                                                </div>
-                                                {issue.assignee.name}
-                                            </span>
-                                        </>
-                                    )}
+                                    {(() => {
+                                        const people = (issue.assignees || []).map((a) => a.user).filter(Boolean);
+                                        if (people.length === 0 && issue.assignee) people.push(issue.assignee);
+                                        if (people.length === 0) return null;
+                                        return (
+                                            <>
+                                                <span className="text-(--text-muted)">·</span>
+                                                <AssigneeAvatars issue={issue} />
+                                            </>
+                                        );
+                                    })()}
                                     {issue.dueDate && (
                                         <>
                                             <span className="text-(--text-muted)">·</span>
@@ -326,7 +416,7 @@ export default function IssuesPage() {
                                         </>
                                     )}
                                 </div>
-                            </div>
+            </div>
                         </Link>
                     ))}
                 </div>

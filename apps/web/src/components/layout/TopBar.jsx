@@ -333,14 +333,16 @@ export function TopBar({ onMenuClick }) {
         return () => window.removeEventListener("keydown", handler);
     }, []);
 
+    // Poll every 3 min — Render free tier sleeps; frequent polls cause
+    // ERR_CONNECTION_CLOSED spam. Back off further on failure.
     useEffect(() => {
         if (!accessToken) return;
         const load = () =>
             fetchNotifications(accessToken)
                 .then((d) => setUnread(d.unreadCount))
-                .catch(() => {});
+                .catch(() => {}); // silence connection errors (service sleeping)
         load();
-        const id = setInterval(load, 30000);
+        const id = setInterval(load, 180000);
         return () => clearInterval(id);
     }, [accessToken]);
 

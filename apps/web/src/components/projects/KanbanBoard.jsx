@@ -165,14 +165,29 @@ function IssueCard({ issue, isDragging = false, projectId }) {
                     {issue.priority}
                 </span>
 
-                {issue.assignee && (
-                    <div className="flex items-center gap-1">
-                        <div className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-[9px] font-bold text-indigo-700 shrink-0">
-                            {issue.assignee.name?.[0]?.toUpperCase()}
+                {(() => {
+                    const people = (issue.assignees || []).map((a) => a.user).filter(Boolean);
+                    if (people.length === 0 && issue.assignee) people.push(issue.assignee);
+                    if (people.length === 0) return null;
+                    return (
+                        <div className="flex items-center -space-x-1">
+                            {people.slice(0, 3).map((u) => (
+                                <div
+                                    key={u.id}
+                                    title={u.name}
+                                    className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-(--bg-elevated) bg-indigo-100 text-[9px] font-bold text-indigo-700 shrink-0"
+                                >
+                                    {u.name?.[0]?.toUpperCase()}
+                                </div>
+                            ))}
+                            {people.length > 3 && (
+                                <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-(--bg-elevated) bg-zinc-200 text-[9px] font-bold text-zinc-600 shrink-0">
+                                    +{people.length - 3}
+                                </div>
+                            )}
                         </div>
-                        <span className="text-[11px] text-(--text-muted) truncate max-w-20">{issue.assignee.name}</span>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {dueDate && (
                     <span className={`flex items-center gap-0.5 text-[11px] ${isOverdue ? "text-red-500 font-medium" : "text-(--text-muted)"}`}>
