@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { apiRequest } from "@/lib/api-client";
 import {
   BarChart3,
   ChevronDown,
@@ -144,7 +145,6 @@ function WorkspaceSwitcher({ collapsed }) {
     if (!wsName.trim()) { setWsErr("Name required"); return; }
     setWsLoading(true); setWsErr("");
     try {
-      const { apiRequest } = await import("@/lib/api-client");
       const ws = await apiRequest("/workspaces", {
         method: "POST",
         token: accessToken,

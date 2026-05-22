@@ -9,7 +9,6 @@ import { useApp } from "@/contexts/AppContext";
 import { SearchModal } from "@/components/search/SearchModal";
 import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
 import { fetchNotifications } from "@/lib/notifications-api";
-import { apiRequest } from "@/lib/api-client";
 
 const PAGE_LABELS = {
     "/dashboard": "Dashboard",
