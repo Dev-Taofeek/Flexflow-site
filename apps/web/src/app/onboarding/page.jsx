@@ -40,11 +40,7 @@ export default function OnboardingPage() {
       if (!res.ok || !json.success)
         throw new Error(json.error?.message || "Failed to create organization");
 
-      const org = json.data;
-      await update({
-        onboarded: true,
-        organizations: [...(session?.user?.organizations || []), org],
-      });
+      await update({ onboarded: true });
       router.push("/dashboard");
     } catch (err) {
       setError(err.message);
@@ -73,11 +69,7 @@ export default function OnboardingPage() {
       if (!res.ok || !json.success)
         throw new Error(json.error?.message || "Failed to join organization");
 
-      const org = json.data;
-      await update({
-        onboarded: true,
-        organizations: [...(session?.user?.organizations || []), org],
-      });
+      await update({ onboarded: true });
       router.push("/dashboard");
     } catch (err) {
       setError(err.message);

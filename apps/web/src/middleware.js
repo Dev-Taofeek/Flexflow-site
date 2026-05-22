@@ -12,21 +12,15 @@ export default withAuth(
         const isAuthPath = AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
         const isOnboarding = pathname === "/onboarding";
 
-        // Authenticated users away from auth pages
+        // Authenticated users on auth pages → redirect based on onboarding status
         if (token && isAuthPath) {
-            const hasOrg = token.organizations?.length > 0;
-            if (!token.onboarded || !hasOrg) {
-                return NextResponse.redirect(new URL("/onboarding", req.url));
-            }
+            if (!token.onboarded) return NextResponse.redirect(new URL("/onboarding", req.url));
             return NextResponse.redirect(new URL("/dashboard", req.url));
         }
 
-        // Authenticated users without an org → onboarding
-        if (token && !isOnboarding && !isAuthPath) {
-            const hasOrg = token.organizations?.length > 0;
-            if (!token.onboarded || !hasOrg) {
-                return NextResponse.redirect(new URL("/onboarding", req.url));
-            }
+        // Authenticated users not yet onboarded → send to onboarding
+        if (token && !isOnboarding && !isAuthPath && !token.onboarded) {
+            return NextResponse.redirect(new URL("/onboarding", req.url));
         }
 
         return NextResponse.next();

@@ -3,35 +3,54 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
     const { data: session, update: updateSession } = useSession();
+    const [organizations, setOrganizations] = useState([]);
     const [currentOrgId, setCurrentOrgId] = useState(null);
     const [currentWorkspaceId, setCurrentWorkspaceId] = useState(null);
     const [isReady, setIsReady] = useState(false);
 
-    const organizations = session?.user?.organizations || [];
-    const currentOrg = organizations.find((o) => o.id === currentOrgId) || organizations[0] || null;
-    const currentWorkspace = currentOrg?.workspaces?.find((w) => w.id === currentWorkspaceId) || currentOrg?.workspaces?.[0] || null;
+    const accessToken = session?.user?.accessToken || null;
 
-    // If the refresh token itself expired, sign the user out gracefully
+    // Force sign-out when refresh token expires
     useEffect(() => {
         if (session?.error === "RefreshAccessTokenError") {
             signOut({ callbackUrl: "/login?error=session_expired" });
         }
     }, [session?.error]);
 
-    // Hydrate from localStorage
+    // Fetch organizations from API — never stored in JWT to avoid 494 header-too-large errors
+    const fetchOrgs = useCallback(async (token) => {
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_URL}/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) return;
+            const json = await res.json();
+            if (json.success) {
+                setOrganizations(json.data.organizations || []);
+            }
+        } catch {}
+    }, []);
+
     useEffect(() => {
-        if (!session?.user?.id) return;
+        if (!accessToken) return;
+        fetchOrgs(accessToken);
+    }, [accessToken, fetchOrgs]);
+
+    // Hydrate currentOrg/Workspace from localStorage once orgs are loaded
+    useEffect(() => {
+        if (!session?.user?.id || organizations.length === 0) return;
 
         const savedOrgId = localStorage.getItem(`flexflow:org:${session.user.id}`);
-        const savedWsId = localStorage.getItem(`flexflow:ws:${session.user.id}`);
+        const savedWsId  = localStorage.getItem(`flexflow:ws:${session.user.id}`);
 
-        const orgs = session.user.organizations || [];
-        const orgExists = orgs.find((o) => o.id === savedOrgId);
-        const targetOrg = orgExists || orgs[0];
+        const orgExists  = organizations.find((o) => o.id === savedOrgId);
+        const targetOrg  = orgExists || organizations[0];
 
         if (targetOrg) {
             setCurrentOrgId(targetOrg.id);
@@ -41,7 +60,13 @@ export function AppProvider({ children }) {
         }
 
         setIsReady(true);
-    }, [session?.user?.id]);
+    }, [session?.user?.id, organizations]);
+
+    const currentOrg = organizations.find((o) => o.id === currentOrgId) || organizations[0] || null;
+    const currentWorkspace =
+        currentOrg?.workspaces?.find((w) => w.id === currentWorkspaceId) ||
+        currentOrg?.workspaces?.[0] ||
+        null;
 
     const switchOrg = useCallback((orgId) => {
         const org = organizations.find((o) => o.id === orgId);
@@ -64,28 +89,29 @@ export function AppProvider({ children }) {
     }, [session?.user?.id]);
 
     const refreshOrganizations = useCallback(async () => {
-        if (!session?.user?.accessToken) return;
+        if (!accessToken) return;
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
-                headers: { Authorization: `Bearer ${session.user.accessToken}` },
+            const res = await fetch(`${API_URL}/auth/me`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
             });
             if (!res.ok) return;
             const json = await res.json();
             if (json.success) {
-                await updateSession({ organizations: json.data.organizations, onboarded: json.data.user.onboarded });
+                setOrganizations(json.data.organizations || []);
+                await updateSession({ onboarded: json.data.user.onboarded });
             }
         } catch {}
-    }, [session?.user?.accessToken, updateSession]);
+    }, [accessToken, updateSession]);
 
     return (
         <AppContext.Provider value={{
             organizations,
             currentOrg,
             currentWorkspace,
-            currentOrgId: currentOrg?.id || null,
+            currentOrgId:       currentOrg?.id || null,
             currentWorkspaceId: currentWorkspace?.id || null,
-            accessToken: session?.user?.accessToken || null,
-            user: session?.user || null,
+            accessToken,
+            user:               session?.user || null,
             isReady,
             switchOrg,
             switchWorkspace,

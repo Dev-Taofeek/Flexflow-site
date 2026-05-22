@@ -104,14 +104,15 @@ export const authOptions = {
     ],
     callbacks: {
         async jwt({ token, user, account, trigger, session }) {
-            // ── session.update() calls from client (e.g. after onboarding) ─
+            // ── session.update() — only update lightweight fields ─────────
             if (trigger === "update" && session) {
                 if (session.onboarded !== undefined) token.onboarded = session.onboarded;
-                if (session.organizations !== undefined) token.organizations = session.organizations;
+                // Organizations are NOT stored in JWT to prevent 494 header-too-large errors.
+                // AppContext fetches them from GET /auth/me using the accessToken.
                 return token;
             }
 
-            // ── Initial login ──────────────────────────────────────────────
+            // ── Initial credentials login ──────────────────────────────────
             if (user && account?.provider === "credentials") {
                 return {
                     ...token,
@@ -120,11 +121,11 @@ export const authOptions = {
                     refreshToken: user.refreshToken,
                     accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
                     onboarded: user.onboarded,
-                    organizations: user.organizations,
                     error: null,
                 };
             }
 
+            // ── OAuth login ────────────────────────────────────────────────
             if (account && (account.provider === "google" || account.provider === "github")) {
                 const data = await oauthLogin({ email: user.email, name: user.name, image: user.image });
                 if (data) {
@@ -135,7 +136,6 @@ export const authOptions = {
                         refreshToken: data.refreshToken,
                         accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
                         onboarded: data.user.onboarded,
-                        organizations: data.organizations || [],
                         error: null,
                     };
                 }
@@ -143,7 +143,7 @@ export const authOptions = {
 
             // ── Subsequent requests: refresh if within 5 min of expiry ──────
             if (token.accessTokenExpiry && Date.now() < token.accessTokenExpiry - 5 * 60 * 1000) {
-                return token; // Still valid, no refresh needed
+                return token;
             }
 
             return refreshAccessToken(token);
@@ -156,7 +156,7 @@ export const authOptions = {
                 session.user.accessToken = token.accessToken;
                 session.user.refreshToken = token.refreshToken;
                 session.user.onboarded = token.onboarded;
-                session.user.organizations = token.organizations || [];
+                // organizations intentionally omitted — fetched by AppContext from API
             }
             return session;
         },
