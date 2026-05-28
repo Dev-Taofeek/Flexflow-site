@@ -24,7 +24,7 @@ async function authorize(credentials) {
         const json = await res.json();
         if (!json.success || !json.data) return null;
 
-        const { user, accessToken, refreshToken, organizations } = json.data;
+        const { user, accessToken, refreshToken } = json.data;
         return {
             id: user.id,
             name: user.name,
@@ -33,7 +33,6 @@ async function authorize(credentials) {
             accessToken,
             refreshToken,
             onboarded: user.onboarded,
-            organizations: organizations || [],
         };
     } catch {
         return null;
