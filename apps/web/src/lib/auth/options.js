@@ -24,14 +24,13 @@ async function authorize(credentials) {
         const json = await res.json();
         if (!json.success || !json.data) return null;
 
-        const { user, accessToken, refreshToken } = json.data;
+        const { user, accessToken } = json.data;
         return {
             id: user.id,
             name: user.name,
             email: user.email,
             image: user.avatarUrl || null,
             accessToken,
-            refreshToken,
             onboarded: user.onboarded,
         };
     } catch {
@@ -59,8 +58,11 @@ async function refreshAccessToken(token) {
     try {
         const res = await fetch(`${API_URL}/auth/refresh`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken: token.refreshToken }),
+            headers: {
+                "Content-Type": "application/json",
+                "x-internal-secret": process.env.INTERNAL_SECRET,
+            },
+            body: JSON.stringify({ userId: token.sub }),
         });
         const json = await res.json();
         if (!res.ok || !json.success) throw new Error("Refresh failed");
@@ -69,7 +71,7 @@ async function refreshAccessToken(token) {
             ...token,
             accessToken: json.data.accessToken,
             accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
-            error: null,
+            error: undefined,
         };
     } catch {
         // Refresh token is also expired — force re-login
@@ -106,8 +108,6 @@ export const authOptions = {
             // ── session.update() — only update lightweight fields ─────────
             if (trigger === "update" && session) {
                 if (session.onboarded !== undefined) token.onboarded = session.onboarded;
-                // Organizations are NOT stored in JWT to prevent 494 header-too-large errors.
-                // AppContext fetches them from GET /auth/me using the accessToken.
                 return token;
             }
 
@@ -115,12 +115,9 @@ export const authOptions = {
             if (user && account?.provider === "credentials") {
                 return {
                     ...token,
-                    id: user.id,
                     accessToken: user.accessToken,
-                    refreshToken: user.refreshToken,
                     accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
                     onboarded: user.onboarded,
-                    error: null,
                 };
             }
 
@@ -130,12 +127,9 @@ export const authOptions = {
                 if (data) {
                     return {
                         ...token,
-                        id: data.user.id,
                         accessToken: data.accessToken,
-                        refreshToken: data.refreshToken,
                         accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
                         onboarded: data.user.onboarded,
-                        error: null,
                     };
                 }
             }
@@ -149,13 +143,13 @@ export const authOptions = {
         },
 
         async session({ session, token }) {
-            session.error = token.error || null;
+            if (token.error) session.error = token.error;
             if (session.user) {
-                session.user.id = token.id;
+                session.user.id = token.sub;
                 session.user.accessToken = token.accessToken;
-                session.user.refreshToken = token.refreshToken;
                 session.user.onboarded = token.onboarded;
-                // organizations intentionally omitted — fetched by AppContext from API
+                // refreshToken intentionally omitted — stored in DB, not needed client-side
+                // organizations intentionally omitted — fetched by AppContext from GET /auth/me
             }
             return session;
         },

@@ -10,6 +10,7 @@ const envSchema = z.object({
     REDIS_URL: z.string().optional(),
     JWT_ACCESS_SECRET: z.string().min(32, "JWT_ACCESS_SECRET must be at least 32 characters"),
     JWT_REFRESH_SECRET: z.string().min(32, "JWT_REFRESH_SECRET must be at least 32 characters"),
+    INTERNAL_SECRET: z.string().min(32, "INTERNAL_SECRET must be at least 32 characters"),
     CLIENT_ORIGIN: z.string().url("CLIENT_ORIGIN must be a valid URL"),
     RESEND_API_KEY: z.string().optional(),
 });

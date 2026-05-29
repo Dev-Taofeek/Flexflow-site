@@ -53,6 +53,8 @@ router.post("/oauth", async (req, res) => {
         const accessToken = signAccessToken(user.id);
         const refreshToken = signRefreshToken(user.id);
 
+        await prisma.user.update({ where: { id: user.id }, data: { refreshToken } });
+
         return res.status(200).json(successResponse({
             user,
             accessToken,
@@ -95,6 +97,8 @@ router.post("/register", async (req, res) => {
 
         const accessToken = signAccessToken(user.id);
         const refreshToken = signRefreshToken(user.id);
+
+        await prisma.user.update({ where: { id: user.id }, data: { refreshToken } });
 
         return res.status(201).json(successResponse({ user, accessToken, refreshToken }));
     } catch (error) {
@@ -147,6 +151,8 @@ router.post("/login", async (req, res) => {
         const accessToken = signAccessToken(user.id);
         const refreshToken = signRefreshToken(user.id);
 
+        await prisma.user.update({ where: { id: user.id }, data: { refreshToken } });
+
         return res.status(200).json(successResponse({
             user: safeUser,
             organizations: organizations.map((m) => ({
@@ -165,6 +171,30 @@ router.post("/login", async (req, res) => {
 
 router.post("/refresh", async (req, res) => {
     try {
+        const { userId } = req.body;
+
+        // Internal call from NextAuth — authenticate with shared secret
+        if (userId) {
+            const secret = req.headers["x-internal-secret"];
+            if (!secret || secret !== env.INTERNAL_SECRET) {
+                return res.status(401).json(errorResponse("UNAUTHORIZED", "Forbidden"));
+            }
+
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { id: true, status: true, refreshToken: true },
+            });
+
+            if (!user || user.status === "SUSPENDED" || !user.refreshToken) {
+                return res.status(401).json(errorResponse("UNAUTHORIZED", "Invalid session"));
+            }
+
+            jwt.verify(user.refreshToken, env.JWT_REFRESH_SECRET);
+            const accessToken = signAccessToken(user.id);
+            return res.status(200).json(successResponse({ accessToken }));
+        }
+
+        // Legacy: refresh token passed in body (old cookies still in the wild)
         const { refreshToken } = req.body;
         if (!refreshToken) {
             return res.status(401).json(errorResponse("UNAUTHORIZED", "Refresh token required"));

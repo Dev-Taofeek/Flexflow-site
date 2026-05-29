@@ -60,6 +60,7 @@ model User {
   onboarded          Boolean            @default(false)
   twoFactorEnabled     Boolean            @default(false)
   twoFactorSecret      String?
+  refreshToken         String?            @unique
   passwordResetToken   String?            @unique
   passwordResetExpiry  DateTime?
   createdAt            DateTime           @default(now())
