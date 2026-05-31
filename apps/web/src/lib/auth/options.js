@@ -56,13 +56,16 @@ async function oauthLogin({ email, name, image }) {
 
 async function refreshAccessToken(token) {
     try {
+        // Old cookies (before DB migration) still carry refreshToken — use it directly.
+        // New cookies have no refreshToken; use the DB-backed userId path instead.
+        const useLegacy = !!token.refreshToken;
         const res = await fetch(`${API_URL}/auth/refresh`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "x-internal-secret": process.env.INTERNAL_SECRET,
+                ...(!useLegacy && { "x-internal-secret": process.env.INTERNAL_SECRET }),
             },
-            body: JSON.stringify({ userId: token.sub }),
+            body: JSON.stringify(useLegacy ? { refreshToken: token.refreshToken } : { userId: token.sub }),
         });
         const json = await res.json();
         if (!res.ok || !json.success) throw new Error("Refresh failed");
@@ -127,6 +130,8 @@ export const authOptions = {
                 if (data) {
                     return {
                         ...token,
+                        // Override OAuth provider's sub with our DB user ID
+                        sub: data.user.id,
                         accessToken: data.accessToken,
                         accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
                         onboarded: data.user.onboarded,
