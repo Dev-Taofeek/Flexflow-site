@@ -18,6 +18,30 @@ function signRefreshToken(userId) {
     return jwt.sign({ userId }, env.JWT_REFRESH_SECRET, { expiresIn: "30d" });
 }
 
+function handleAuthError(res, label, error, fallbackMessage) {
+    console.error(`${label} error:`, {
+        name: error.name,
+        code: error.code,
+        message: error.message,
+        meta: error.meta,
+    });
+
+    if (error.code === "P2021" || error.code === "P2022") {
+        return res.status(500).json(
+            errorResponse(
+                "DATABASE_SCHEMA_ERROR",
+                "Database schema is not ready. Redeploy the API or run Prisma db push.",
+            ),
+        );
+    }
+
+    if (error.code === "P2002") {
+        return res.status(409).json(errorResponse("UNIQUE_CONSTRAINT", "This account already exists"));
+    }
+
+    return res.status(500).json(errorResponse("SERVER_ERROR", fallbackMessage));
+}
+
 // OAuth upsert — called by NextAuth after Google/GitHub sign-in
 router.post("/oauth", async (req, res) => {
     try {
@@ -68,8 +92,7 @@ router.post("/oauth", async (req, res) => {
             })),
         }));
     } catch (error) {
-        console.error("OAuth error:", error);
-        return res.status(500).json(errorResponse("SERVER_ERROR", "OAuth sign-in failed"));
+        return handleAuthError(res, "OAuth", error, "OAuth sign-in failed");
     }
 });
 
@@ -106,8 +129,7 @@ router.post("/register", async (req, res) => {
 
         return res.status(201).json(successResponse({ user, accessToken, refreshToken }));
     } catch (error) {
-        console.error("Register error:", error);
-        return res.status(500).json(errorResponse("SERVER_ERROR", "Registration failed. Please try again."));
+        return handleAuthError(res, "Register", error, "Registration failed. Please try again.");
     }
 });
 
@@ -170,8 +192,7 @@ router.post("/login", async (req, res) => {
             refreshToken,
         }));
     } catch (error) {
-        console.error("Login error:", error);
-        return res.status(500).json(errorResponse("SERVER_ERROR", "Login failed"));
+        return handleAuthError(res, "Login", error, "Login failed");
     }
 });
 
