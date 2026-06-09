@@ -17,4 +17,4 @@ COPY src ./src
 ENV NODE_ENV=production
 EXPOSE 4000
 
-CMD ["node", "src/server.js"]
+CMD ["sh", "-c", "pnpm prisma db push && node src/server.js"]

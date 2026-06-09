@@ -9,6 +9,30 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 // Access token lifetime: 23h so refresh happens once a day max
 const ACCESS_TOKEN_TTL_MS = 23 * 60 * 60 * 1000;
 
+function compactToken(token) {
+    const {
+        accessToken,
+        accessTokenExpiry,
+        onboarded,
+        sub,
+        name,
+        email,
+        picture,
+        error,
+    } = token;
+
+    return {
+        sub,
+        name,
+        email,
+        picture,
+        accessToken,
+        accessTokenExpiry,
+        onboarded,
+        ...(error ? { error } : {}),
+    };
+}
+
 async function authorize(credentials) {
     const parsed = loginSchema.safeParse(credentials);
     if (!parsed.success) return null;
@@ -71,14 +95,14 @@ async function refreshAccessToken(token) {
         if (!res.ok || !json.success) throw new Error("Refresh failed");
 
         return {
-            ...token,
+            ...compactToken(token),
             accessToken: json.data.accessToken,
             accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
             error: undefined,
         };
     } catch {
         // Refresh token is also expired — force re-login
-        return { ...token, error: "RefreshAccessTokenError" };
+        return { ...compactToken(token), error: "RefreshAccessTokenError" };
     }
 }
 
@@ -111,37 +135,37 @@ export const authOptions = {
             // ── session.update() — only update lightweight fields ─────────
             if (trigger === "update" && session) {
                 if (session.onboarded !== undefined) token.onboarded = session.onboarded;
-                return token;
+                return compactToken(token);
             }
 
             // ── Initial credentials login ──────────────────────────────────
             if (user && account?.provider === "credentials") {
-                return {
-                    ...token,
+                return compactToken({
+                    ...compactToken(token),
                     accessToken: user.accessToken,
                     accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
                     onboarded: user.onboarded,
-                };
+                });
             }
 
             // ── OAuth login ────────────────────────────────────────────────
             if (account && (account.provider === "google" || account.provider === "github")) {
                 const data = await oauthLogin({ email: user.email, name: user.name, image: user.image });
                 if (data) {
-                    return {
-                        ...token,
+                    return compactToken({
+                        ...compactToken(token),
                         // Override OAuth provider's sub with our DB user ID
                         sub: data.user.id,
                         accessToken: data.accessToken,
                         accessTokenExpiry: Date.now() + ACCESS_TOKEN_TTL_MS,
                         onboarded: data.user.onboarded,
-                    };
+                    });
                 }
             }
 
             // ── Subsequent requests: refresh if within 5 min of expiry ──────
             if (token.accessTokenExpiry && Date.now() < token.accessTokenExpiry - 5 * 60 * 1000) {
-                return token;
+                return compactToken(token);
             }
 
             return refreshAccessToken(token);

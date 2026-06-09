@@ -8,4 +8,4 @@ cmds = ["corepack enable pnpm", "pnpm install --no-frozen-lockfile"]
 cmds = ["pnpm prisma generate"]
 
 [start]
-cmd = "pnpm prisma migrate deploy && node src/server.js"
+cmd = "pnpm prisma db push && node src/server.js"
