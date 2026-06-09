@@ -1,14 +1,12 @@
 import { Router } from "express";
-import { Resend } from "resend";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
 router.use(authenticate);
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 function slugify(str) {
     return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -297,18 +295,16 @@ router.post("/:orgId/invite", async (req, res) => {
         let emailSent = false;
         let emailError = null;
 
-        if (resend) {
+        if (isEmailConfigured()) {
             try {
-                await resend.emails.send({
-                    from: "FlexFlow <onboarding@resend.dev>",
+                await sendTransactionalEmail({
                     to: email,
                     subject: `You've been invited to ${org.name} on FlexFlow`,
-                    html: `<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
-  <h2 style="font-size:20px;font-weight:600;color:#18181b;margin:0 0 8px">You've been invited</h2>
-  <p style="color:#52525b;margin:0 0 24px">${req.user.name} invited you to join <strong>${org.name}</strong> on FlexFlow as ${role}.</p>
-  <a href="${inviteUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:500">Accept Invitation</a>
-  <p style="color:#a1a1aa;font-size:12px;margin-top:24px">This invitation expires in 7 days. If the button doesn't work, copy this link:<br/>${inviteUrl}</p>
-</div>`,
+                    title: "You've been invited",
+                    message: `${req.user.name} invited you to join ${org.name} on FlexFlow as ${role}.`,
+                    actionText: "Accept invitation",
+                    actionUrl: inviteUrl,
+                    footer: "This invitation expires in 7 days.",
                 });
                 emailSent = true;
             } catch (emailErr) {
@@ -321,7 +317,7 @@ router.post("/:orgId/invite", async (req, res) => {
             ...invite,
             inviteUrl,
             emailSent,
-            emailError: emailError || (!resend ? "RESEND_API_KEY not configured" : null),
+            emailError: emailError || (!isEmailConfigured() ? "EMAILJS_NOT_CONFIGURED" : null),
         }));
     } catch (error) {
         console.error(error);

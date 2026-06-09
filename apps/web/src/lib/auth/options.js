@@ -3,8 +3,7 @@ import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 
 import { loginSchema } from "@/lib/auth/schemas";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+import { apiUrl } from "@/lib/api-url";
 
 // Access token lifetime: 23h so refresh happens once a day max
 const ACCESS_TOKEN_TTL_MS = 23 * 60 * 60 * 1000;
@@ -38,7 +37,7 @@ async function authorize(credentials) {
     if (!parsed.success) return null;
 
     try {
-        const res = await fetch(`${API_URL}/auth/login`, {
+        const res = await fetch(apiUrl("/auth/login"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
@@ -64,7 +63,7 @@ async function authorize(credentials) {
 
 async function oauthLogin({ email, name, image }) {
     try {
-        const res = await fetch(`${API_URL}/auth/oauth`, {
+        const res = await fetch(apiUrl("/auth/oauth"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, name, avatarUrl: image }),
@@ -83,7 +82,7 @@ async function refreshAccessToken(token) {
         // Old cookies (before DB migration) still carry refreshToken — use it directly.
         // New cookies have no refreshToken; use the DB-backed userId path instead.
         const useLegacy = !!token.refreshToken;
-        const res = await fetch(`${API_URL}/auth/refresh`, {
+        const res = await fetch(apiUrl("/auth/refresh"), {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

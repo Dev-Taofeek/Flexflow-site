@@ -1,11 +1,11 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { Resend } from "resend";
 import { Router } from "express";
 
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
+import { sendTransactionalEmail } from "../services/email.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -288,8 +288,6 @@ router.get("/me", async (req, res) => {
     }
 });
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
 router.post("/forgot-password", async (req, res) => {
     try {
         const { email } = req.body;
@@ -311,22 +309,18 @@ router.post("/forgot-password", async (req, res) => {
 
         const resetUrl = `${process.env.CLIENT_ORIGIN}/reset-password?token=${token}`;
 
-        if (resend) {
-            try {
-                await resend.emails.send({
-                    from: "FlexFlow <onboarding@resend.dev>",
-                    to: email,
-                    subject: "Reset your FlexFlow password",
-                    html: `<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
-  <h2 style="font-size:20px;font-weight:600;color:#18181b;margin:0 0 8px">Reset your password</h2>
-  <p style="color:#52525b;margin:0 0 24px">Click the button below to reset your FlexFlow password. This link expires in 1 hour.</p>
-  <a href="${resetUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:500">Reset password</a>
-  <p style="color:#a1a1aa;font-size:12px;margin-top:24px">If you didn't request this, you can safely ignore this email.</p>
-</div>`,
-                });
-            } catch (emailErr) {
-                console.error("Resend email failed:", emailErr);
-            }
+        try {
+            await sendTransactionalEmail({
+                to: email,
+                subject: "Reset your FlexFlow password",
+                title: "Reset your password",
+                message: "Click the button below to reset your FlexFlow password. This link expires in 1 hour.",
+                actionText: "Reset password",
+                actionUrl: resetUrl,
+                footer: "If you didn't request this, you can safely ignore this email.",
+            });
+        } catch (emailErr) {
+            console.error("Password reset email failed:", emailErr);
         }
 
         return res.status(200).json(successResponse({ sent: true }));

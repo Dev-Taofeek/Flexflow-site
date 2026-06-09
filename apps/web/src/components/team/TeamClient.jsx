@@ -142,7 +142,7 @@ export function TeamClient({
                 "Invite email sent successfully."
               ) : (
                 <div className="space-y-1">
-                  <p className="font-medium">Email not sent — RESEND_API_KEY not configured on the server.</p>
+                  <p className="font-medium">Email not sent — EmailJS is not configured on the server.</p>
                   <p className="text-xs">Share this invite link manually:</p>
                   <div className="flex items-center gap-2 mt-1">
                     <input

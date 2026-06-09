@@ -12,7 +12,10 @@ const envSchema = z.object({
     JWT_REFRESH_SECRET: z.string().min(32, "JWT_REFRESH_SECRET must be at least 32 characters"),
     INTERNAL_SECRET: z.string().min(32, "INTERNAL_SECRET must be at least 32 characters"),
     CLIENT_ORIGIN: z.string().url("CLIENT_ORIGIN must be a valid URL"),
-    RESEND_API_KEY: z.string().optional(),
+    EMAILJS_SERVICE_ID: z.string().optional(),
+    EMAILJS_TEMPLATE_ID: z.string().optional(),
+    EMAILJS_PUBLIC_KEY: z.string().optional(),
+    EMAILJS_PRIVATE_KEY: z.string().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

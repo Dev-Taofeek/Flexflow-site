@@ -20,5 +20,11 @@ services:
         sync: false
       - key: CLIENT_ORIGIN
         sync: false
-      - key: RESEND_API_KEY
+      - key: EMAILJS_SERVICE_ID
+        sync: false
+      - key: EMAILJS_TEMPLATE_ID
+        sync: false
+      - key: EMAILJS_PUBLIC_KEY
+        sync: false
+      - key: EMAILJS_PRIVATE_KEY
         sync: false

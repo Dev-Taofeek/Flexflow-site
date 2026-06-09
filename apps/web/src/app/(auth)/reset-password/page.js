@@ -9,8 +9,7 @@ import { AuthShell } from "@/components/auth/AuthShell";
 import { FormField } from "@/components/auth/FormField";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { apiUrl } from "@/lib/api-url";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -31,7 +30,7 @@ function ResetPasswordForm() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/reset-password`, {
+      const res = await fetch(apiUrl("/auth/reset-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),

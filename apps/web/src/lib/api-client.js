@@ -1,7 +1,7 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+import { apiUrl } from "./api-url";
 
 export async function apiRequest(path, { token, method = "GET", body, params } = {}) {
-    const url = new URL(`${BASE_URL}${path}`);
+    const url = new URL(apiUrl(path));
     if (params) {
         Object.entries(params).forEach(([k, v]) => {
             if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));

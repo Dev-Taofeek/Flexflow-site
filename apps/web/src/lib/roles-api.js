@@ -1,7 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+import { apiUrl } from "./api-url";
 
 export async function fetchRolesData() {
-  const response = await fetch(`${API_URL}/roles`, {
+  const response = await fetch(apiUrl("/roles"), {
     cache: "no-store",
   });
 
@@ -15,7 +15,7 @@ export async function fetchRolesData() {
 }
 
 export async function updatePermission({ role, resource, action, enabled }) {
-  const response = await fetch(`${API_URL}/roles`, {
+  const response = await fetch(apiUrl("/roles"), {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",

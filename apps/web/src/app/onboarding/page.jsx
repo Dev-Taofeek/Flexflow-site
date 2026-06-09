@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Building2, Users, ArrowRight, Check, ChevronLeft, Loader2, Sparkles } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { apiUrl } from "@/lib/api-url";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -31,7 +31,7 @@ export default function OnboardingPage() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/organizations`, {
+      const res = await fetch(apiUrl("/organizations"), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(createForm),
@@ -60,7 +60,7 @@ export default function OnboardingPage() {
           ? { token: joinForm.inviteCode }
           : { inviteCode: joinForm.inviteCode };
 
-      const res = await fetch(`${API_URL}/organizations/join`, {
+      const res = await fetch(apiUrl("/organizations/join"), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),

@@ -1,10 +1,8 @@
 import { Router } from "express";
-import { Resend } from "resend";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const router = Router();
 router.use(authenticate);
@@ -175,22 +173,20 @@ router.patch("/:issueId/assignees", async (req, res) => {
                 })
             ));
 
-            if (resend) {
+            if (isEmailConfigured()) {
                 const assigneeUsers = await prisma.user.findMany({
                     where: { id: { in: newlyAdded } },
                     select: { email: true, name: true },
                 });
                 await Promise.all(assigneeUsers.map((u) =>
-                    resend.emails.send({
-                        from: "FlexFlow <onboarding@resend.dev>",
+                    sendTransactionalEmail({
                         to: u.email,
                         subject: `You've been assigned: ${issue.title}`,
-                        html: `<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
-  <h2 style="font-size:20px;font-weight:600;color:#18181b;margin:0 0 8px">New assignment</h2>
-  <p style="color:#52525b;margin:0 0 8px">Hi ${u.name},</p>
-  <p style="color:#52525b;margin:0 0 24px">You've been assigned to the issue: <strong>${issue.title}</strong></p>
-  <p style="color:#a1a1aa;font-size:12px;margin-top:24px">Log in to FlexFlow to view this issue.</p>
-</div>`,
+                        title: "New assignment",
+                        message: `Hi ${u.name}, you've been assigned to the issue: ${issue.title}.`,
+                        actionText: "Open FlexFlow",
+                        actionUrl: process.env.CLIENT_ORIGIN,
+                        footer: "Log in to FlexFlow to view this issue.",
                     }).catch(() => {})
                 ));
             }

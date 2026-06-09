@@ -3,7 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { apiUrl } from "@/lib/api-url";
+
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
@@ -26,7 +27,7 @@ export function AppProvider({ children }) {
     const fetchOrgs = useCallback(async (token) => {
         if (!token) return;
         try {
-            const res = await fetch(`${API_URL}/auth/me`, {
+            const res = await fetch(apiUrl("/auth/me"), {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) return;
@@ -91,7 +92,7 @@ export function AppProvider({ children }) {
     const refreshOrganizations = useCallback(async () => {
         if (!accessToken) return;
         try {
-            const res = await fetch(`${API_URL}/auth/me`, {
+            const res = await fetch(apiUrl("/auth/me"), {
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
             if (!res.ok) return;
