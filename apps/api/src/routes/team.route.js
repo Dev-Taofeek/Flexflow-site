@@ -8,6 +8,17 @@ import { successResponse, errorResponse } from "../utils/api-response.js";
 const router = Router();
 router.use(authenticate);
 
+function dedupeInvites(invites) {
+    const byEmail = new Map();
+    for (const invite of invites) {
+        const key = invite.email.toLowerCase();
+        if (!byEmail.has(key)) {
+            byEmail.set(key, invite);
+        }
+    }
+    return [...byEmail.values()];
+}
+
 router.get("/", async (req, res) => {
     try {
         const { workspaceId } = req.query;
@@ -35,7 +46,7 @@ router.get("/", async (req, res) => {
 
         return res.status(200).json(successResponse({
             members: members.map((m) => ({ ...m.user, role: m.role, memberId: m.id, joinedAt: m.createdAt })),
-            invites,
+            invites: dedupeInvites(invites),
             roles: ["OWNER", "ADMIN", "MEMBER", "VIEWER"],
             currentUserRole: self.role,
         }));
@@ -64,10 +75,39 @@ router.post("/invite", async (req, res) => {
             include: { organization: true },
         });
 
+        const normalizedEmail = email.trim().toLowerCase();
+        const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+        if (existingUser) {
+            const existingMember = await prisma.workspaceMember.findUnique({
+                where: { workspaceId_userId: { workspaceId, userId: existingUser.id } },
+            });
+            if (existingMember) {
+                return res.status(409).json(errorResponse("ALREADY_MEMBER", "This user is already a member of this workspace"));
+            }
+        }
+
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        const invite = await prisma.invite.create({
-            data: { organizationId: workspace.organizationId, invitedById: req.user.id, email, role, expiresAt },
+        let invite = await prisma.invite.findFirst({
+            where: {
+                organizationId: workspace.organizationId,
+                email: normalizedEmail,
+                accepted: false,
+                expiresAt: { gt: new Date() },
+            },
+            orderBy: { createdAt: "desc" },
         });
+        const resent = Boolean(invite);
+
+        if (invite) {
+            invite = await prisma.invite.update({
+                where: { id: invite.id },
+                data: { role, expiresAt, invitedById: req.user.id },
+            });
+        } else {
+            invite = await prisma.invite.create({
+                data: { organizationId: workspace.organizationId, invitedById: req.user.id, email: normalizedEmail, role, expiresAt },
+            });
+        }
 
         const inviteUrl = `${process.env.CLIENT_ORIGIN}/join?token=${invite.token}`;
 
@@ -96,11 +136,38 @@ router.post("/invite", async (req, res) => {
             ...invite,
             inviteUrl,
             emailSent,
+            resent,
             emailError: emailError || (!isEmailConfigured() ? "EMAILJS_NOT_CONFIGURED" : null),
         }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to send invite"));
+    }
+});
+
+router.delete("/invites/:inviteId", async (req, res) => {
+    try {
+        const { workspaceId } = req.query;
+        if (!workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId is required"));
+
+        const self = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId, userId: req.user.id } },
+        });
+        if (!self || !["OWNER", "ADMIN"].includes(self.role)) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
+        }
+
+        const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+        const invite = await prisma.invite.findUnique({ where: { id: req.params.inviteId } });
+        if (!workspace || !invite || invite.organizationId !== workspace.organizationId || invite.accepted) {
+            return res.status(404).json(errorResponse("NOT_FOUND", "Invitation not found"));
+        }
+
+        await prisma.invite.delete({ where: { id: invite.id } });
+        return res.status(200).json(successResponse({ deleted: true, id: invite.id }));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to cancel invite"));
     }
 });
 

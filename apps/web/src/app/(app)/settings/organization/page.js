@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { AlertTriangle, Building2, Check, Copy, Loader2, Trash2, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/contexts/AppContext";
+import { useToast } from "@/contexts/ToastContext";
 import {
   fetchOrganization,
   updateOrganization,
@@ -11,6 +12,7 @@ import {
   updateMemberRole,
   removeMember,
   inviteToOrg,
+  cancelOrgInvite,
 } from "@/lib/org-api";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -25,6 +27,7 @@ const ROLE_COLORS = {
 
 export default function OrganizationSettingsPage() {
   const { currentOrg, accessToken, isReady, refreshOrganizations } = useApp();
+  const { addToast } = useToast();
   const router = useRouter();
   const [org, setOrg] = useState(null);
   const [members, setMembers] = useState([]);
@@ -64,8 +67,10 @@ export default function OrganizationSettingsPage() {
       const updated = await updateOrganization(currentOrg.id, { name, description }, accessToken);
       setOrg(updated);
       await refreshOrganizations();
+      addToast("Organization updated.", "success");
     } catch (err) {
       setError(err.message);
+      addToast(err.message, "error");
     } finally {
       setSaving(false);
     }
@@ -75,8 +80,10 @@ export default function OrganizationSettingsPage() {
     try {
       await updateMemberRole(currentOrg.id, userId, role, accessToken);
       setMembers((prev) => prev.map((m) => (m.user?.id === userId ? { ...m, role } : m)));
+      addToast("Member role updated.", "success");
     } catch (err) {
       setError(err.message);
+      addToast(err.message, "error");
     }
   }
 
@@ -85,8 +92,10 @@ export default function OrganizationSettingsPage() {
     try {
       await removeMember(currentOrg.id, userId, accessToken);
       setMembers((prev) => prev.filter((m) => m.user?.id !== userId));
+      addToast("Member removed.", "success");
     } catch (err) {
       setError(err.message);
+      addToast(err.message, "error");
     }
   }
 
@@ -96,12 +105,28 @@ export default function OrganizationSettingsPage() {
     setInviting(true);
     try {
       const invite = await inviteToOrg(currentOrg.id, inviteEmail, inviteRole, accessToken);
-      setInvites((prev) => [invite, ...prev]);
+      setInvites((prev) => [
+        invite,
+        ...prev.filter((inv) => inv.id !== invite.id && inv.email?.toLowerCase() !== invite.email?.toLowerCase()),
+      ]);
       setInviteEmail("");
+      addToast(invite.resent ? "Invite link resent." : "Invitation created.", "success");
     } catch (err) {
       setError(err.message);
+      addToast(err.message, "error");
     } finally {
       setInviting(false);
+    }
+  }
+
+  async function handleCancelInvite(inviteId) {
+    try {
+      await cancelOrgInvite(currentOrg.id, inviteId, accessToken);
+      setInvites((prev) => prev.filter((inv) => inv.id !== inviteId));
+      addToast("Invitation cancelled.", "success");
+    } catch (err) {
+      setError(err.message);
+      addToast(err.message, "error");
     }
   }
 
@@ -109,6 +134,7 @@ export default function OrganizationSettingsPage() {
     if (!org?.inviteCode) return;
     navigator.clipboard.writeText(org.inviteCode);
     setCodeCopied(true);
+    addToast("Invite code copied.", "success");
     setTimeout(() => setCodeCopied(false), 2000);
   }
 
@@ -309,6 +335,15 @@ export default function OrganizationSettingsPage() {
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                   Pending
                 </span>
+                <button
+                  type="button"
+                  onClick={() => handleCancelInvite(inv.id)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-red-50 hover:text-red-500"
+                  title="Cancel invitation"
+                  aria-label={`Cancel invitation for ${inv.email}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             ))}
           </div>

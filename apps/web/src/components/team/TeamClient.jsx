@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, MoreHorizontal, Send, ShieldCheck, Trash2, UserMinus } from "lucide-react";
+import { Mail, Send, Trash2, UserMinus } from "lucide-react";
 
-import { Avatar } from "@/components/ui/Avatar";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useToast } from "@/contexts/ToastContext";
 import Image from "next/image";
 
 const ROLE_COLORS = {
@@ -24,7 +23,9 @@ export function TeamClient({
   onInvite,
   onRoleChange,
   onRemove,
+  onCancelInvite,
 }) {
+  const { addToast } = useToast();
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [email, setEmail] = useState("");
@@ -47,13 +48,17 @@ export function TeamClient({
     try {
       const invite = await onInvite?.({ email, role });
       if (invite) {
-        setInvitations((prev) => [invite, ...prev]);
+        setInvitations((prev) => [
+          invite,
+          ...prev.filter((inv) => inv.id !== invite.id && inv.email?.toLowerCase() !== invite.email?.toLowerCase()),
+        ]);
         setInviteResult({ emailSent: invite.emailSent, inviteUrl: invite.inviteUrl });
       }
       setEmail("");
       setRole("MEMBER");
     } catch (err) {
       setInviteError(err.message);
+      addToast(err.message, "error");
     } finally {
       setIsInviting(false);
     }
@@ -64,7 +69,7 @@ export function TeamClient({
     try {
       await onRoleChange?.({ memberId, role: nextRole });
     } catch (err) {
-      console.error(err);
+      addToast(err.message || "Failed to update role.", "error");
     }
   }
 
@@ -74,7 +79,16 @@ export function TeamClient({
       await onRemove?.(memberId);
       setMembers((prev) => prev.filter((m) => m.memberId !== memberId));
     } catch (err) {
-      console.error(err);
+      addToast(err.message || "Failed to remove member.", "error");
+    }
+  }
+
+  async function handleCancelInvite(inviteId, inviteEmail) {
+    try {
+      await onCancelInvite?.(inviteId);
+      setInvitations((prev) => prev.filter((inv) => inv.id !== inviteId));
+    } catch (err) {
+      addToast(err.message || `Failed to cancel invite for ${inviteEmail}.`, "error");
     }
   }
 
@@ -260,6 +274,17 @@ export function TeamClient({
                 <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                   Pending
                 </span>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => handleCancelInvite(inv.id, inv.email)}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-red-50 hover:text-red-500"
+                    title="Cancel invitation"
+                    aria-label={`Cancel invitation for ${inv.email}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             ))}
           </div>

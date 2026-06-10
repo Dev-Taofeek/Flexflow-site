@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { CheckCircle2, Loader2, QrCode, ShieldCheck, ShieldOff } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { useToast } from "@/contexts/ToastContext";
 import { apiRequest } from "@/lib/api-client";
 import { useRole } from "@/hooks/useRole";
 
@@ -29,6 +30,7 @@ const inputCls = "w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2
 export function ProfileSettingsClient() {
     const { data: session, update } = useSession();
     const { accessToken } = useApp();
+    const { addToast } = useToast();
     const { isOwner } = useRole();
 
     const user = session?.user;
@@ -77,8 +79,10 @@ export function ProfileSettingsClient() {
             });
             await update({ name });
             setProfileMsg({ ok: true, text: "Profile saved." });
+            addToast("Profile saved.", "success");
         } catch (err) {
             setProfileMsg({ ok: false, text: err.message });
+            addToast(err.message, "error");
         } finally {
             setProfileLoading(false);
         }
@@ -93,8 +97,10 @@ export function ProfileSettingsClient() {
             await apiRequest("/profile/password", { method: "PATCH", token: accessToken, body: { currentPassword: curPw, newPassword: newPw } });
             setCurPw(""); setNewPw("");
             setPwMsg({ ok: true, text: "Password updated." });
+            addToast("Password updated.", "success");
         } catch (err) {
             setPwMsg({ ok: false, text: err.message });
+            addToast(err.message, "error");
         } finally {
             setPwLoading(false);
         }
@@ -105,8 +111,10 @@ export function ProfileSettingsClient() {
         try {
             const data = await apiRequest("/profile/2fa/setup", { method: "POST", token: accessToken });
             setTwoFA((s) => ({ ...s, loading: false, qrCode: data.qrCode, secret: data.secret }));
+            addToast("Scan the QR code to finish enabling 2FA.", "info");
         } catch (err) {
             setTwoFA((s) => ({ ...s, loading: false, msg: { ok: false, text: err.message } }));
+            addToast(err.message, "error");
         }
     }
 
@@ -116,8 +124,10 @@ export function ProfileSettingsClient() {
         try {
             await apiRequest("/profile/2fa/verify", { method: "POST", token: accessToken, body: { code: twoFA.code } });
             setTwoFA((s) => ({ ...s, loading: false, enabled: true, qrCode: "", secret: "", code: "", msg: { ok: true, text: "2FA enabled!" } }));
+            addToast("2FA enabled.", "success");
         } catch (err) {
             setTwoFA((s) => ({ ...s, loading: false, msg: { ok: false, text: err.message } }));
+            addToast(err.message, "error");
         }
     }
 
@@ -128,8 +138,10 @@ export function ProfileSettingsClient() {
         try {
             await apiRequest("/profile/2fa", { method: "DELETE", token: accessToken, body: { code } });
             setTwoFA((s) => ({ ...s, loading: false, enabled: false, msg: { ok: true, text: "2FA disabled." } }));
+            addToast("2FA disabled.", "success");
         } catch (err) {
             setTwoFA((s) => ({ ...s, loading: false, msg: { ok: false, text: err.message } }));
+            addToast(err.message, "error");
         }
     }
 

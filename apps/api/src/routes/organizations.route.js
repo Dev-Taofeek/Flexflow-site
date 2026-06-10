@@ -12,6 +12,17 @@ function slugify(str) {
     return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
+function dedupeInvites(invites) {
+    const byEmail = new Map();
+    for (const invite of invites) {
+        const key = invite.email.toLowerCase();
+        if (!byEmail.has(key)) {
+            byEmail.set(key, invite);
+        }
+    }
+    return [...byEmail.values()];
+}
+
 router.get("/", async (req, res) => {
     try {
         const memberships = await prisma.organizationMember.findMany({
@@ -193,7 +204,7 @@ router.get("/:orgId/members", async (req, res) => {
             orderBy: { createdAt: "desc" },
         });
 
-        return res.status(200).json(successResponse({ members, invites }));
+        return res.status(200).json(successResponse({ members, invites: dedupeInvites(invites) }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch members"));
@@ -271,24 +282,43 @@ router.post("/:orgId/invite", async (req, res) => {
         }
 
         const { email, role = "MEMBER" } = req.body;
-        if (!email?.includes("@")) {
+        const normalizedEmail = email?.trim().toLowerCase();
+        if (!normalizedEmail?.includes("@")) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Valid email is required"));
         }
 
         const org = await prisma.organization.findUnique({ where: { id: req.params.orgId } });
 
-        const existingUser = await prisma.user.findUnique({ where: { email } });
+        const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (existingUser) {
             const already = await prisma.organizationMember.findUnique({
                 where: { organizationId_userId: { organizationId: req.params.orgId, userId: existingUser.id } },
             });
-            if (already) return res.status(409).json(errorResponse("ALREADY_MEMBER", "User is already a member"));
+            if (already) return res.status(409).json(errorResponse("ALREADY_MEMBER", "This user is already a member of this organization"));
         }
 
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        const invite = await prisma.invite.create({
-            data: { organizationId: req.params.orgId, invitedById: req.user.id, email, role, expiresAt },
+        let invite = await prisma.invite.findFirst({
+            where: {
+                organizationId: req.params.orgId,
+                email: normalizedEmail,
+                accepted: false,
+                expiresAt: { gt: new Date() },
+            },
+            orderBy: { createdAt: "desc" },
         });
+        const resent = Boolean(invite);
+
+        if (invite) {
+            invite = await prisma.invite.update({
+                where: { id: invite.id },
+                data: { role, expiresAt, invitedById: req.user.id },
+            });
+        } else {
+            invite = await prisma.invite.create({
+                data: { organizationId: req.params.orgId, invitedById: req.user.id, email: normalizedEmail, role, expiresAt },
+            });
+        }
 
         const inviteUrl = `${process.env.CLIENT_ORIGIN}/join?token=${invite.token}`;
 
@@ -317,11 +347,34 @@ router.post("/:orgId/invite", async (req, res) => {
             ...invite,
             inviteUrl,
             emailSent,
+            resent,
             emailError: emailError || (!isEmailConfigured() ? "EMAILJS_NOT_CONFIGURED" : null),
         }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to send invite"));
+    }
+});
+
+router.delete("/:orgId/invites/:inviteId", async (req, res) => {
+    try {
+        const membership = await prisma.organizationMember.findUnique({
+            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.user.id } },
+        });
+        if (!membership || !["OWNER", "ADMIN"].includes(membership.role)) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
+        }
+
+        const invite = await prisma.invite.findUnique({ where: { id: req.params.inviteId } });
+        if (!invite || invite.organizationId !== req.params.orgId || invite.accepted) {
+            return res.status(404).json(errorResponse("NOT_FOUND", "Invitation not found"));
+        }
+
+        await prisma.invite.delete({ where: { id: invite.id } });
+        return res.status(200).json(successResponse({ deleted: true, id: invite.id }));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to cancel invite"));
     }
 });
 

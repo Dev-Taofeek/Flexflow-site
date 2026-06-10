@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Bell, Building2, Check, ChevronDown, Command, LayoutGrid, Loader2, Menu, Plus, Search, X } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { useApp } from "@/contexts/AppContext";
+import { useToast } from "@/contexts/ToastContext";
 import { useRole } from "@/hooks/useRole";
 import { PremiumModal } from "@/components/ui/PremiumModal";
 import { SearchModal } from "@/components/search/SearchModal";
@@ -38,6 +39,7 @@ function MobileOrgSheet({ open, onClose }) {
     const router = useRouter();
     const { organizations, currentOrg, currentWorkspace, switchOrg, switchWorkspace, accessToken, refreshOrganizations } = useApp();
     const { canManage, ownsAnyOrg } = useRole();
+    const { addToast } = useToast();
 
     const [tab, setTab] = useState("orgs"); // "orgs" | "workspaces" | "new-org" | "new-ws"
     const [orgForm, setOrgForm] = useState({ name: "", workspaceName: "General" });
@@ -53,6 +55,7 @@ function MobileOrgSheet({ open, onClose }) {
     function openNewOrg() {
         if (ownsAnyOrg) {
             setPremiumModal({ open: true, feature: "Multiple Organizations", description: "The free plan lets you create 1 organization. Upgrade to Premium to create unlimited organizations." });
+            addToast("Free plan allows one organization.", "info");
             return;
         }
         setTab("new-org");
@@ -61,6 +64,7 @@ function MobileOrgSheet({ open, onClose }) {
     function openNewWorkspace() {
         if ((currentOrg?.workspaces?.length ?? 0) >= 3) {
             setPremiumModal({ open: true, feature: "More Workspaces", description: "The free plan includes 3 workspaces per organization. Upgrade to Premium for unlimited workspaces." });
+            addToast("Free plan allows three workspaces per organization.", "info");
             return;
         }
         setTab("new-ws");
@@ -78,7 +82,8 @@ function MobileOrgSheet({ open, onClose }) {
             await refreshOrganizations();
             setOrgForm({ name: "", workspaceName: "General" });
             setTab("orgs");
-        } catch (ex) { setErr(ex.message); }
+            addToast("Organization created.", "success");
+        } catch (ex) { setErr(ex.message); addToast(ex.message, "error"); }
         finally { setLoading(false); }
     }
 
@@ -94,7 +99,8 @@ function MobileOrgSheet({ open, onClose }) {
             await refreshOrganizations();
             setWsForm({ name: "" });
             setTab("workspaces");
-        } catch (ex) { setErr(ex.message); }
+            addToast("Workspace created.", "success");
+        } catch (ex) { setErr(ex.message); addToast(ex.message, "error"); }
         finally { setLoading(false); }
     }
 
@@ -290,6 +296,7 @@ function MobileOrgSheet({ open, onClose }) {
 function NewWorkspacePopover() {
     const { currentOrg, accessToken, refreshOrganizations, switchWorkspace } = useApp();
     const { canManage } = useRole();
+    const { addToast } = useToast();
     const [open, setOpen] = useState(false);
     const [name, setName] = useState("");
     const [loading, setLoading] = useState(false);
@@ -317,8 +324,10 @@ function NewWorkspacePopover() {
             await refreshOrganizations();
             switchWorkspace(ws.id);
             setName(""); setOpen(false);
+            addToast("Workspace created.", "success");
         } catch (ex) {
             setErr(ex.message);
+            addToast(ex.message, "error");
         } finally {
             setLoading(false);
         }
@@ -329,6 +338,7 @@ function NewWorkspacePopover() {
     function handleOpenPopover() {
         if ((currentOrg?.workspaces?.length ?? 0) >= 3) {
             setPremiumModal({ open: true, feature: "More Workspaces", description: "The free plan includes 3 workspaces per organization. Upgrade to Premium for unlimited workspaces." });
+            addToast("Free plan allows three workspaces per organization.", "info");
             return;
         }
         setOpen((o) => !o);

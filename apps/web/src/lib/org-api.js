@@ -24,6 +24,10 @@ export async function inviteToOrg(orgId, email, role, token) {
     return apiRequest(`/organizations/${orgId}/invite`, { token, method: "POST", body: { email, role } });
 }
 
+export async function cancelOrgInvite(orgId, inviteId, token) {
+    return apiRequest(`/organizations/${orgId}/invites/${inviteId}`, { token, method: "DELETE" });
+}
+
 export async function fetchWorkspace(workspaceId, token) {
     return apiRequest(`/workspaces/${workspaceId}`, { token });
 }

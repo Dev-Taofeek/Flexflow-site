@@ -9,8 +9,10 @@ import { FormField } from "@/components/auth/FormField";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiUrl } from "@/lib/api-url";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function ForgotPasswordPage() {
+    const { addToast } = useToast();
     const [email, setEmail] = useState("");
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -30,8 +32,10 @@ export default function ForgotPasswordPage() {
             const json = await res.json();
             if (!res.ok) throw new Error(json.error?.message || "Failed to send reset email");
             setSubmitted(true);
+            addToast("If that account exists, a reset email has been sent.", "success");
         } catch (err) {
             setError(err.message);
+            addToast(err.message, "error");
         } finally {
             setLoading(false);
         }

@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PremiumModal } from "@/components/ui/PremiumModal";
+import { useToast } from "@/contexts/ToastContext";
 import { useRole } from "@/hooks/useRole";
 
 export function WorkspaceSettingsClient() {
   const { isOwner, canManage } = useRole();
+  const { addToast } = useToast();
   const [premiumModal, setPremiumModal] = useState({ open: false, feature: "", description: "" });
   const [columns, setColumns] = useState(["To Do", "In Progress", "In Review", "Done"]);
 
@@ -73,6 +75,19 @@ export function WorkspaceSettingsClient() {
 
   function handleRemoveLabel(labelId) {
     setLabels((current) => current.filter((label) => label.id !== labelId));
+  }
+
+  function handleSaveIntegrations() {
+    if (!isOwner) {
+      addToast("Only the organization owner can configure integrations.", "error");
+      return;
+    }
+    setPremiumModal({
+      open: true,
+      feature: "Workspace Integrations",
+      description: "Slack and GitHub integrations are available on the Premium plan.",
+    });
+    addToast("Integrations are available on the Premium plan.", "info");
   }
 
   return (
@@ -304,10 +319,15 @@ export function WorkspaceSettingsClient() {
                 <rect x="2" y="2" width="4" height="4" rx="2" />
               </svg>
 
-              <div>
-                <p className="text-foreground dark:text-foreground-dark text-sm font-semibold">
-                  Slack webhook
-                </p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-foreground dark:text-foreground-dark text-sm font-semibold">
+                    Slack webhook
+                  </p>
+                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 uppercase tracking-wide">
+                    Premium
+                  </span>
+                </div>
 
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
                   Send issue updates to a Slack channel.
@@ -320,7 +340,13 @@ export function WorkspaceSettingsClient() {
               onChange={(event) => setSlackWebhook(event.target.value)}
               placeholder="https://hooks.slack.com/services/..."
               className="mt-4"
+              disabled
             />
+
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <p className="font-semibold">Upgrade to unlock</p>
+              <p className="mt-0.5">Slack notifications are available on the Premium plan.</p>
+            </div>
 
             <Badge variant="secondary" className="mt-4">
               Not connected
@@ -376,7 +402,7 @@ export function WorkspaceSettingsClient() {
         )}
 
         <div className="mt-6 flex justify-end">
-          <Button type="button" disabled={!isOwner}>Save integrations</Button>
+          <Button type="button" disabled={!isOwner} onClick={handleSaveIntegrations}>Save integrations</Button>
         </div>
       </section>
 

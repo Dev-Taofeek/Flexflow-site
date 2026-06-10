@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
-import { fetchTeamData, inviteMember, updateMemberRole, removeMember } from "@/lib/team-api";
+import { useToast } from "@/contexts/ToastContext";
+import { fetchTeamData, inviteMember, updateMemberRole, removeMember, cancelInvite } from "@/lib/team-api";
 import { TeamClient } from "@/components/team/TeamClient";
 
 export default function TeamPage() {
   const { currentWorkspace, accessToken, isReady } = useApp();
+  const { addToast } = useToast();
   const [teamData, setTeamData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -36,7 +38,11 @@ export default function TeamPage() {
       role,
       token: accessToken,
     });
-    setTeamData((prev) => ({ ...prev, invites: [invite, ...(prev.invites || [])] }));
+    setTeamData((prev) => ({
+      ...prev,
+      invites: [invite, ...(prev.invites || []).filter((i) => i.id !== invite.id && i.email?.toLowerCase() !== invite.email?.toLowerCase())],
+    }));
+    addToast(invite.resent ? "Invite link resent." : "Invitation created.", "success");
     return invite;
   }
 
@@ -51,6 +57,7 @@ export default function TeamPage() {
       ...prev,
       members: prev.members.map((m) => (m.memberId === memberId ? { ...m, ...updated } : m)),
     }));
+    addToast("Member role updated.", "success");
   }
 
   async function handleRemove(memberId) {
@@ -59,6 +66,16 @@ export default function TeamPage() {
       ...prev,
       members: prev.members.filter((m) => m.memberId !== memberId),
     }));
+    addToast("Member removed.", "success");
+  }
+
+  async function handleCancelInvite(inviteId) {
+    await cancelInvite({ inviteId, workspaceId: currentWorkspace.id, token: accessToken });
+    setTeamData((prev) => ({
+      ...prev,
+      invites: prev.invites.filter((inv) => inv.id !== inviteId),
+    }));
+    addToast("Invitation cancelled.", "success");
   }
 
   if (loading || !isReady) {
@@ -96,6 +113,7 @@ export default function TeamPage() {
         onInvite={handleInvite}
         onRoleChange={handleRoleChange}
         onRemove={handleRemove}
+        onCancelInvite={handleCancelInvite}
       />
     </div>
   );

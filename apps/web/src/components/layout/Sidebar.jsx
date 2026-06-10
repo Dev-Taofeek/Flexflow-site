@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { apiRequest } from "@/lib/api-client";
+import { useToast } from "@/contexts/ToastContext";
 import {
   BarChart3,
   ChevronDown,
@@ -119,6 +120,7 @@ function OrgSwitcher({ collapsed }) {
 
 function WorkspaceSwitcher({ collapsed }) {
   const { currentOrg, currentWorkspace, switchWorkspace, accessToken, refreshOrganizations } = useApp();
+  const { addToast } = useToast();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [wsName, setWsName] = useState("");
@@ -143,6 +145,12 @@ function WorkspaceSwitcher({ collapsed }) {
   async function handleCreateWorkspace(e) {
     e.preventDefault();
     if (!wsName.trim()) { setWsErr("Name required"); return; }
+    if (workspaces.length >= 3) {
+      const message = "Free plan allows 3 workspaces per organization. Upgrade to Premium for unlimited workspaces.";
+      setWsErr(message);
+      addToast(message, "info");
+      return;
+    }
     setWsLoading(true); setWsErr("");
     try {
       const ws = await apiRequest("/workspaces", {
@@ -153,8 +161,10 @@ function WorkspaceSwitcher({ collapsed }) {
       await refreshOrganizations();
       switchWorkspace(ws.id);
       setWsName(""); setCreating(false); setOpen(false);
+      addToast("Workspace created.", "success");
     } catch (err) {
       setWsErr(err.message);
+      addToast(err.message, "error");
     } finally {
       setWsLoading(false);
     }
@@ -233,7 +243,16 @@ function WorkspaceSwitcher({ collapsed }) {
               </form>
             ) : (
               <button
-                onClick={() => setCreating(true)}
+                onClick={() => {
+                  if (workspaces.length >= 3) {
+                    const message = "Free plan allows 3 workspaces per organization. Upgrade to Premium for unlimited workspaces.";
+                    setWsErr(message);
+                    setCreating(true);
+                    addToast(message, "info");
+                    return;
+                  }
+                  setCreating(true);
+                }}
                 className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
               >
                 <Plus className="h-4 w-4" />
