@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
-import { isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
+import { notifyIssueUsers } from "../services/issue-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
@@ -126,13 +126,14 @@ router.post("/", async (req, res) => {
 
         const assignedOnCreate = ids.filter((id) => id !== req.user.id);
         if (assignedOnCreate.length > 0) {
-            await Promise.all(assignedOnCreate.map((userId) =>
-                notifyUser(userId, {
-                    title: "You've been assigned to an issue",
-                    message: `You were assigned to: ${issue.title}`,
-                    type: "ISSUE_ASSIGNED",
-                })
-            ));
+            await notifyIssueUsers(assignedOnCreate, issue, {
+                actorId: req.user.id,
+                title: "You've been assigned to an issue",
+                message: `${req.user.name} assigned you to: ${issue.title}`,
+                type: "ISSUE_ASSIGNED",
+                subject: `You've been assigned: ${issue.title}`,
+                actionText: "Open issue",
+            });
         }
 
         return res.status(201).json(successResponse(issue));
@@ -180,34 +181,14 @@ router.patch("/:issueId/assignees", async (req, res) => {
         const newlyAdded = ids.filter((id) => !oldIds.has(id));
 
         if (newlyAdded.length > 0) {
-            await Promise.all(newlyAdded.map((userId) =>
-                prisma.notification.create({
-                    data: {
-                        userId,
-                        title: "You've been assigned to an issue",
-                        message: `You were assigned to: ${issue.title}`,
-                        type: "ISSUE_ASSIGNED",
-                    },
-                })
-            ));
-
-            if (isEmailConfigured()) {
-                const assigneeUsers = await prisma.user.findMany({
-                    where: { id: { in: newlyAdded } },
-                    select: { email: true, name: true },
-                });
-                await Promise.all(assigneeUsers.map((u) =>
-                    sendTransactionalEmail({
-                        to: u.email,
-                        subject: `You've been assigned: ${issue.title}`,
-                        title: "New assignment",
-                        message: `Hi ${u.name}, you've been assigned to the issue: ${issue.title}.`,
-                        actionText: "Open FlexFlow",
-                        actionUrl: process.env.CLIENT_ORIGIN,
-                        footer: "Log in to FlexFlow to view this issue.",
-                    }).catch(() => {})
-                ));
-            }
+            await notifyIssueUsers(newlyAdded, issue, {
+                actorId: req.user.id,
+                title: "You've been assigned to an issue",
+                message: `${req.user.name} assigned you to: ${issue.title}`,
+                type: "ISSUE_ASSIGNED",
+                subject: `You've been assigned: ${issue.title}`,
+                actionText: "Open issue",
+            });
         }
 
         const updated = await prisma.issue.findUnique({ where: { id: issueId }, include: ISSUE_INCLUDE });

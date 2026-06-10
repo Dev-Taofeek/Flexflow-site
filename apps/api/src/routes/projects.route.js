@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { notifyIssueParticipants, notifyIssueUsers } from "../services/issue-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
@@ -299,10 +300,13 @@ router.post("/:projectId/issues", async (req, res) => {
         });
 
         if (assigneeId && assigneeId !== req.user.id) {
-            await notifyUser(assigneeId, {
+            await notifyIssueUsers([assigneeId], issue, {
+                actorId: req.user.id,
                 title: "You've been assigned to an issue",
-                message: `You were assigned to: ${issue.title}`,
+                message: `${req.user.name} assigned you to: ${issue.title}`,
                 type: "ISSUE_ASSIGNED",
+                subject: `You've been assigned: ${issue.title}`,
+                actionText: "Open issue",
             });
         }
 
@@ -340,6 +344,14 @@ router.patch("/:projectId/issues/:issueId/status", async (req, res) => {
             title: "Issue status updated",
             message: `${updated.title} moved to ${status.replaceAll("_", " ")}.`,
             type: "SYSTEM",
+        });
+        await notifyIssueParticipants(issue.id, {
+            actorId: req.user.id,
+            title: "Issue status updated",
+            message: `${req.user.name} moved ${updated.title} to ${status.replaceAll("_", " ")}.`,
+            type: "SYSTEM",
+            subject: `Issue updated: ${updated.title}`,
+            actionText: "View update",
         });
 
         req.app.get("io")?.emit("issue:status-updated", { projectId: req.params.projectId, issue: updated, activity });
@@ -384,6 +396,26 @@ router.patch("/:projectId/issues/:issueId", async (req, res) => {
             message: `${updated.title} was updated.`,
             type: "SYSTEM",
         });
+        if (assigneeId && assigneeId !== issue.assigneeId && assigneeId !== req.user.id) {
+            await notifyIssueUsers([assigneeId], updated, {
+                actorId: req.user.id,
+                title: "You've been assigned to an issue",
+                message: `${req.user.name} assigned you to: ${updated.title}`,
+                type: "ISSUE_ASSIGNED",
+                subject: `You've been assigned: ${updated.title}`,
+                actionText: "Open issue",
+            });
+        }
+        await notifyIssueParticipants(issue.id, {
+            actorId: req.user.id,
+            title: "Issue updated",
+            message: `${req.user.name} updated ${updated.title}.`,
+            type: "SYSTEM",
+            subject: `Issue updated: ${updated.title}`,
+            actionText: "View issue",
+            extraUserIds: assigneeId ? [assigneeId] : [],
+            excludeUserIds: assigneeId && assigneeId !== issue.assigneeId ? [assigneeId] : [],
+        });
 
         req.app.get("io")?.emit("issue:updated", { projectId: req.params.projectId, issue: updated, activity });
         return res.status(200).json(successResponse(updated));
@@ -418,6 +450,14 @@ router.post("/:projectId/issues/:issueId/comments", async (req, res) => {
             title: "Comment added",
             message: `You commented on ${issue.title}.`,
             type: "COMMENT",
+        });
+        await notifyIssueParticipants(issue.id, {
+            actorId: req.user.id,
+            title: "New comment on an issue",
+            message: `${req.user.name} commented on ${issue.title}.`,
+            type: "COMMENT",
+            subject: `New comment: ${issue.title}`,
+            actionText: "Read comment",
         });
 
         req.app.get("io")?.emit("issue:comment-created", { projectId: req.params.projectId, issueId: issue.id, comment, activity });
