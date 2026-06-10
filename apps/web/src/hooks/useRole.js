@@ -5,8 +5,8 @@ import { useApp } from "@/contexts/AppContext";
 const RANK = { OWNER: 4, ADMIN: 3, MEMBER: 2, VIEWER: 1 };
 
 export function useRole() {
-    const { currentOrg, organizations } = useApp();
-    const role = currentOrg?.role || "VIEWER";
+    const { currentOrg, currentWorkspace, organizations } = useApp();
+    const role = currentWorkspace?.role || currentOrg?.role || "VIEWER";
     const rank = RANK[role] ?? 1;
 
     return {

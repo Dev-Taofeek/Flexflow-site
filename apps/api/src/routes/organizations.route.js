@@ -24,6 +24,15 @@ function dedupeInvites(invites) {
     return [...byEmail.values()];
 }
 
+const VALID_ROLES = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
+
+function canManageOrgRole(actorRole, targetRole, nextRole) {
+    if (targetRole === "OWNER" || nextRole === "OWNER") return false;
+    if (actorRole === "OWNER") return true;
+    if (actorRole === "ADMIN") return targetRole !== "ADMIN" && nextRole !== "ADMIN";
+    return false;
+}
+
 router.get("/", async (req, res) => {
     try {
         const memberships = await prisma.organizationMember.findMany({
@@ -31,7 +40,10 @@ router.get("/", async (req, res) => {
             include: {
                 organization: {
                     include: {
-                        workspaces: { orderBy: { createdAt: "asc" } },
+                        workspaces: {
+                            include: { members: { where: { userId: req.user.id }, select: { role: true } } },
+                            orderBy: { createdAt: "asc" },
+                        },
                         _count: { select: { members: true } },
                     },
                 },
@@ -41,6 +53,11 @@ router.get("/", async (req, res) => {
 
         const organizations = memberships.map((m) => ({
             ...m.organization,
+            workspaces: m.organization.workspaces.map((workspace) => ({
+                ...workspace,
+                role: workspace.members?.[0]?.role || m.role,
+                members: undefined,
+            })),
             role: m.role,
             memberId: m.id,
         }));
@@ -240,8 +257,7 @@ router.patch("/:orgId/members/:userId/role", async (req, res) => {
         }
 
         const { role } = req.body;
-        const validRoles = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
-        if (!validRoles.includes(role)) {
+        if (!VALID_ROLES.includes(role)) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Invalid role"));
         }
 
@@ -250,8 +266,8 @@ router.patch("/:orgId/members/:userId/role", async (req, res) => {
         });
         if (!targetMembership) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
 
-        if (actorMembership.role === "ADMIN" && role === "OWNER") {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Admins cannot assign Owner role"));
+        if (!canManageOrgRole(actorMembership.role, targetMembership.role, role)) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot change this member's role"));
         }
 
         const updated = await prisma.organizationMember.update({
@@ -293,6 +309,14 @@ router.delete("/:orgId/members/:userId", async (req, res) => {
             return res.status(400).json(errorResponse("BAD_REQUEST", "Cannot remove yourself from the organization"));
         }
 
+        const targetMembership = await prisma.organizationMember.findUnique({
+            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.params.userId } },
+        });
+        if (!targetMembership) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
+        if (targetMembership.role === "OWNER" || (actorMembership.role === "ADMIN" && targetMembership.role === "ADMIN")) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot remove this member"));
+        }
+
         const removed = await prisma.organizationMember.delete({
             where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.params.userId } },
             include: { user: { select: { name: true } }, organization: { select: { name: true } } },
@@ -331,6 +355,9 @@ router.post("/:orgId/invite", async (req, res) => {
         const normalizedEmail = email?.trim().toLowerCase();
         if (!normalizedEmail?.includes("@")) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Valid email is required"));
+        }
+        if (!VALID_ROLES.includes(role) || role === "OWNER" || (membership.role === "ADMIN" && role === "ADMIN")) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot invite members with that role"));
         }
 
         const org = await prisma.organization.findUnique({ where: { id: req.params.orgId } });

@@ -20,6 +20,15 @@ function dedupeInvites(invites) {
     return [...byEmail.values()];
 }
 
+const VALID_ROLES = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
+
+function canManageWorkspaceRole(actorRole, targetRole, nextRole) {
+    if (targetRole === "OWNER" || nextRole === "OWNER") return false;
+    if (actorRole === "OWNER") return true;
+    if (actorRole === "ADMIN") return targetRole !== "ADMIN" && nextRole !== "ADMIN";
+    return false;
+}
+
 router.get("/", async (req, res) => {
     try {
         const { workspaceId } = req.query;
@@ -171,6 +180,9 @@ router.delete("/invites/:inviteId", async (req, res) => {
         if (!self || !["OWNER", "ADMIN"].includes(self.role)) {
             return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
         }
+        if (!VALID_ROLES.includes(role) || role === "OWNER" || (self.role === "ADMIN" && role === "ADMIN")) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot invite teammates with that role"));
+        }
 
         const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
         const invite = await prisma.invite.findUnique({ where: { id: req.params.inviteId } });
@@ -203,11 +215,13 @@ router.patch("/members/:memberId/role", async (req, res) => {
             return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
         }
 
-        const validRoles = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
-        if (!validRoles.includes(role)) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Invalid role"));
+        if (!VALID_ROLES.includes(role)) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Invalid role"));
 
         const target = await prisma.workspaceMember.findUnique({ where: { id: req.params.memberId } });
         if (!target) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
+        if (!canManageWorkspaceRole(self.role, target.role, role)) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot change this member's role"));
+        }
 
         const updated = await prisma.workspaceMember.update({
             where: { id: req.params.memberId },
@@ -252,6 +266,9 @@ router.delete("/members/:memberId", async (req, res) => {
 
         if (target.userId === req.user.id) {
             return res.status(400).json(errorResponse("BAD_REQUEST", "Cannot remove yourself"));
+        }
+        if (target.role === "OWNER" || (self.role === "ADMIN" && target.role === "ADMIN")) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot remove this member"));
         }
 
         const removed = await prisma.workspaceMember.delete({

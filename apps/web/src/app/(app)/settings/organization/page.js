@@ -45,6 +45,20 @@ export default function OrganizationSettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [error, setError] = useState("");
+  const canManageMembers = ["OWNER", "ADMIN"].includes(currentOrg?.role);
+  const inviteRoleOptions = currentOrg?.role === "OWNER" ? ["ADMIN", "MEMBER", "VIEWER"] : ["MEMBER", "VIEWER"];
+
+  function canEditMember(memberRole) {
+    if (!canManageMembers || memberRole === "OWNER") return false;
+    if (currentOrg?.role === "OWNER") return true;
+    return memberRole !== "ADMIN";
+  }
+
+  function roleOptionsFor(memberRole) {
+    if (currentOrg?.role === "OWNER") return ["ADMIN", "MEMBER", "VIEWER"];
+    if (memberRole === "ADMIN") return ["ADMIN"];
+    return ["MEMBER", "VIEWER"];
+  }
 
   useEffect(() => {
     if (!isReady || !currentOrg?.id || !accessToken) return;
@@ -276,6 +290,7 @@ export default function OrganizationSettingsPage() {
         </div>
 
         {/* Invite row */}
+        {canManageMembers && (
         <form
           onSubmit={handleInvite}
           className="flex items-center gap-2 border-b border-(--border) bg-(--bg-sunken) px-5 py-3"
@@ -292,7 +307,7 @@ export default function OrganizationSettingsPage() {
             onChange={(e) => setInviteRole(e.target.value)}
             className="h-10 rounded-lg border border-(--border) bg-(--bg) px-2 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
           >
-            {["ADMIN", "MEMBER", "VIEWER"].map((r) => (
+            {inviteRoleOptions.map((r) => (
               <option key={r} value={r}>
                 {r.charAt(0) + r.slice(1).toLowerCase()}
               </option>
@@ -307,6 +322,7 @@ export default function OrganizationSettingsPage() {
             Invite
           </Button>
         </form>
+        )}
 
         <div className="divide-y divide-(--border)">
           {members.map((m) => (
@@ -334,26 +350,29 @@ export default function OrganizationSettingsPage() {
               >
                 {m.role?.charAt(0) + m.role?.slice(1).toLowerCase()}
               </span>
-              {["OWNER", "ADMIN"].includes(currentOrg?.role) && (
+              {canManageMembers && (
                 <div className="flex items-center gap-1">
                   <select
                     value={m.role}
                     onChange={(e) => handleRoleChange(m.user?.id, e.target.value)}
+                    disabled={!canEditMember(m.role)}
                     className="h-7 rounded-md border border-(--border) bg-(--bg) px-2 text-xs text-(--text-secondary) focus:outline-none"
                   >
-                    {["OWNER", "ADMIN", "MEMBER", "VIEWER"].map((r) => (
+                    {roleOptionsFor(m.role).map((r) => (
                       <option key={r} value={r}>
                         {r.charAt(0) + r.slice(1).toLowerCase()}
                       </option>
                     ))}
                   </select>
-                  <button
-                    aria-label={`Remove ${m.user?.name ?? "member"}`}
-                    onClick={() => handleRemoveMember(m.user?.id)}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-red-50 hover:text-red-500"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {canEditMember(m.role) && (
+                    <button
+                      aria-label={`Remove ${m.user?.name ?? "member"}`}
+                      onClick={() => handleRemoveMember(m.user?.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-red-50 hover:text-red-500"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>

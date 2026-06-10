@@ -69,7 +69,14 @@ router.post("/oauth", async (req, res) => {
         const organizations = await prisma.organizationMember.findMany({
             where: { userId: user.id },
             include: {
-                organization: { include: { workspaces: { orderBy: { createdAt: "asc" } } } },
+                organization: {
+                    include: {
+                        workspaces: {
+                            include: { members: { where: { userId: user.id }, select: { role: true } } },
+                            orderBy: { createdAt: "asc" },
+                        },
+                    },
+                },
             },
             orderBy: { createdAt: "asc" },
         });
@@ -87,6 +94,11 @@ router.post("/oauth", async (req, res) => {
             refreshToken,
             organizations: organizations.map((m) => ({
                 ...m.organization,
+                workspaces: m.organization.workspaces.map((workspace) => ({
+                    ...workspace,
+                    role: workspace.members?.[0]?.role || m.role,
+                    members: undefined,
+                })),
                 role: m.role,
                 memberId: m.id,
             })),
@@ -168,7 +180,12 @@ router.post("/login", async (req, res) => {
             where: { userId: user.id },
             include: {
                 organization: {
-                    include: { workspaces: { orderBy: { createdAt: "asc" } } },
+                    include: {
+                        workspaces: {
+                            include: { members: { where: { userId: user.id }, select: { role: true } } },
+                            orderBy: { createdAt: "asc" },
+                        },
+                    },
                 },
             },
             orderBy: { createdAt: "asc" },
@@ -185,6 +202,11 @@ router.post("/login", async (req, res) => {
             user: safeUser,
             organizations: organizations.map((m) => ({
                 ...m.organization,
+                workspaces: m.organization.workspaces.map((workspace) => ({
+                    ...workspace,
+                    role: workspace.members?.[0]?.role || m.role,
+                    members: undefined,
+                })),
                 role: m.role,
                 memberId: m.id,
             })),
@@ -270,7 +292,12 @@ router.get("/me", async (req, res) => {
             where: { userId: user.id },
             include: {
                 organization: {
-                    include: { workspaces: { orderBy: { createdAt: "asc" } } },
+                    include: {
+                        workspaces: {
+                            include: { members: { where: { userId: user.id }, select: { role: true } } },
+                            orderBy: { createdAt: "asc" },
+                        },
+                    },
                 },
             },
             orderBy: { createdAt: "asc" },
@@ -278,6 +305,11 @@ router.get("/me", async (req, res) => {
 
         const organizations = memberships.map((m) => ({
             ...m.organization,
+            workspaces: m.organization.workspaces.map((workspace) => ({
+                ...workspace,
+                role: workspace.members?.[0]?.role || m.role,
+                members: undefined,
+            })),
             role: m.role,
             memberId: m.id,
         }));

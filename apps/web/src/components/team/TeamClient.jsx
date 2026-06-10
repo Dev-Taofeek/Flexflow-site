@@ -35,6 +35,19 @@ export function TeamClient({
   const [inviteResult, setInviteResult] = useState(null); // { emailSent, inviteUrl }
 
   const canManage = currentUserRole && ["OWNER", "ADMIN"].includes(currentUserRole);
+  const editableInviteRoles = currentUserRole === "OWNER" ? ["ADMIN", "MEMBER", "VIEWER"] : ["MEMBER", "VIEWER"];
+
+  function canEditMember(member) {
+    if (!canManage || member.role === "OWNER") return false;
+    if (currentUserRole === "OWNER") return true;
+    return member.role !== "ADMIN";
+  }
+
+  function editableRolesFor(member) {
+    if (currentUserRole === "OWNER") return ["ADMIN", "MEMBER", "VIEWER"];
+    if (member.role === "ADMIN") return ["ADMIN"];
+    return ["MEMBER", "VIEWER"];
+  }
 
   async function handleInvite(e) {
     e.preventDefault();
@@ -52,7 +65,7 @@ export function TeamClient({
           invite,
           ...prev.filter((inv) => inv.id !== invite.id && inv.email?.toLowerCase() !== invite.email?.toLowerCase()),
         ]);
-        setInviteResult({ emailSent: invite.emailSent, inviteUrl: invite.inviteUrl });
+        setInviteResult({ emailSent: invite.emailSent, inviteUrl: invite.inviteUrl, emailConfig: invite.emailConfig });
       }
       setEmail("");
       setRole("MEMBER");
@@ -136,9 +149,7 @@ export function TeamClient({
               onChange={(e) => setRole(e.target.value)}
               className="h-10 rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
             >
-              {roles
-                .filter((r) => r !== "OWNER")
-                .map((r) => (
+              {editableInviteRoles.map((r) => (
                   <option key={r} value={r}>
                     {r.charAt(0) + r.slice(1).toLowerCase()}
                   </option>
@@ -229,21 +240,24 @@ export function TeamClient({
                   <select
                     value={member.role}
                     onChange={(e) => handleRoleChange(member.memberId || member.id, e.target.value)}
+                    disabled={!canEditMember(member)}
                     className="h-7 rounded-md border border-(--border) bg-(--bg) px-2 text-xs text-(--text-secondary) focus:border-indigo-500 focus:outline-none"
                   >
-                    {roles.map((r) => (
+                    {editableRolesFor(member).map((r) => (
                       <option key={r} value={r}>
                         {r.charAt(0) + r.slice(1).toLowerCase()}
                       </option>
                     ))}
                   </select>
-                  <button
-                    onClick={() => handleRemove(member.memberId || member.id)}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-red-50 hover:text-red-500"
-                    title="Remove member"
-                  >
-                    <UserMinus className="h-3.5 w-3.5" />
-                  </button>
+                  {canEditMember(member) && (
+                    <button
+                      onClick={() => handleRemove(member.memberId || member.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-red-50 hover:text-red-500"
+                      title="Remove member"
+                    >
+                      <UserMinus className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>

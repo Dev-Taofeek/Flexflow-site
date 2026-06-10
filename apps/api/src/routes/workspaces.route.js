@@ -174,6 +174,9 @@ router.post("/:workspaceId/members", async (req, res) => {
 
         const { userId, role = "MEMBER" } = req.body;
         const workspace = await prisma.workspace.findUnique({ where: { id: req.params.workspaceId } });
+        if (!["ADMIN", "MEMBER", "VIEWER"].includes(role) || (actor.role === "ADMIN" && role === "ADMIN")) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot add members with that role"));
+        }
 
         const orgMember = await prisma.organizationMember.findUnique({
             where: { organizationId_userId: { organizationId: workspace.organizationId, userId } },
@@ -217,6 +220,14 @@ router.delete("/:workspaceId/members/:userId", async (req, res) => {
         });
         if (!actor || !["OWNER", "ADMIN"].includes(actor.role)) {
             return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
+        }
+
+        const target = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId: req.params.workspaceId, userId: req.params.userId } },
+        });
+        if (!target) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
+        if (target.role === "OWNER" || (actor.role === "ADMIN" && target.role === "ADMIN")) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot remove this member"));
         }
 
         await prisma.workspaceMember.delete({
