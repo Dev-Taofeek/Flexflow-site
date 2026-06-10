@@ -39,7 +39,17 @@ export async function apiRequest(path, { token, method = "GET", body, params, to
         throw Object.assign(new Error("Unauthorized"), { status: 401 });
     }
 
-    const json = await res.json();
+    const text = await res.text();
+    let json;
+    try {
+        json = text ? JSON.parse(text) : {};
+    } catch {
+        const message = res.status === 413
+            ? "The uploaded image is too large. Please choose a smaller logo."
+            : text || `Request failed: ${res.status}`;
+        if (toast) emitToast(message, "error");
+        throw new Error(message);
+    }
     if (!res.ok || !json.success) {
         const message = json.error?.message || `Request failed: ${res.status}`;
         if (toast) emitToast(message, "error");

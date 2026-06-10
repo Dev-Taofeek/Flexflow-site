@@ -69,15 +69,20 @@ async function assertWorkspaceAdmin(workspaceId, userId) {
 
 async function ensureRoles(workspaceId) {
     for (const seed of roleSeeds) {
-        const role = await prisma.role.upsert({
-            where: { workspaceId_name: { workspaceId, name: seed.name } },
-            update: {},
-            create: {
+        let role = await prisma.role.findFirst({
+            where: { workspaceId, name: seed.name },
+            orderBy: { createdAt: "asc" },
+        });
+
+        if (!role) {
+            role = await prisma.role.create({
+                data: {
                 workspaceId,
                 name: seed.name,
                 isSystemRole: true,
-            },
-        });
+                },
+            });
+        }
 
         const existing = await prisma.permission.count({ where: { roleId: role.id } });
         if (existing === 0) {

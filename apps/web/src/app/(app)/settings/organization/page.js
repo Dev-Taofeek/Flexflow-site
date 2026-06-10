@@ -5,6 +5,7 @@ import { AlertTriangle, Building2, Check, Copy, ImagePlus, Loader2, Trash2, User
 import { useRouter } from "next/navigation";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
+import { imageFileToLogoDataUrl } from "@/lib/image-upload";
 import {
   fetchOrganization,
   updateOrganization,
@@ -126,13 +127,16 @@ export default function OrganizationSettingsPage() {
     }
   }
 
-  function handleLogoUpload(event) {
+  async function handleLogoUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => setLogoUrl(String(reader.result || ""));
-    reader.readAsDataURL(file);
+    try {
+      setLogoUrl(await imageFileToLogoDataUrl(file));
+      addToast("Logo ready to save.", "success");
+    } catch (err) {
+      addToast(err.message, "error");
+    }
   }
 
   async function handleCancelInvite(inviteId) {

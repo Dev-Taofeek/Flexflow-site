@@ -248,8 +248,6 @@ model Role {
   workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   permissions     Permission[]
   assignments     RoleAssignment[]
-
-  @@unique([workspaceId, name])
 }
 
 model Permission {

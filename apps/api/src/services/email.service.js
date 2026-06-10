@@ -3,8 +3,8 @@ const EMAILJS_SEND_URL = "https://api.emailjs.com/api/v1.0/email/send";
 function getEmailConfig() {
     const serviceId = process.env.EMAILJS_SERVICE_ID;
     const templateId = process.env.EMAILJS_TEMPLATE_ID;
-    const publicKey = process.env.EMAILJS_PUBLIC_KEY;
-    const privateKey = process.env.EMAILJS_PRIVATE_KEY;
+    const publicKey = process.env.EMAILJS_PUBLIC_KEY || process.env.EMAILJS_USER_ID;
+    const privateKey = process.env.EMAILJS_PRIVATE_KEY || process.env.EMAILJS_ACCESS_TOKEN;
 
     if (!serviceId || !templateId || !publicKey) {
         return null;

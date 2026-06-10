@@ -11,6 +11,7 @@ import { PremiumModal } from "@/components/ui/PremiumModal";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useRole } from "@/hooks/useRole";
+import { imageFileToLogoDataUrl } from "@/lib/image-upload";
 import { fetchWorkspace, updateWorkspace } from "@/lib/org-api";
 
 export function WorkspaceSettingsClient() {
@@ -58,13 +59,16 @@ export function WorkspaceSettingsClient() {
       .catch((err) => addToast(err.message, "error"));
   }, [currentWorkspace?.id, accessToken, addToast]);
 
-  function handleWorkspaceLogoUpload(event) {
+  async function handleWorkspaceLogoUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => setWorkspaceLogo(String(reader.result || ""));
-    reader.readAsDataURL(file);
+    try {
+      setWorkspaceLogo(await imageFileToLogoDataUrl(file));
+      addToast("Logo ready to save.", "success");
+    } catch (err) {
+      addToast(err.message, "error");
+    }
   }
 
   async function handleSaveWorkspace(event) {
