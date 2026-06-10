@@ -42,7 +42,11 @@ export default function TeamPage() {
       ...prev,
       invites: [invite, ...(prev.invites || []).filter((i) => i.id !== invite.id && i.email?.toLowerCase() !== invite.email?.toLowerCase())],
     }));
-    addToast(invite.resent ? "Invite link resent." : "Invitation created.", "success");
+    if (invite.emailSent) {
+      addToast(invite.resent ? "Invite email resent." : "Invitation email sent.", "success");
+    } else {
+      addToast("Invite link created, but EmailJS is not configured so no email was sent.", "info");
+    }
     return invite;
   }
 

@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -155,6 +156,12 @@ router.patch("/", async (req, res) => {
         } else {
             await prisma.permission.deleteMany({ where: { roleId: dbRole.id, resource, action } });
         }
+
+        await notifyUser(req.user.id, {
+            title: "Permission updated",
+            message: `${role} ${enabled ? "can now" : "can no longer"} ${action} ${resource}.`,
+            type: "SYSTEM",
+        });
 
         return res.status(200).json(successResponse(await getMatrix(workspaceId)));
     } catch (error) {

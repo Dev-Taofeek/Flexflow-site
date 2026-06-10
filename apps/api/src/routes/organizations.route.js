@@ -3,6 +3,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
+import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -53,7 +54,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
     try {
-        const { name, description, workspaceName } = req.body;
+        const { name, description, workspaceName, logoUrl } = req.body;
 
         if (!name?.trim()) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Organization name is required"));
@@ -78,6 +79,7 @@ router.post("/", async (req, res) => {
                 name: name.trim(),
                 slug,
                 description: description?.trim() || null,
+                logoUrl: logoUrl || null,
                 members: {
                     create: { userId: req.user.id, role: "OWNER" },
                 },
@@ -100,6 +102,12 @@ router.post("/", async (req, res) => {
         await prisma.user.update({
             where: { id: req.user.id },
             data: { onboarded: true },
+        });
+
+        await notifyUser(req.user.id, {
+            title: "Organization created",
+            message: `${org.name} was created.`,
+            type: "SYSTEM",
         });
 
         return res.status(201).json(successResponse({ ...org, role: "OWNER" }));
@@ -161,6 +169,12 @@ router.patch("/:orgId", async (req, res) => {
             },
         });
 
+        await notifyUser(req.user.id, {
+            title: "Organization updated",
+            message: `${org.name} settings were updated.`,
+            type: "SYSTEM",
+        });
+
         return res.status(200).json(successResponse(org));
     } catch (error) {
         console.error(error);
@@ -177,7 +191,12 @@ router.delete("/:orgId", async (req, res) => {
             return res.status(403).json(errorResponse("FORBIDDEN", "Only the owner can delete an organization"));
         }
 
-        await prisma.organization.delete({ where: { id: req.params.orgId } });
+        const org = await prisma.organization.delete({ where: { id: req.params.orgId } });
+        await notifyUser(req.user.id, {
+            title: "Organization deleted",
+            message: `${org.name} was deleted.`,
+            type: "SYSTEM",
+        });
         return res.status(200).json(successResponse({ deleted: true }));
     } catch (error) {
         console.error(error);
@@ -241,6 +260,19 @@ router.patch("/:orgId/members/:userId/role", async (req, res) => {
             include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
         });
 
+        await Promise.all([
+            notifyUser(req.user.id, {
+                title: "Member role updated",
+                message: `${updated.user.name} is now ${role}.`,
+                type: "INFO",
+            }),
+            notifyUser(req.params.userId, {
+                title: "Your role changed",
+                message: `Your organization role is now ${role}.`,
+                type: "INFO",
+            }),
+        ]);
+
         return res.status(200).json(successResponse(updated));
     } catch (error) {
         console.error(error);
@@ -261,9 +293,23 @@ router.delete("/:orgId/members/:userId", async (req, res) => {
             return res.status(400).json(errorResponse("BAD_REQUEST", "Cannot remove yourself from the organization"));
         }
 
-        await prisma.organizationMember.delete({
+        const removed = await prisma.organizationMember.delete({
             where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.params.userId } },
+            include: { user: { select: { name: true } }, organization: { select: { name: true } } },
         });
+
+        await Promise.all([
+            notifyUser(req.user.id, {
+                title: "Member removed",
+                message: `${removed.user.name} was removed from ${removed.organization.name}.`,
+                type: "INFO",
+            }),
+            notifyUser(req.params.userId, {
+                title: "Removed from organization",
+                message: `You were removed from ${removed.organization.name}.`,
+                type: "INFO",
+            }),
+        ]);
 
         return res.status(200).json(successResponse({ removed: true }));
     } catch (error) {
@@ -294,7 +340,14 @@ router.post("/:orgId/invite", async (req, res) => {
             const already = await prisma.organizationMember.findUnique({
                 where: { organizationId_userId: { organizationId: req.params.orgId, userId: existingUser.id } },
             });
-            if (already) return res.status(409).json(errorResponse("ALREADY_MEMBER", "This user is already a member of this organization"));
+            if (already) {
+                await notifyUser(req.user.id, {
+                    title: "Invite not sent",
+                    message: `${normalizedEmail} is already a member of this organization.`,
+                    type: "INVITE",
+                });
+                return res.status(409).json(errorResponse("ALREADY_MEMBER", "This user is already a member of this organization"));
+            }
         }
 
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -343,6 +396,14 @@ router.post("/:orgId/invite", async (req, res) => {
             }
         }
 
+        await notifyUser(req.user.id, {
+            title: resent ? "Invite resent" : "Invite created",
+            message: emailSent
+                ? `Invitation email sent to ${normalizedEmail}.`
+                : `Invite link created for ${normalizedEmail}, but EmailJS is not configured.`,
+            type: "INVITE",
+        });
+
         return res.status(201).json(successResponse({
             ...invite,
             inviteUrl,
@@ -371,6 +432,11 @@ router.delete("/:orgId/invites/:inviteId", async (req, res) => {
         }
 
         await prisma.invite.delete({ where: { id: invite.id } });
+        await notifyUser(req.user.id, {
+            title: "Invitation cancelled",
+            message: `Invitation for ${invite.email} was cancelled.`,
+            type: "INVITE",
+        });
         return res.status(200).json(successResponse({ deleted: true, id: invite.id }));
     } catch (error) {
         console.error(error);

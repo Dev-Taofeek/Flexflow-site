@@ -1,19 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ImagePlus, LayoutGrid, Lock } from "lucide-react";
+import Image from "next/image";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PremiumModal } from "@/components/ui/PremiumModal";
+import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useRole } from "@/hooks/useRole";
+import { fetchWorkspace, updateWorkspace } from "@/lib/org-api";
 
 export function WorkspaceSettingsClient() {
   const { isOwner, canManage } = useRole();
+  const { currentWorkspace, accessToken, refreshOrganizations } = useApp();
   const { addToast } = useToast();
+  const logoInputRef = useRef(null);
   const [premiumModal, setPremiumModal] = useState({ open: false, feature: "", description: "" });
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceDescription, setWorkspaceDescription] = useState("");
+  const [workspaceLogo, setWorkspaceLogo] = useState("");
+  const [savingWorkspace, setSavingWorkspace] = useState(false);
   const [columns, setColumns] = useState(["To Do", "In Progress", "In Review", "Done"]);
 
   const [labels, setLabels] = useState([
@@ -37,6 +46,45 @@ export function WorkspaceSettingsClient() {
   const [newColumn, setNewColumn] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
+
+  useEffect(() => {
+    if (!currentWorkspace?.id || !accessToken) return;
+    fetchWorkspace(currentWorkspace.id, accessToken)
+      .then((workspace) => {
+        setWorkspaceName(workspace.name || "");
+        setWorkspaceDescription(workspace.description || "");
+        setWorkspaceLogo(workspace.logoUrl || "");
+      })
+      .catch((err) => addToast(err.message, "error"));
+  }, [currentWorkspace?.id, accessToken, addToast]);
+
+  function handleWorkspaceLogoUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => setWorkspaceLogo(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  }
+
+  async function handleSaveWorkspace(event) {
+    event.preventDefault();
+    if (!currentWorkspace?.id || !accessToken) return;
+    setSavingWorkspace(true);
+    try {
+      await updateWorkspace(currentWorkspace.id, {
+        name: workspaceName,
+        description: workspaceDescription,
+        logoUrl: workspaceLogo,
+      }, accessToken);
+      await refreshOrganizations();
+      addToast("Workspace updated.", "success");
+    } catch (err) {
+      addToast(err.message, "error");
+    } finally {
+      setSavingWorkspace(false);
+    }
+  }
 
   function handleAddColumn(event) {
     event.preventDefault();
@@ -91,6 +139,69 @@ export function WorkspaceSettingsClient() {
 
   return (
     <div className="space-y-6">
+      <section className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
+        <div className="flex items-center gap-3">
+          <div className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 flex h-11 w-11 items-center justify-center rounded-2xl">
+            <LayoutGrid className="h-5 w-5" strokeWidth={1.7} />
+          </div>
+
+          <div>
+            <h2 className="text-foreground dark:text-foreground-dark text-lg font-semibold">
+              Workspace profile
+            </h2>
+            <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
+              Update the name, description, and logo shown in the sidebar.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveWorkspace} className="mt-6 space-y-4">
+          <div>
+            <label className="text-foreground dark:text-foreground-dark text-sm font-medium">Workspace name</label>
+            <Input value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} className="mt-2" />
+          </div>
+
+          <div>
+            <label className="text-foreground dark:text-foreground-dark text-sm font-medium">Description</label>
+            <textarea
+              value={workspaceDescription}
+              onChange={(event) => setWorkspaceDescription(event.target.value)}
+              rows={2}
+              className="mt-2 w-full resize-none rounded-lg border border-(--border) bg-(--bg) px-3 py-2.5 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
+              placeholder="What does this workspace contain?"
+            />
+          </div>
+
+          <div>
+            <p className="text-foreground dark:text-foreground-dark text-sm font-medium">Workspace logo</p>
+            <div className="border-border bg-background dark:border-border-dark dark:bg-background-dark mt-3 flex items-center gap-3 rounded-2xl border p-4">
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-(--bg-overlay)">
+                {workspaceLogo ? (
+                  <Image src={workspaceLogo} alt={`${workspaceName || "Workspace"} logo`} fill className="object-cover" />
+                ) : (
+                  <LayoutGrid className="h-5 w-5 text-(--text-muted)" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-foreground dark:text-foreground-dark text-sm">Upload a square PNG, JPG, or WebP logo.</p>
+                <p className="text-muted-foreground dark:text-muted-foreground-dark text-xs">This appears before the workspace name in the sidebar.</p>
+              </div>
+              <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleWorkspaceLogoUpload} className="hidden" />
+              <Button type="button" variant="secondary" onClick={() => logoInputRef.current?.click()}>
+                <ImagePlus className="h-4 w-4" strokeWidth={1.7} />
+                Upload
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="submit" disabled={!canManage || savingWorkspace}>
+              {savingWorkspace ? "Saving..." : "Save workspace"}
+            </Button>
+          </div>
+        </form>
+      </section>
+
       <section className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
         <div className="flex items-center gap-3">
           <div className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 flex h-11 w-11 items-center justify-center rounded-2xl">

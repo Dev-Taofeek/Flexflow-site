@@ -21,7 +21,7 @@ export async function removeMember(orgId, userId, token) {
 }
 
 export async function inviteToOrg(orgId, email, role, token) {
-    return apiRequest(`/organizations/${orgId}/invite`, { token, method: "POST", body: { email, role } });
+    return apiRequest(`/organizations/${orgId}/invite`, { token, method: "POST", body: { email, role }, toast: false });
 }
 
 export async function cancelOrgInvite(orgId, inviteId, token) {

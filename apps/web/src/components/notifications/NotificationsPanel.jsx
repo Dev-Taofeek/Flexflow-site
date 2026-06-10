@@ -33,6 +33,7 @@ export function NotificationsPanel({ open, onClose }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     function handler(e) {
@@ -67,6 +68,8 @@ export function NotificationsPanel({ open, onClose }) {
   }
 
   if (!open) return null;
+
+  const visibleNotifications = showAll ? notifications : notifications.slice(0, 6);
 
   return (
     <div
@@ -109,7 +112,7 @@ export function NotificationsPanel({ open, onClose }) {
           </div>
         )}
         {!loading &&
-          notifications.map((n) => {
+          visibleNotifications.map((n) => {
             const Icon = TYPE_ICON[n.type] || Info;
             return (
               <button
@@ -147,6 +150,17 @@ export function NotificationsPanel({ open, onClose }) {
             );
           })}
       </div>
+      {!loading && notifications.length > 6 && (
+        <div className="border-t border-(--border) p-2">
+          <button
+            type="button"
+            onClick={() => setShowAll((value) => !value)}
+            className="w-full rounded-lg px-3 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-(--bg-overlay)"
+          >
+            {showAll ? "Show recent 6" : `Show all (${notifications.length})`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

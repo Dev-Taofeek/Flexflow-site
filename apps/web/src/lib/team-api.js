@@ -5,7 +5,7 @@ export async function fetchTeamData(workspaceId, token) {
 }
 
 export async function inviteMember({ workspaceId, email, role, token }) {
-    return apiRequest("/team/invite", { token, method: "POST", body: { workspaceId, email, role } });
+    return apiRequest("/team/invite", { token, method: "POST", body: { workspaceId, email, role }, toast: false });
 }
 
 export async function updateMemberRole({ memberId, workspaceId, role, token }) {

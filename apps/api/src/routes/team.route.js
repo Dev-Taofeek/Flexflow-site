@@ -3,6 +3,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
+import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -82,6 +83,11 @@ router.post("/invite", async (req, res) => {
                 where: { workspaceId_userId: { workspaceId, userId: existingUser.id } },
             });
             if (existingMember) {
+                await notifyUser(req.user.id, {
+                    title: "Invite not sent",
+                    message: `${normalizedEmail} is already a member of this workspace.`,
+                    type: "INVITE",
+                });
                 return res.status(409).json(errorResponse("ALREADY_MEMBER", "This user is already a member of this workspace"));
             }
         }
@@ -132,6 +138,14 @@ router.post("/invite", async (req, res) => {
             }
         }
 
+        await notifyUser(req.user.id, {
+            title: resent ? "Invite resent" : "Invite created",
+            message: emailSent
+                ? `Invitation email sent to ${normalizedEmail}.`
+                : `Invite link created for ${normalizedEmail}, but EmailJS is not configured.`,
+            type: "INVITE",
+        });
+
         return res.status(201).json(successResponse({
             ...invite,
             inviteUrl,
@@ -164,6 +178,11 @@ router.delete("/invites/:inviteId", async (req, res) => {
         }
 
         await prisma.invite.delete({ where: { id: invite.id } });
+        await notifyUser(req.user.id, {
+            title: "Invitation cancelled",
+            message: `Invitation for ${invite.email} was cancelled.`,
+            type: "INVITE",
+        });
         return res.status(200).json(successResponse({ deleted: true, id: invite.id }));
     } catch (error) {
         console.error(error);
@@ -195,6 +214,19 @@ router.patch("/members/:memberId/role", async (req, res) => {
             include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
         });
 
+        await Promise.all([
+            notifyUser(req.user.id, {
+                title: "Workspace role updated",
+                message: `${updated.user.name} is now ${role}.`,
+                type: "INFO",
+            }),
+            notifyUser(updated.user.id, {
+                title: "Your workspace role changed",
+                message: `Your workspace role is now ${role}.`,
+                type: "INFO",
+            }),
+        ]);
+
         return res.status(200).json(successResponse({ ...updated.user, role: updated.role, memberId: updated.id }));
     } catch (error) {
         console.error(error);
@@ -221,7 +253,22 @@ router.delete("/members/:memberId", async (req, res) => {
             return res.status(400).json(errorResponse("BAD_REQUEST", "Cannot remove yourself"));
         }
 
-        await prisma.workspaceMember.delete({ where: { id: req.params.memberId } });
+        const removed = await prisma.workspaceMember.delete({
+            where: { id: req.params.memberId },
+            include: { user: { select: { id: true, name: true } }, workspace: { select: { name: true } } },
+        });
+        await Promise.all([
+            notifyUser(req.user.id, {
+                title: "Workspace member removed",
+                message: `${removed.user.name} was removed from ${removed.workspace.name}.`,
+                type: "INFO",
+            }),
+            notifyUser(removed.user.id, {
+                title: "Removed from workspace",
+                message: `You were removed from ${removed.workspace.name}.`,
+                type: "INFO",
+            }),
+        ]);
         return res.status(200).json(successResponse({ removed: true }));
     } catch (error) {
         console.error(error);

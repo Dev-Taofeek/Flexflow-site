@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -75,6 +76,12 @@ router.post("/", async (req, res) => {
                 visibility: visibility === "PUBLIC" ? "PUBLIC" : "PRIVATE",
             },
             include: { createdBy: { select: USER_SELECT } },
+        });
+
+        await notifyUser(req.user.id, {
+            title: "Project created",
+            message: `${project.name} was created.`,
+            type: "SYSTEM",
         });
 
         return res.status(201).json(successResponse({ ...project, totalIssues: 0, completedIssues: 0, progress: 0 }));
@@ -167,6 +174,12 @@ router.patch("/:projectId", async (req, res) => {
             },
         });
 
+        await notifyUser(req.user.id, {
+            title: "Project updated",
+            message: `${updated.name} was updated.`,
+            type: "SYSTEM",
+        });
+
         return res.status(200).json(successResponse(updated));
     } catch (error) {
         console.error(error);
@@ -185,6 +198,11 @@ router.delete("/:projectId", async (req, res) => {
         }
 
         await prisma.project.delete({ where: { id: req.params.projectId } });
+        await notifyUser(req.user.id, {
+            title: "Project deleted",
+            message: `${project.name} was deleted.`,
+            type: "SYSTEM",
+        });
         return res.status(200).json(successResponse({ deleted: true }));
     } catch (error) {
         console.error(error);
@@ -274,6 +292,20 @@ router.post("/:projectId/issues", async (req, res) => {
             data: { userId: req.user.id, projectId: project.id, issueId: issue.id, action: "created", entityType: "issue", entityId: issue.id },
         });
 
+        await notifyUser(req.user.id, {
+            title: "Issue created",
+            message: `${issue.title} was created in ${project.name}.`,
+            type: "SYSTEM",
+        });
+
+        if (assigneeId && assigneeId !== req.user.id) {
+            await notifyUser(assigneeId, {
+                title: "You've been assigned to an issue",
+                message: `You were assigned to: ${issue.title}`,
+                type: "ISSUE_ASSIGNED",
+            });
+        }
+
         return res.status(201).json(successResponse(issue));
     } catch (error) {
         console.error(error);
@@ -302,6 +334,12 @@ router.patch("/:projectId/issues/:issueId/status", async (req, res) => {
         const activity = await prisma.activityLog.create({
             data: { userId: req.user.id, projectId: issue.projectId, issueId: issue.id, action: `changed status to ${status}`, entityType: "issue", entityId: issue.id },
             include: { user: { select: USER_SELECT } },
+        });
+
+        await notifyUser(req.user.id, {
+            title: "Issue status updated",
+            message: `${updated.title} moved to ${status.replaceAll("_", " ")}.`,
+            type: "SYSTEM",
         });
 
         req.app.get("io")?.emit("issue:status-updated", { projectId: req.params.projectId, issue: updated, activity });
@@ -341,6 +379,12 @@ router.patch("/:projectId/issues/:issueId", async (req, res) => {
             include: { user: { select: USER_SELECT } },
         });
 
+        await notifyUser(req.user.id, {
+            title: "Issue updated",
+            message: `${updated.title} was updated.`,
+            type: "SYSTEM",
+        });
+
         req.app.get("io")?.emit("issue:updated", { projectId: req.params.projectId, issue: updated, activity });
         return res.status(200).json(successResponse(updated));
     } catch (error) {
@@ -368,6 +412,12 @@ router.post("/:projectId/issues/:issueId/comments", async (req, res) => {
         const activity = await prisma.activityLog.create({
             data: { userId: req.user.id, projectId: issue.projectId, issueId: issue.id, action: "added a comment", entityType: "comment", entityId: comment.id },
             include: { user: { select: USER_SELECT } },
+        });
+
+        await notifyUser(req.user.id, {
+            title: "Comment added",
+            message: `You commented on ${issue.title}.`,
+            type: "COMMENT",
         });
 
         req.app.get("io")?.emit("issue:comment-created", { projectId: req.params.projectId, issueId: issue.id, comment, activity });

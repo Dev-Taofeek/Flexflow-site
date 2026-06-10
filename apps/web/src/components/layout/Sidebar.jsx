@@ -39,6 +39,22 @@ const NAV = [
 
 const SETTINGS_NAV = [{ label: "Settings", href: "/settings/profile", icon: Settings }];
 
+function LogoBadge({ logoUrl, label, fallback, size = "md", icon: Icon }) {
+  const dimensions = size === "sm" ? "h-6 w-6 rounded-md" : size === "xs" ? "h-5 w-5 rounded" : "h-7 w-7 rounded-md";
+
+  return (
+    <div className={`relative flex shrink-0 items-center justify-center overflow-hidden ${dimensions} bg-indigo-600 text-xs font-bold text-white`}>
+      {logoUrl ? (
+        <Image src={logoUrl} alt={`${label} logo`} fill className="object-cover" />
+      ) : Icon ? (
+        <Icon className="h-3.5 w-3.5 text-(--text-muted)" />
+      ) : (
+        fallback
+      )}
+    </div>
+  );
+}
+
 function OrgSwitcher({ collapsed }) {
   const { organizations, currentOrg, switchOrg } = useApp();
   const { ownsAnyOrg } = useRole();
@@ -75,9 +91,7 @@ function OrgSwitcher({ collapsed }) {
           collapsed ? "justify-center px-2" : "",
         ].join(" ")}
       >
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-600 text-xs font-bold text-white">
-          {initials}
-        </div>
+        <LogoBadge logoUrl={currentOrg.logoUrl} label={currentOrg.name} fallback={initials} />
         {!collapsed && (
           <>
             <div className="min-w-0 flex-1">
@@ -106,9 +120,7 @@ function OrgSwitcher({ collapsed }) {
               }}
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-(--bg-overlay)"
             >
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-indigo-600 text-[10px] font-bold text-white">
-                {org.name.slice(0, 2).toUpperCase()}
-              </div>
+              <LogoBadge logoUrl={org.logoUrl} label={org.name} fallback={org.name.slice(0, 2).toUpperCase()} size="sm" />
               <span className="flex-1 truncate text-(--text-primary)">{org.name}</span>
               {org.id === currentOrg.id && <Check className="h-3.5 w-3.5 text-indigo-500" />}
             </button>
@@ -205,9 +217,7 @@ function WorkspaceSwitcher({ collapsed }) {
       >
         {!collapsed ? (
           <>
-            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-(--bg-overlay)">
-              <LayoutGrid className="h-3 w-3 text-(--text-muted)" />
-            </div>
+            <LogoBadge logoUrl={currentWorkspace?.logoUrl} label={currentWorkspace?.name || "Workspace"} fallback={null} size="xs" icon={LayoutGrid} />
             <span className="flex-1 truncate text-xs font-medium text-(--text-secondary)">
               {currentWorkspace?.name || "Select workspace"}
             </span>
@@ -231,6 +241,7 @@ function WorkspaceSwitcher({ collapsed }) {
               onClick={() => { switchWorkspace(ws.id); setOpen(false); }}
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-(--bg-overlay)"
             >
+              <LogoBadge logoUrl={ws.logoUrl} label={ws.name} fallback={null} size="xs" icon={LayoutGrid} />
               <span className="flex-1 truncate text-(--text-primary)">{ws.name}</span>
               {currentWorkspace?.id === ws.id && <Check className="h-3.5 w-3.5 text-indigo-500" />}
             </button>

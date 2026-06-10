@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { AlertTriangle, Building2, Check, Copy, Loader2, Trash2, UserPlus } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { AlertTriangle, Building2, Check, Copy, ImagePlus, Loader2, Trash2, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -36,6 +36,8 @@ export default function OrganizationSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const logoInputRef = useRef(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("MEMBER");
@@ -53,6 +55,7 @@ export default function OrganizationSettingsPage() {
         setOrg(orgData);
         setName(orgData.name || "");
         setDescription(orgData.description || "");
+        setLogoUrl(orgData.logoUrl || "");
         setMembers(memberData.members || []);
         setInvites(memberData.invites || []);
       })
@@ -64,7 +67,7 @@ export default function OrganizationSettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const updated = await updateOrganization(currentOrg.id, { name, description }, accessToken);
+      const updated = await updateOrganization(currentOrg.id, { name, description, logoUrl }, accessToken);
       setOrg(updated);
       await refreshOrganizations();
       addToast("Organization updated.", "success");
@@ -110,13 +113,26 @@ export default function OrganizationSettingsPage() {
         ...prev.filter((inv) => inv.id !== invite.id && inv.email?.toLowerCase() !== invite.email?.toLowerCase()),
       ]);
       setInviteEmail("");
-      addToast(invite.resent ? "Invite link resent." : "Invitation created.", "success");
+      if (invite.emailSent) {
+        addToast(invite.resent ? "Invite email resent." : "Invitation email sent.", "success");
+      } else {
+        addToast("Invite link created, but EmailJS is not configured so no email was sent.", "info");
+      }
     } catch (err) {
       setError(err.message);
       addToast(err.message, "error");
     } finally {
       setInviting(false);
     }
+  }
+
+  function handleLogoUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => setLogoUrl(String(reader.result || ""));
+    reader.readAsDataURL(file);
   }
 
   async function handleCancelInvite(inviteId) {
@@ -175,6 +191,27 @@ export default function OrganizationSettingsPage() {
           <div>
             <label className="mb-1.5 block text-xs font-medium text-(--text-secondary)">Name</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Corp" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-(--text-secondary)">Logo</label>
+            <div className="flex items-center gap-3 rounded-lg border border-(--border) bg-(--bg) p-3">
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-indigo-600 text-sm font-bold text-white">
+                {logoUrl ? (
+                  <Image src={logoUrl} alt={`${name || "Organization"} logo`} fill className="object-cover" />
+                ) : (
+                  (name || "OR").slice(0, 2).toUpperCase()
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-(--text-primary)">Add a square PNG, JPG, or WebP logo.</p>
+                <p className="text-xs text-(--text-muted)">This appears before the organization name in the sidebar.</p>
+              </div>
+              <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoUpload} className="hidden" />
+              <Button type="button" variant="secondary" onClick={() => logoInputRef.current?.click()}>
+                <ImagePlus className="h-4 w-4" />
+                Upload
+              </Button>
+            </div>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-(--text-secondary)">

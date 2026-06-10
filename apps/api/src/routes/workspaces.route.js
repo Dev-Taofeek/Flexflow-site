@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -13,7 +14,7 @@ function slugify(str) {
 
 router.post("/", async (req, res) => {
     try {
-        const { organizationId, name, description } = req.body;
+        const { organizationId, name, description, logoUrl } = req.body;
         if (!organizationId || !name?.trim()) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "organizationId and name are required"));
         }
@@ -43,9 +44,16 @@ router.post("/", async (req, res) => {
                 name: name.trim(),
                 slug,
                 description: description?.trim() || null,
+                logoUrl: logoUrl || null,
                 members: { create: { userId: req.user.id, role: "OWNER" } },
             },
             include: { _count: { select: { members: true, projects: true } } },
+        });
+
+        await notifyUser(req.user.id, {
+            title: "Workspace created",
+            message: `${workspace.name} was created.`,
+            type: "SYSTEM",
         });
 
         return res.status(201).json(successResponse(workspace));
@@ -90,13 +98,20 @@ router.patch("/:workspaceId", async (req, res) => {
             return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
         }
 
-        const { name, description } = req.body;
+        const { name, description, logoUrl } = req.body;
         const workspace = await prisma.workspace.update({
             where: { id: req.params.workspaceId },
             data: {
                 ...(name && { name: name.trim() }),
                 ...(description !== undefined && { description: description?.trim() || null }),
+                ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
             },
+        });
+
+        await notifyUser(req.user.id, {
+            title: "Workspace updated",
+            message: `${workspace.name} settings were updated.`,
+            type: "SYSTEM",
         });
 
         return res.status(200).json(successResponse(workspace));
@@ -115,7 +130,12 @@ router.delete("/:workspaceId", async (req, res) => {
             return res.status(403).json(errorResponse("FORBIDDEN", "Only the owner can delete a workspace"));
         }
 
-        await prisma.workspace.delete({ where: { id: req.params.workspaceId } });
+        const workspace = await prisma.workspace.delete({ where: { id: req.params.workspaceId } });
+        await notifyUser(req.user.id, {
+            title: "Workspace deleted",
+            message: `${workspace.name} was deleted.`,
+            type: "SYSTEM",
+        });
         return res.status(200).json(successResponse({ deleted: true }));
     } catch (error) {
         console.error(error);
@@ -169,6 +189,19 @@ router.post("/:workspaceId/members", async (req, res) => {
             data: { workspaceId: req.params.workspaceId, userId, role },
             include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
         });
+
+        await Promise.all([
+            notifyUser(req.user.id, {
+                title: "Workspace member added",
+                message: `${member.user.name} was added to ${workspace.name}.`,
+                type: "INFO",
+            }),
+            notifyUser(userId, {
+                title: "Added to workspace",
+                message: `You were added to ${workspace.name}.`,
+                type: "INFO",
+            }),
+        ]);
 
         return res.status(201).json(successResponse(member));
     } catch (error) {
@@ -233,6 +266,11 @@ router.post("/:workspaceId/labels", async (req, res) => {
         const label = await prisma.label.create({
             data: { workspaceId: req.params.workspaceId, name: name.trim(), color },
         });
+        await notifyUser(req.user.id, {
+            title: "Label created",
+            message: `${label.name} label was created.`,
+            type: "SYSTEM",
+        });
         return res.status(201).json(successResponse(label));
     } catch (error) {
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to create label"));
@@ -249,7 +287,12 @@ router.delete("/:workspaceId/labels/:labelId", async (req, res) => {
             return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
         }
 
-        await prisma.label.delete({ where: { id: req.params.labelId } });
+        const label = await prisma.label.delete({ where: { id: req.params.labelId } });
+        await notifyUser(req.user.id, {
+            title: "Label deleted",
+            message: `${label.name} label was deleted.`,
+            type: "SYSTEM",
+        });
         return res.status(200).json(successResponse({ deleted: true }));
     } catch (error) {
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to delete label"));

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
+import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -116,6 +117,23 @@ router.post("/", async (req, res) => {
                 entityId: issue.id,
             },
         });
+
+        await notifyUser(req.user.id, {
+            title: "Issue created",
+            message: `${issue.title} was created.`,
+            type: "SYSTEM",
+        });
+
+        const assignedOnCreate = ids.filter((id) => id !== req.user.id);
+        if (assignedOnCreate.length > 0) {
+            await Promise.all(assignedOnCreate.map((userId) =>
+                notifyUser(userId, {
+                    title: "You've been assigned to an issue",
+                    message: `You were assigned to: ${issue.title}`,
+                    type: "ISSUE_ASSIGNED",
+                })
+            ));
+        }
 
         return res.status(201).json(successResponse(issue));
     } catch (error) {
