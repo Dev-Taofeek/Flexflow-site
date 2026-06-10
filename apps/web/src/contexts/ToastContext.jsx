@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 
 const ToastContext = createContext(null);
@@ -9,11 +9,26 @@ export function ToastProvider({ children }) {
 
     const addToast = useCallback((message, type = "info") => {
         const id = Date.now();
-        setToasts((t) => [...t, { id, message, type }]);
+        setToasts((t) => {
+            if (t.some((toast) => toast.message === message && toast.type === type)) {
+                return t;
+            }
+            return [...t, { id, message, type }];
+        });
         setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
     }, []);
 
     const dismiss = useCallback((id) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+
+    useEffect(() => {
+        function handler(event) {
+            const { message, type = "info" } = event.detail || {};
+            if (message) addToast(message, type);
+        }
+
+        window.addEventListener("flexflow:toast", handler);
+        return () => window.removeEventListener("flexflow:toast", handler);
+    }, [addToast]);
 
     return (
         <ToastContext.Provider value={{ addToast }}>

@@ -15,6 +15,7 @@ import { OAuthButtons } from "@/components/auth/OAuthButtons";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { loginSchema } from "@/lib/auth/schemas";
+import { useToast } from "@/contexts/ToastContext";
 
 const ERROR_MESSAGES = {
   CredentialsSignin: "Invalid email or password.",
@@ -24,6 +25,7 @@ const ERROR_MESSAGES = {
 
 function LoginForm() {
   const router = useRouter();
+  const { addToast } = useToast();
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
 
@@ -49,8 +51,11 @@ function LoginForm() {
       redirect: false,
     });
     if (result?.error) {
-      setAuthError(ERROR_MESSAGES[result.error] ?? "Invalid email or password.");
+      const message = ERROR_MESSAGES[result.error] ?? "Invalid email or password.";
+      setAuthError(message);
+      addToast(message, "error");
     } else {
+      addToast("Signed in.", "success");
       router.push("/dashboard");
     }
   }

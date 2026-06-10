@@ -10,8 +10,10 @@ import { FormField } from "@/components/auth/FormField";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiUrl } from "@/lib/api-url";
+import { useToast } from "@/contexts/ToastContext";
 
 function ResetPasswordForm() {
+  const { addToast } = useToast();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
 
@@ -38,8 +40,10 @@ function ResetPasswordForm() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error?.message || "Failed to reset password");
       setDone(true);
+      addToast("Password reset successfully.", "success");
     } catch (err) {
       setError(err.message);
+      addToast(err.message, "error");
     } finally {
       setLoading(false);
     }

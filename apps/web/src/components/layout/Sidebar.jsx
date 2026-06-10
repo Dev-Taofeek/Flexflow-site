@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 
 import { useApp } from "@/contexts/AppContext";
+import { useRole } from "@/hooks/useRole";
+import { PremiumModal } from "@/components/ui/PremiumModal";
 import Image from "next/image";
 
 const NAV = [
@@ -39,7 +41,10 @@ const SETTINGS_NAV = [{ label: "Settings", href: "/settings/profile", icon: Sett
 
 function OrgSwitcher({ collapsed }) {
   const { organizations, currentOrg, switchOrg } = useApp();
+  const { ownsAnyOrg } = useRole();
+  const { addToast } = useToast();
   const [open, setOpen] = useState(false);
+  const [premiumModal, setPremiumModal] = useState({ open: false, feature: "", description: "" });
   const ref = useRef(null);
 
   useEffect(() => {
@@ -56,6 +61,12 @@ function OrgSwitcher({ collapsed }) {
 
   return (
     <div ref={ref} className="relative">
+      <PremiumModal
+        open={premiumModal.open}
+        onClose={() => setPremiumModal((s) => ({ ...s, open: false }))}
+        feature={premiumModal.feature}
+        description={premiumModal.description}
+      />
       <button
         onClick={() => setOpen((o) => !o)}
         className={[
@@ -103,14 +114,26 @@ function OrgSwitcher({ collapsed }) {
             </button>
           ))}
           <div className="mt-1 border-t border-(--border) pt-1">
-            <Link
-              href="/onboarding"
-              onClick={() => setOpen(false)}
+            <button
+              type="button"
+              onClick={() => {
+                if (ownsAnyOrg) {
+                  setPremiumModal({
+                    open: true,
+                    feature: "Multiple Organizations",
+                    description: "The free plan lets you create 1 organization. Upgrade to Premium to create more.",
+                  });
+                  addToast("You need Premium to create another organization.", "info");
+                  return;
+                }
+                setOpen(false);
+                window.location.href = "/onboarding";
+              }}
               className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
             >
               <Plus className="h-4 w-4" />
               New organization
-            </Link>
+            </button>
           </div>
         </div>
       )}

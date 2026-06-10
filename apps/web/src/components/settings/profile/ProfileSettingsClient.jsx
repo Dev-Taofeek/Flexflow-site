@@ -237,6 +237,9 @@ export function ProfileSettingsClient() {
                         <h2 className="flex items-center gap-2 text-base font-semibold text-(--text-primary)">
                             <ShieldCheck className="h-4 w-4 text-indigo-600" />
                             Two-factor authentication
+                            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 uppercase tracking-wide">
+                                Premium
+                            </span>
                         </h2>
                         <p className="mt-1 text-sm text-(--text-muted)">
                             Add an extra layer of security with a TOTP authenticator app (Google Authenticator, Authy, etc.)

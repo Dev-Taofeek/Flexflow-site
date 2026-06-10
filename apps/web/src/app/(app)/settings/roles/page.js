@@ -1,9 +1,27 @@
-import { PermissionMatrix } from "@/components/settings/roles/PermissionMatrix";
+"use client";
 
+import { useEffect, useState } from "react";
+
+import { PermissionMatrix } from "@/components/settings/roles/PermissionMatrix";
+import { useApp } from "@/contexts/AppContext";
 import { fetchRolesData } from "@/lib/roles-api";
 
-export default async function RolesSettingsPage() {
-  const response = await fetchRolesData();
+export default function RolesSettingsPage() {
+  const { currentWorkspace, accessToken, isReady } = useApp();
+  const [response, setResponse] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!isReady || !currentWorkspace?.id || !accessToken) return;
+
+    setLoading(true);
+    setError("");
+    fetchRolesData(currentWorkspace.id, accessToken)
+      .then(setResponse)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [accessToken, currentWorkspace?.id, isReady]);
 
   return (
     <div className="space-y-6">
@@ -20,11 +38,19 @@ export default async function RolesSettingsPage() {
         </p>
       </section>
 
-      <PermissionMatrix
-        roles={response.data.roles}
-        resources={response.data.resources}
-        initialPermissions={response.data.permissions}
-      />
+      {loading ? (
+        <div className="h-80 animate-pulse rounded-3xl border border-(--border) bg-(--bg-elevated)" />
+      ) : error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+      ) : (
+        <PermissionMatrix
+          workspaceId={currentWorkspace.id}
+          token={accessToken}
+          roles={response.roles}
+          resources={response.resources}
+          initialPermissions={response.permissions}
+        />
+      )}
     </div>
   );
 }

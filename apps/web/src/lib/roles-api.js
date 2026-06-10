@@ -1,38 +1,14 @@
-import { apiUrl } from "./api-url";
+import { apiRequest } from "./api-client";
 
-export async function fetchRolesData() {
-  const response = await fetch(apiUrl("/roles"), {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-
-    throw new Error(error || "Failed to fetch roles");
-  }
-
-  return response.json();
+export async function fetchRolesData(workspaceId, token) {
+  return apiRequest("/roles", { token, params: { workspaceId }, toast: false });
 }
 
-export async function updatePermission({ role, resource, action, enabled }) {
-  const response = await fetch(apiUrl("/roles"), {
+export async function updatePermission({ workspaceId, role, resource, action, enabled, token }) {
+  return apiRequest("/roles", {
+    token,
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      role,
-      resource,
-      action,
-      enabled,
-    }),
+    body: { workspaceId, role, resource, action, enabled },
+    successMessage: "Permission updated.",
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-
-    throw new Error(error || "Failed to update permission");
-  }
-
-  return response.json();
 }

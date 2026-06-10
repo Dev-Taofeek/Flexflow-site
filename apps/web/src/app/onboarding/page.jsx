@@ -7,9 +7,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Building2, Users, ArrowRight, Check, ChevronLeft, Loader2, Sparkles } from "lucide-react";
 
 import { apiUrl } from "@/lib/api-url";
+import { useApp } from "@/contexts/AppContext";
+import { useRole } from "@/hooks/useRole";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { currentOrg } = useApp();
+  const { ownsAnyOrg } = useRole();
+  const { addToast } = useToast();
   const { data: session, update } = useSession();
   const [mode, setMode] = useState(null); // "create" | "join"
   const [step, setStep] = useState(1);
@@ -27,6 +33,12 @@ export default function OnboardingPage() {
 
   async function handleCreate(e) {
     e.preventDefault();
+    if (ownsAnyOrg || currentOrg) {
+      const message = "You need Premium to create another organization.";
+      setError(message);
+      addToast(message, "info");
+      return;
+    }
     if (!createForm.name.trim()) return setError("Organization name is required");
     setError("");
     setLoading(true);
@@ -41,9 +53,11 @@ export default function OnboardingPage() {
         throw new Error(json.error?.message || "Failed to create organization");
 
       await update({ onboarded: true });
+      addToast("Organization created.", "success");
       router.push("/dashboard");
     } catch (err) {
       setError(err.message);
+      addToast(err.message, "error");
     } finally {
       setLoading(false);
     }
@@ -70,9 +84,11 @@ export default function OnboardingPage() {
         throw new Error(json.error?.message || "Failed to join organization");
 
       await update({ onboarded: true });
+      addToast("Organization joined.", "success");
       router.push("/dashboard");
     } catch (err) {
       setError(err.message);
+      addToast(err.message, "error");
     } finally {
       setLoading(false);
     }

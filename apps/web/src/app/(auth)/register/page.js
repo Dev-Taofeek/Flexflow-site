@@ -11,9 +11,11 @@ import { FormField } from "@/components/auth/FormField";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiUrl } from "@/lib/api-url";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { addToast } = useToast();
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -56,9 +58,11 @@ export default function RegisterPage() {
       });
 
       if (result?.error) throw new Error("Auto-login failed — please sign in manually");
+      addToast("Account created.", "success");
       router.push("/onboarding");
     } catch (err) {
       setError(err.message);
+      addToast(err.message, "error");
     } finally {
       setLoading(false);
     }

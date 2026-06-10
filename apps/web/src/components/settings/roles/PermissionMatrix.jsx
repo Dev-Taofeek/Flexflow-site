@@ -4,16 +4,24 @@ import { useState } from "react";
 import { Check, LockKeyhole, ShieldCheck } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
+import { useToast } from "@/contexts/ToastContext";
 import { updatePermission } from "@/lib/roles-api";
 
-export function PermissionMatrix({ roles, resources, initialPermissions }) {
+export function PermissionMatrix({ workspaceId, token, roles, resources, initialPermissions }) {
+  const { addToast } = useToast();
   const [permissions, setPermissions] = useState(initialPermissions);
   const [savingKey, setSavingKey] = useState("");
 
   async function handleToggle({ role, resource, action }) {
+    if (role === "Owner") {
+      addToast("Owner permissions are locked.", "info");
+      return;
+    }
+
     const currentActions = permissions[role]?.[resource] || [];
     const enabled = !currentActions.includes(action);
     const key = `${role}-${resource}-${action}`;
+    const previousPermissions = permissions;
 
     setSavingKey(key);
 
@@ -27,15 +35,23 @@ export function PermissionMatrix({ roles, resources, initialPermissions }) {
       },
     }));
 
-    const response = await updatePermission({
-      role,
-      resource,
-      action,
-      enabled,
-    });
+    try {
+      const response = await updatePermission({
+        workspaceId,
+        role,
+        resource,
+        action,
+        enabled,
+        token,
+      });
 
-    setPermissions(response.data.permissions);
-    setSavingKey("");
+      setPermissions(response.permissions);
+    } catch (err) {
+      setPermissions(previousPermissions);
+      addToast(err.message || "Failed to update permission.", "error");
+    } finally {
+      setSavingKey("");
+    }
   }
 
   return (
@@ -103,6 +119,7 @@ export function PermissionMatrix({ roles, resources, initialPermissions }) {
                     const isEnabled = permissions[role]?.[resource.id]?.includes(action);
                     const key = `${role}-${resource.id}-${action}`;
                     const isSaving = savingKey === key;
+                    const isLocked = role === "Owner";
 
                     return (
                       <td key={key} className="px-4 py-4">
@@ -115,7 +132,7 @@ export function PermissionMatrix({ roles, resources, initialPermissions }) {
                               action,
                             })
                           }
-                          disabled={isSaving}
+                          disabled={isSaving || isLocked}
                           className={[
                             "inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-colors",
                             "focus-visible:ring-brand-500 focus-visible:ring-2 focus-visible:outline-none",
@@ -123,6 +140,7 @@ export function PermissionMatrix({ roles, resources, initialPermissions }) {
                               ? "border-brand-500 bg-brand-600 dark:bg-brand-500 text-white"
                               : "border-border bg-surface text-muted-foreground hover:border-brand-500 hover:text-brand-600 dark:border-border-dark dark:bg-surface-dark dark:text-muted-foreground-dark dark:hover:text-brand-400",
                             isSaving ? "opacity-60" : "",
+                            isLocked ? "cursor-not-allowed opacity-80" : "",
                           ].join(" ")}
                           aria-label={`${isEnabled ? "Disable" : "Enable"} ${role} ${action} ${resource.label} permission`}
                         >

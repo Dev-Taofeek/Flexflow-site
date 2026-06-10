@@ -36,7 +36,6 @@ export function WorkspaceSettingsClient() {
 
   const [newColumn, setNewColumn] = useState("");
   const [newLabel, setNewLabel] = useState("");
-  const [slackWebhook, setSlackWebhook] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
 
   function handleAddColumn(event) {
@@ -334,14 +333,6 @@ export function WorkspaceSettingsClient() {
                 </p>
               </div>
             </div>
-
-            <Input
-              value={slackWebhook}
-              onChange={(event) => setSlackWebhook(event.target.value)}
-              placeholder="https://hooks.slack.com/services/..."
-              className="mt-4"
-              disabled
-            />
 
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <p className="font-semibold">Upgrade to unlock</p>
