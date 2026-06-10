@@ -1,10 +1,14 @@
 const EMAILJS_SEND_URL = "https://api.emailjs.com/api/v1.0/email/send";
 
+function clean(value) {
+    return typeof value === "string" ? value.trim() : value;
+}
+
 function getEmailConfig() {
-    const serviceId = process.env.EMAILJS_SERVICE_ID;
-    const templateId = process.env.EMAILJS_TEMPLATE_ID;
-    const publicKey = process.env.EMAILJS_PUBLIC_KEY || process.env.EMAILJS_USER_ID;
-    const privateKey = process.env.EMAILJS_PRIVATE_KEY || process.env.EMAILJS_ACCESS_TOKEN;
+    const serviceId = clean(process.env.EMAILJS_SERVICE_ID);
+    const templateId = clean(process.env.EMAILJS_TEMPLATE_ID);
+    const publicKey = clean(process.env.EMAILJS_PUBLIC_KEY || process.env.EMAILJS_USER_ID);
+    const privateKey = clean(process.env.EMAILJS_PRIVATE_KEY || process.env.EMAILJS_ACCESS_TOKEN);
 
     if (!serviceId || !templateId || !publicKey) {
         return null;
@@ -15,6 +19,20 @@ function getEmailConfig() {
 
 export function isEmailConfigured() {
     return Boolean(getEmailConfig());
+}
+
+export function getEmailConfigStatus() {
+    const values = {
+        EMAILJS_SERVICE_ID: clean(process.env.EMAILJS_SERVICE_ID),
+        EMAILJS_TEMPLATE_ID: clean(process.env.EMAILJS_TEMPLATE_ID),
+        EMAILJS_PUBLIC_KEY: clean(process.env.EMAILJS_PUBLIC_KEY || process.env.EMAILJS_USER_ID),
+    };
+
+    return {
+        configured: Boolean(values.EMAILJS_SERVICE_ID && values.EMAILJS_TEMPLATE_ID && values.EMAILJS_PUBLIC_KEY),
+        present: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, Boolean(value)])),
+        missing: Object.entries(values).filter(([, value]) => !value).map(([key]) => key),
+    };
 }
 
 export async function sendTransactionalEmail({

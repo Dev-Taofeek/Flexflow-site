@@ -45,7 +45,8 @@ export default function TeamPage() {
     if (invite.emailSent) {
       addToast(invite.resent ? "Invite email resent." : "Invitation email sent.", "success");
     } else {
-      addToast("Invite link created, but EmailJS is not configured so no email was sent.", "info");
+      const missing = invite.emailConfig?.missing?.length ? ` Missing: ${invite.emailConfig.missing.join(", ")}.` : "";
+      addToast(`Invite link created, but EmailJS is not configured so no email was sent.${missing}`, "info");
     }
     return invite;
   }

@@ -2,7 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
-import { isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
+import { getEmailConfigStatus, isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
@@ -410,6 +410,7 @@ router.post("/:orgId/invite", async (req, res) => {
             emailSent,
             resent,
             emailError: emailError || (!isEmailConfigured() ? "EMAILJS_NOT_CONFIGURED" : null),
+            emailConfig: getEmailConfigStatus(),
         }));
     } catch (error) {
         console.error(error);

@@ -157,7 +157,11 @@ export function TeamClient({
               ) : (
                 <div className="space-y-1">
                   <p className="font-medium">Invite link created, but no email was sent.</p>
-                  <p className="text-xs">EmailJS is not configured on the server yet. Share this invite link manually:</p>
+                  <p className="text-xs">
+                    EmailJS is not configured on the server yet
+                    {inviteResult.emailConfig?.missing?.length ? ` (${inviteResult.emailConfig.missing.join(", ")} missing)` : ""}.
+                    Share this invite link manually:
+                  </p>
                   <div className="flex items-center gap-2 mt-1">
                     <input
                       readOnly
