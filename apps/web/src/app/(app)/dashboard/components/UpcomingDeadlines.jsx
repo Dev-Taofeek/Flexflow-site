@@ -34,6 +34,11 @@ export function UpcomingDeadlines({ deadlines }) {
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
                   {deadline.project}
                 </p>
+                {deadline.assignees?.length > 0 && (
+                  <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
+                    {deadline.assignees.length} assignee{deadline.assignees.length === 1 ? "" : "s"}
+                  </p>
+                )}
               </div>
             </div>
 

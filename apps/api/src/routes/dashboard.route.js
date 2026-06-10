@@ -19,8 +19,18 @@ router.get("/", async (req, res) => {
 
         const [myTasks, recentActivity, projects, upcomingDeadlines] = await Promise.all([
             prisma.issue.findMany({
-                where: { assigneeId: req.user.id, project: { workspaceId }, status: { not: "DONE" } },
-                include: { project: { select: { name: true, color: true } } },
+                where: {
+                    OR: [
+                        { assigneeId: req.user.id },
+                        { assignees: { some: { userId: req.user.id } } },
+                    ],
+                    project: { workspaceId },
+                    status: { not: "DONE" },
+                },
+                include: {
+                    project: { select: { name: true, color: true } },
+                    assignees: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
+                },
                 orderBy: { dueDate: "asc" },
                 take: 10,
             }),
@@ -38,7 +48,11 @@ router.get("/", async (req, res) => {
             }),
             prisma.issue.findMany({
                 where: { project: { workspaceId }, dueDate: { gte: new Date() }, status: { not: "DONE" } },
-                include: { project: { select: { name: true, color: true } }, assignee: { select: { name: true, avatarUrl: true } } },
+                include: {
+                    project: { select: { name: true, color: true } },
+                    assignee: { select: { id: true, name: true, avatarUrl: true } },
+                    assignees: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
+                },
                 orderBy: { dueDate: "asc" },
                 take: 5,
             }),
@@ -51,10 +65,10 @@ router.get("/", async (req, res) => {
         });
 
         return res.status(200).json(successResponse({
-            myTasks: myTasks.map((t) => ({ id: t.id, title: t.title, project: t.project.name, projectColor: t.project.color, status: t.status, priority: t.priority, dueDate: t.dueDate })),
+            myTasks: myTasks.map((t) => ({ id: t.id, title: t.title, project: t.project.name, projectColor: t.project.color, status: t.status, priority: t.priority, dueDate: t.dueDate, assignees: t.assignees.map((a) => a.user) })),
             recentActivity: recentActivity.map((a) => ({ id: a.id, actor: a.user.name, actorAvatar: a.user.avatarUrl, action: a.action, target: a.issue?.title || a.project?.name || "", createdAt: a.createdAt })),
             projectProgress,
-            upcomingDeadlines: upcomingDeadlines.map((i) => ({ id: i.id, title: i.title, project: i.project.name, projectColor: i.project.color, dueDate: i.dueDate, assignee: i.assignee })),
+            upcomingDeadlines: upcomingDeadlines.map((i) => ({ id: i.id, title: i.title, project: i.project.name, projectColor: i.project.color, dueDate: i.dueDate, assignee: i.assignee, assignees: i.assignees.map((a) => a.user) })),
         }));
     } catch (error) {
         console.error(error);

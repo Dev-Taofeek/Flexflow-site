@@ -39,6 +39,11 @@ export function MyTasksWidget({ tasks }) {
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
                   {task.project}
                 </p>
+                {task.assignees?.length > 1 && (
+                  <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
+                    Assigned with {task.assignees.length - 1} other{task.assignees.length === 2 ? "" : "s"}
+                  </p>
+                )}
               </div>
 
               <Badge variant={priorityVariantMap[task.priority]}>{task.priority}</Badge>
