@@ -27,13 +27,13 @@ function GoogleIcon() {
   );
 }
 
-export function OAuthButtons() {
+export function OAuthButtons({ callbackUrl = "/dashboard" }) {
   return (
     <Button
       type="button"
       variant="secondary"
       className="w-full"
-      onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+      onClick={() => signIn("google", { callbackUrl })}
     >
       <GoogleIcon />
       Continue with Google

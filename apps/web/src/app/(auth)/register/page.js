@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { signIn } from "next-auth/react";
 
@@ -13,9 +13,11 @@ import { Input } from "@/components/ui/Input";
 import { apiUrl } from "@/lib/api-url";
 import { useToast } from "@/contexts/ToastContext";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { addToast } = useToast();
+  const callbackUrl = searchParams.get("callbackUrl") || "/onboarding";
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -59,7 +61,7 @@ export default function RegisterPage() {
 
       if (result?.error) throw new Error("Auto-login failed — please sign in manually");
       addToast("Account created.", "success");
-      router.push("/onboarding");
+      router.push(callbackUrl);
     } catch (err) {
       setError(err.message);
       addToast(err.message, "error");
@@ -144,7 +146,7 @@ export default function RegisterPage() {
         <p className="text-center text-sm text-(--text-muted)">
           Already have an account?{" "}
           <Link
-            href="/login"
+            href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
             className="font-medium text-indigo-600 transition-colors hover:text-indigo-500"
           >
             Sign in
@@ -152,5 +154,19 @@ export default function RegisterPage() {
         </p>
       </form>
     </AuthShell>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthShell title="Create your account" description="Get started with FlexFlow.">
+          <div className="h-64 animate-pulse rounded-xl bg-gray-100" />
+        </AuthShell>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }

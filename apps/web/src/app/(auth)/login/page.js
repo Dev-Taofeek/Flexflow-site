@@ -28,6 +28,7 @@ function LoginForm() {
   const { addToast } = useToast();
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState(
@@ -56,7 +57,7 @@ function LoginForm() {
       addToast(message, "error");
     } else {
       addToast("Signed in.", "success");
-      router.push("/dashboard");
+      router.push(callbackUrl);
     }
   }
 
@@ -72,7 +73,7 @@ function LoginForm() {
           </div>
         )}
 
-        <OAuthButtons />
+        <OAuthButtons callbackUrl={callbackUrl} />
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
@@ -143,7 +144,7 @@ function LoginForm() {
         <p className="text-muted-foreground dark:text-muted-foreground-dark text-center text-sm">
           Don&apos;t have an account?{" "}
           <Link
-            href="/register"
+            href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`}
             className="text-brand-600 hover:text-brand-500 dark:text-brand-400 dark:hover:text-brand-300 font-medium transition-colors"
           >
             Create one

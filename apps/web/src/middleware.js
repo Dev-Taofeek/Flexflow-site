@@ -11,6 +11,7 @@ export default withAuth(
 
         const isAuthPath = AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
         const isOnboarding = pathname === "/onboarding";
+        const isJoinPath = pathname === "/join";
 
         // Authenticated users on auth pages → redirect based on onboarding status
         if (token && isAuthPath) {
@@ -19,7 +20,7 @@ export default withAuth(
         }
 
         // Authenticated users not yet onboarded → send to onboarding
-        if (token && !isOnboarding && !isAuthPath && !token.onboarded) {
+        if (token && !isOnboarding && !isAuthPath && !isJoinPath && !token.onboarded) {
             return NextResponse.redirect(new URL("/onboarding", req.url));
         }
 
