@@ -2,12 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Bell, Check, Info, MessageSquare, Shield, UserPlus } from "lucide-react";
-import { useApp } from "@/contexts/AppContext";
-import {
-  fetchNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-} from "@/lib/notifications-api";
+import { useNotifications } from "@/contexts/NotificationsContext";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 const TYPE_ICON = {
   INVITE: UserPlus,
@@ -28,11 +24,9 @@ function timeAgo(dateStr) {
 }
 
 export function NotificationsPanel({ open, onClose }) {
-  const { accessToken } = useApp();
+  const { notifications, unreadCount, loading, markRead, markAllRead } = useNotifications();
+  const { permission, subscribe } = usePushSubscription();
   const ref = useRef(null);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
@@ -43,28 +37,13 @@ export function NotificationsPanel({ open, onClose }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [open, onClose]);
 
-  useEffect(() => {
-    if (!open || !accessToken) return;
-    setLoading(true);
-    fetchNotifications(accessToken)
-      .then((d) => {
-        setNotifications(d.notifications);
-        setUnreadCount(d.unreadCount);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [open, accessToken]);
-
   async function handleMarkRead(id) {
-    await markNotificationRead(id, accessToken).catch(() => {});
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
-    setUnreadCount((c) => Math.max(0, c - 1));
+    if (!id) return;
+    await markRead(id);
   }
 
   async function handleMarkAll() {
-    await markAllNotificationsRead(accessToken).catch(() => {});
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    setUnreadCount(0);
+    await markAllRead();
   }
 
   if (!open) return null;
@@ -86,14 +65,24 @@ export function NotificationsPanel({ open, onClose }) {
             </span>
           )}
         </div>
-        {unreadCount > 0 && (
-          <button
-            onClick={handleMarkAll}
-            className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-500"
-          >
-            <Check className="h-3 w-3" /> Mark all read
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {permission === "default" && (
+            <button
+              onClick={subscribe}
+              className="text-xs text-indigo-600 hover:text-indigo-500"
+            >
+              Enable push
+            </button>
+          )}
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAll}
+              className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-500"
+            >
+              <Check className="h-3 w-3" /> Mark all read
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="max-h-105 overflow-y-auto">

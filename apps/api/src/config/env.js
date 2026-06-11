@@ -16,6 +16,9 @@ const envSchema = z.object({
     EMAILJS_TEMPLATE_ID: z.string().optional(),
     EMAILJS_PUBLIC_KEY: z.string().optional(),
     EMAILJS_PRIVATE_KEY: z.string().optional(),
+    VAPID_PUBLIC_KEY: z.string().optional(),
+    VAPID_PRIVATE_KEY: z.string().optional(),
+    VAPID_SUBJECT: z.string().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

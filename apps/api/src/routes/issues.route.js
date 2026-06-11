@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { authorize } from "../middleware/rbac.middleware.js";
 import { notifyIssueUsers } from "../services/issue-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
@@ -71,7 +72,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST /api/issues
-router.post("/", async (req, res) => {
+router.post("/", authorize("issues", "create"), async (req, res) => {
     try {
         const { projectId, title, description, priority = "MEDIUM", status = "TODO", assigneeIds = [], dueDate } = req.body;
         if (!projectId || !title?.trim()) {
@@ -80,12 +81,6 @@ router.post("/", async (req, res) => {
 
         const project = await prisma.project.findUnique({ where: { id: projectId } });
         if (!project) return res.status(404).json(errorResponse("NOT_FOUND", "Project not found"));
-
-        const member = await prisma.workspaceMember.findUnique({
-            where: { workspaceId_userId: { workspaceId: project.workspaceId, userId: req.user.id } },
-        });
-        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
-        if (member.role === "VIEWER") return res.status(403).json(errorResponse("FORBIDDEN", "Viewers cannot create issues"));
 
         const ids = Array.isArray(assigneeIds) ? assigneeIds.filter(Boolean) : [assigneeIds].filter(Boolean);
         const primaryAssigneeId = ids[0] || null;
@@ -144,7 +139,7 @@ router.post("/", async (req, res) => {
 });
 
 // PATCH /api/issues/:issueId/assignees — update assignees list
-router.patch("/:issueId/assignees", async (req, res) => {
+router.patch("/:issueId/assignees", authorize("issues", "update"), async (req, res) => {
     try {
         const { issueId } = req.params;
         const { assigneeIds = [] } = req.body;
@@ -157,12 +152,6 @@ router.patch("/:issueId/assignees", async (req, res) => {
             },
         });
         if (!issue) return res.status(404).json(errorResponse("NOT_FOUND", "Issue not found"));
-
-        const member = await prisma.workspaceMember.findUnique({
-            where: { workspaceId_userId: { workspaceId: issue.project.workspaceId, userId: req.user.id } },
-        });
-        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
-        if (member.role === "VIEWER") return res.status(403).json(errorResponse("FORBIDDEN", "Viewers cannot modify issue assignees"));
 
         const ids = [...new Set(assigneeIds.filter(Boolean))];
         const primaryId = ids[0] || null;

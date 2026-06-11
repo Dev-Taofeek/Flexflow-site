@@ -15,9 +15,12 @@ export function useRole() {
         isAdmin:       rank >= 3,   // OWNER or ADMIN
         isMember:      rank >= 2,   // OWNER, ADMIN, or MEMBER
         isViewer:      role === "VIEWER",
-        canWrite:      rank >= 2,   // create/edit issues, comments
+        canWrite:      rank >= 2,   // create/edit comments
+        canManageProjects: rank >= 3, // create/edit/delete projects (OWNER/ADMIN only)
+        canManageIssues:   rank >= 3, // create/edit/delete issues (OWNER/ADMIN only)
         canManage:     rank >= 3,   // invite members, manage workspace settings
         canAdminister: rank >= 4,   // 2FA, integrations, delete org
+        canCreateWorkspace: currentOrg?.role === "OWNER", // only the org owner can create workspaces
         ownsAnyOrg:    (organizations || []).some((o) => o.role === "OWNER"),
     };
 }

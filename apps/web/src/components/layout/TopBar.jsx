@@ -7,11 +7,11 @@ import { Bell, Building2, Check, ChevronDown, Command, LayoutGrid, Loader2, Menu
 import { apiRequest } from "@/lib/api-client";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
+import { useNotifications } from "@/contexts/NotificationsContext";
 import { useRole } from "@/hooks/useRole";
 import { PremiumModal } from "@/components/ui/PremiumModal";
 import { SearchModal } from "@/components/search/SearchModal";
 import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
-import { fetchNotifications } from "@/lib/notifications-api";
 
 function isUpgradeError(msg) {
     return msg?.includes("Upgrade to Premium") || msg?.includes("Free plan");
@@ -38,7 +38,7 @@ function getLabel(pathname) {
 function MobileOrgSheet({ open, onClose }) {
     const router = useRouter();
     const { organizations, currentOrg, currentWorkspace, switchOrg, switchWorkspace, accessToken, refreshOrganizations } = useApp();
-    const { canManage, ownsAnyOrg } = useRole();
+    const { canCreateWorkspace, ownsAnyOrg } = useRole();
     const { addToast } = useToast();
 
     const [tab, setTab] = useState("orgs"); // "orgs" | "workspaces" | "new-org" | "new-ws"
@@ -191,7 +191,7 @@ function MobileOrgSheet({ open, onClose }) {
                                     {currentWorkspace?.id === ws.id && <Check className="h-4 w-4 shrink-0 text-indigo-600" />}
                                 </button>
                             ))}
-                            {canManage && (
+                            {canCreateWorkspace && (
                                 <button
                                     onClick={openNewWorkspace}
                                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-indigo-600 hover:bg-indigo-50 mt-1"
@@ -295,7 +295,7 @@ function MobileOrgSheet({ open, onClose }) {
 // ── Desktop New-Workspace Popover ───────────────────────────────────────────
 function NewWorkspacePopover() {
     const { currentOrg, accessToken, refreshOrganizations, switchWorkspace } = useApp();
-    const { canManage } = useRole();
+    const { canCreateWorkspace } = useRole();
     const { addToast } = useToast();
     const [open, setOpen] = useState(false);
     const [name, setName] = useState("");
@@ -333,7 +333,7 @@ function NewWorkspacePopover() {
         }
     }
 
-    if (!currentOrg || !canManage) return null;
+    if (!currentOrg || !canCreateWorkspace) return null;
 
     function handleOpenPopover() {
         if ((currentOrg?.workspaces?.length ?? 0) >= 3) {
@@ -400,13 +400,13 @@ function NewWorkspacePopover() {
 // ── TopBar ──────────────────────────────────────────────────────────────────
 export function TopBar({ onMenuClick }) {
     const pathname = usePathname();
-    const { currentOrg, currentWorkspace, accessToken } = useApp();
+    const { currentOrg, currentWorkspace } = useApp();
+    const { unreadCount } = useNotifications();
     const label = getLabel(pathname);
 
     const [searchOpen, setSearchOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
     const [orgSheetOpen, setOrgSheetOpen] = useState(false);
-    const [unread, setUnread] = useState(0);
 
     useEffect(() => {
         function handler(e) {
@@ -423,19 +423,6 @@ export function TopBar({ onMenuClick }) {
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, []);
-
-    // Poll every 3 min — Render free tier sleeps; frequent polls cause
-    // ERR_CONNECTION_CLOSED spam. Back off further on failure.
-    useEffect(() => {
-        if (!accessToken) return;
-        const load = () =>
-            fetchNotifications(accessToken)
-                .then((d) => setUnread(d.unreadCount))
-                .catch(() => {}); // silence connection errors (service sleeping)
-        load();
-        const id = setInterval(load, 180000);
-        return () => clearInterval(id);
-    }, [accessToken]);
 
     return (
         <>
@@ -507,9 +494,9 @@ export function TopBar({ onMenuClick }) {
                             className="relative flex h-8 w-8 items-center justify-center rounded-lg text-(--text-tertiary) hover:bg-(--bg-overlay) transition-colors"
                         >
                             <Bell className="h-4 w-4" />
-                            {unread > 0 && (
+                            {unreadCount > 0 && (
                                 <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-600 px-0.5 text-[9px] font-bold text-white">
-                                    {unread > 9 ? "9+" : unread}
+                                    {unreadCount > 9 ? "9+" : unreadCount}
                                 </span>
                             )}
                         </button>

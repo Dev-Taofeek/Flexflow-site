@@ -75,6 +75,7 @@ model User {
   activities     ActivityLog[]
   roleAssignments RoleAssignment[]
   sentInvites    Invite[]           @relation("InviteSender")
+  pushSubscriptions PushSubscription[]
 
   createdProjects Project[]         @relation("CreatedProjects")
   createdIssues   Issue[]           @relation("CreatedIssues")
@@ -301,4 +302,16 @@ model Notification {
   createdAt    DateTime            @default(now())
 
   user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

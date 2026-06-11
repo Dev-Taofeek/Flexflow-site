@@ -9,7 +9,7 @@ import { ProjectsClient } from "@/components/projects/ProjectsClient";
 
 export default function ProjectsPage() {
   const { currentWorkspace, accessToken, isReady } = useApp();
-  const { canWrite } = useRole();
+  const { canManageProjects } = useRole();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -65,7 +65,7 @@ export default function ProjectsPage() {
             {currentWorkspace?.name || "this workspace"}
           </p>
         </div>
-        {canWrite && (
+        {canManageProjects && (
           <button
             onClick={() => setShowForm((s) => !s)}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
@@ -76,7 +76,7 @@ export default function ProjectsPage() {
       </div>
 
       {/* Create form */}
-      {showForm && canWrite && (
+      {showForm && canManageProjects && (
         <form
           onSubmit={handleCreate}
           className="space-y-4 rounded-xl border border-(--border) bg-(--bg-elevated) p-5"
@@ -156,7 +156,7 @@ export default function ProjectsPage() {
           <FolderKanban className="mx-auto h-8 w-8 text-(--text-muted)" />
           <p className="mt-3 text-sm font-medium text-(--text-primary)">No projects yet</p>
           <p className="mt-1 text-sm text-(--text-muted)">
-            {canWrite ? "Create your first project to get started." : "You have read-only access in this workspace."}
+            {canManageProjects ? "Create your first project to get started." : "You have read-only access in this workspace."}
           </p>
         </div>
       ) : (

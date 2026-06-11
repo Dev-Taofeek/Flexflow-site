@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
-import { fetchTeamData, inviteMember, updateMemberRole, removeMember, cancelInvite } from "@/lib/team-api";
+import { fetchTeamData, inviteMember, addExistingMember, updateMemberRole, removeMember, cancelInvite } from "@/lib/team-api";
 import { TeamClient } from "@/components/team/TeamClient";
 
 export default function TeamPage() {
@@ -49,6 +49,22 @@ export default function TeamPage() {
       addToast(`Invite link created, but EmailJS is not configured so no email was sent.${missing}`, "info");
     }
     return invite;
+  }
+
+  async function handleAddExisting({ userId, role }) {
+    const result = await addExistingMember({
+      workspaceId: currentWorkspace.id,
+      userId,
+      role,
+      token: accessToken,
+    });
+    const member = { ...result.user, role: result.role, memberId: result.id, joinedAt: result.createdAt };
+    setTeamData((prev) => ({
+      ...prev,
+      members: [...(prev.members || []), member],
+      availableMembers: (prev.availableMembers || []).filter((m) => m.id !== userId),
+    }));
+    addToast(`${member.name} added to ${currentWorkspace.name}.`, "success");
   }
 
   async function handleRoleChange({ memberId, role }) {
@@ -113,9 +129,11 @@ export default function TeamPage() {
       <TeamClient
         initialMembers={teamData?.members || []}
         initialInvitations={teamData?.invites || []}
+        availableMembers={teamData?.availableMembers || []}
         roles={teamData?.roles || ["OWNER", "ADMIN", "MEMBER", "VIEWER"]}
         currentUserRole={teamData?.currentUserRole}
         onInvite={handleInvite}
+        onAddExisting={handleAddExisting}
         onRoleChange={handleRoleChange}
         onRemove={handleRemove}
         onCancelInvite={handleCancelInvite}

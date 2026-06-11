@@ -41,5 +41,7 @@ export default withAuth(
 );
 
 export const config = {
-    matcher: ["/((?!api|_next/static|_next/image|favicon.ico|opengraph-image).*)"],
+    matcher: [
+        "/((?!api|_next/static|_next/image|favicon.ico|opengraph-image|manifest.webmanifest|sw.js|icons|robots.txt|sitemap.xml).*)",
+    ],
 };

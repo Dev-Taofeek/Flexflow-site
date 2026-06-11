@@ -37,7 +37,7 @@ export async function notifyIssueUsers(userIds, issue, { actorId, title, message
 
     await Promise.all(users.map((user) =>
         Promise.all([
-            notifyUser(user.id, { title, message, type }),
+            notifyUser(user.id, { title, message, type, url: actionUrl }),
             sendIssueEmail(user, {
                 subject: subject || title,
                 title,

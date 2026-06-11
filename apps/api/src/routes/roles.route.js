@@ -4,60 +4,10 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
+import { resources, roleSeeds, ensureRoles } from "../lib/permissions.js";
 
 const router = Router();
 router.use(authenticate);
-
-const resources = [
-    { id: "projects", label: "Projects", actions: ["create", "read", "update", "delete"] },
-    { id: "issues", label: "Issues", actions: ["create", "read", "update", "delete"] },
-    { id: "comments", label: "Comments", actions: ["create", "read", "update", "delete"] },
-    { id: "team", label: "Team", actions: ["invite", "read", "update", "remove"] },
-    { id: "settings", label: "Settings", actions: ["read", "update", "billing", "danger_zone"] },
-];
-
-const roleSeeds = [
-    {
-        name: "Owner",
-        permissions: {
-            projects: ["create", "read", "update", "delete"],
-            issues: ["create", "read", "update", "delete"],
-            comments: ["create", "read", "update", "delete"],
-            team: ["invite", "read", "update", "remove"],
-            settings: ["read", "update", "billing", "danger_zone"],
-        },
-    },
-    {
-        name: "Admin",
-        permissions: {
-            projects: ["create", "read", "update", "delete"],
-            issues: ["create", "read", "update", "delete"],
-            comments: ["create", "read", "update", "delete"],
-            team: ["invite", "read", "update"],
-            settings: ["read", "update"],
-        },
-    },
-    {
-        name: "Member",
-        permissions: {
-            projects: ["read"],
-            issues: ["create", "read", "update"],
-            comments: ["create", "read", "update"],
-            team: ["read"],
-            settings: ["read"],
-        },
-    },
-    {
-        name: "Viewer",
-        permissions: {
-            projects: ["read"],
-            issues: ["read"],
-            comments: ["read"],
-            team: ["read"],
-            settings: ["read"],
-        },
-    },
-];
 
 async function assertWorkspaceAdmin(workspaceId, userId) {
     if (!workspaceId) return null;
@@ -65,35 +15,6 @@ async function assertWorkspaceAdmin(workspaceId, userId) {
         where: { workspaceId_userId: { workspaceId, userId } },
     });
     return member && ["OWNER", "ADMIN"].includes(member.role) ? member : null;
-}
-
-async function ensureRoles(workspaceId) {
-    for (const seed of roleSeeds) {
-        let role = await prisma.role.findFirst({
-            where: { workspaceId, name: seed.name },
-            orderBy: { createdAt: "asc" },
-        });
-
-        if (!role) {
-            role = await prisma.role.create({
-                data: {
-                workspaceId,
-                name: seed.name,
-                isSystemRole: true,
-                },
-            });
-        }
-
-        const existing = await prisma.permission.count({ where: { roleId: role.id } });
-        if (existing === 0) {
-            const data = Object.entries(seed.permissions).flatMap(([resource, actions]) =>
-                actions.map((action) => ({ roleId: role.id, resource, action })),
-            );
-            if (data.length > 0) {
-                await prisma.permission.createMany({ data, skipDuplicates: true });
-            }
-        }
-    }
 }
 
 async function getMatrix(workspaceId) {

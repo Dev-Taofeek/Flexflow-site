@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { socket } from "@/lib/socket";
 import { createIssueComment, updateIssue } from "@/lib/issues-api";
+import { useRole } from "@/hooks/useRole";
 
 const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -26,7 +27,7 @@ function getInitials(name) {
     return name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "?";
 }
 
-function AssigneePicker({ issue, people, token, onUpdated }) {
+function AssigneePicker({ issue, people, token, onUpdated, disabled = false }) {
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const ref = useRef(null);
@@ -73,7 +74,8 @@ function AssigneePicker({ issue, people, token, onUpdated }) {
             <button
                 type="button"
                 onClick={() => setOpen((o) => !o)}
-                className="flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-left text-sm transition-colors hover:border-indigo-400"
+                disabled={disabled}
+                className="flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-left text-sm transition-colors hover:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-70"
             >
                 {assigned.length === 0 ? (
                     <span className="text-(--text-muted) text-sm">Unassigned</span>
@@ -130,6 +132,7 @@ export function IssueDetailView({
     availableLabels = [],
     token,
 }) {
+    const { canManageIssues } = useRole();
     const [issue, setIssue] = useState(initialIssue);
     const [comments, setComments] = useState(initialComments ?? []);
     const [activityLog, setActivityLog] = useState(initialActivityLog ?? []);
@@ -141,7 +144,6 @@ export function IssueDetailView({
     // Real-time updates via Socket.io
     useEffect(() => {
         if (!project?.id) return;
-        socket.connect();
         socket.emit("project:join", project.id);
 
         function onIssueUpdated(payload) {
@@ -162,7 +164,6 @@ export function IssueDetailView({
             socket.emit("project:leave", project.id);
             socket.off("issue:updated", onIssueUpdated);
             socket.off("issue:comment-created", onCommentCreated);
-            socket.disconnect();
         };
     }, [project?.id, issue?.id]);
 
@@ -226,6 +227,7 @@ export function IssueDetailView({
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         onBlur={() => title !== issue.title && saveIssue({ title })}
+                        readOnly={!canManageIssues}
                         className="w-full bg-transparent text-2xl font-semibold tracking-tight text-(--text-primary) outline-none placeholder-(--text-muted) border-none"
                         placeholder="Issue title"
                     />
@@ -233,11 +235,13 @@ export function IssueDetailView({
                     <div className="mt-6">
                         <div className="mb-3 flex items-center justify-between">
                             <h2 className="text-sm font-semibold text-(--text-primary)">Description</h2>
-                            <Button size="sm" disabled={saving} onClick={() => saveIssue({ description })}>
-                                Save
-                            </Button>
+                            {canManageIssues && (
+                                <Button size="sm" disabled={saving} onClick={() => saveIssue({ description })}>
+                                    Save
+                                </Button>
+                            )}
                         </div>
-                        <RichTextEditor value={description} onChange={setDescription} />
+                        <RichTextEditor value={description} onChange={setDescription} readOnly={!canManageIssues} />
                     </div>
                 </section>
 
@@ -306,7 +310,8 @@ export function IssueDetailView({
                             <select
                                 value={issue.status}
                                 onChange={(e) => { setIssue((p) => ({ ...p, status: e.target.value })); saveIssue({ status: e.target.value }); }}
-                                className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
+                                disabled={!canManageIssues}
+                                className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             >
                                 {STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
                             </select>
@@ -320,7 +325,8 @@ export function IssueDetailView({
                             <select
                                 value={issue.priority}
                                 onChange={(e) => { setIssue((p) => ({ ...p, priority: e.target.value })); saveIssue({ priority: e.target.value }); }}
-                                className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
+                                disabled={!canManageIssues}
+                                className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             >
                                 {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                             </select>
@@ -332,6 +338,7 @@ export function IssueDetailView({
                             people={people}
                             token={token}
                             onUpdated={(updated) => setIssue(updated)}
+                            disabled={!canManageIssues}
                         />
 
                         {/* Due date */}
@@ -343,7 +350,8 @@ export function IssueDetailView({
                                 type="date"
                                 value={issue.dueDate ? new Date(issue.dueDate).toISOString().split("T")[0] : ""}
                                 onChange={(e) => { setIssue((p) => ({ ...p, dueDate: e.target.value })); saveIssue({ dueDate: e.target.value || null }); }}
-                                className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
+                                disabled={!canManageIssues}
+                                className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             />
                         </div>
 
@@ -361,7 +369,8 @@ export function IssueDetailView({
                                             <button
                                                 key={name}
                                                 type="button"
-                                                className={["rounded-full px-2.5 py-1 text-xs font-medium border transition-colors",
+                                                disabled={!canManageIssues}
+                                                className={["rounded-full px-2.5 py-1 text-xs font-medium border transition-colors disabled:cursor-not-allowed",
                                                     active ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-(--border) bg-(--bg) text-(--text-secondary) hover:border-indigo-300"
                                                 ].join(" ")}
                                             >

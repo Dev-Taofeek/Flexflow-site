@@ -7,10 +7,11 @@ import { useEffect } from "react";
 
 import { Button } from "@/components/ui/Button";
 
-export function RichTextEditor({ value, onChange }) {
+export function RichTextEditor({ value, onChange, readOnly = false }) {
   const editor = useEditor({
     extensions: [StarterKit],
     content: value,
+    editable: !readOnly,
     editorProps: {
       attributes: {
         class:
@@ -32,8 +33,23 @@ export function RichTextEditor({ value, onChange }) {
     }
   }, [editor, value]);
 
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    editor.setEditable(!readOnly);
+  }, [editor, readOnly]);
+
   if (!editor) {
     return null;
+  }
+
+  if (readOnly) {
+    return (
+      <div>
+        <EditorContent editor={editor} />
+      </div>
+    );
   }
 
   return (

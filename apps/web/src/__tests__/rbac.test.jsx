@@ -14,7 +14,7 @@ const RESOURCES = [
 ];
 const INITIAL_PERMISSIONS = {
     Admin:  { issues: ["create", "read", "update", "delete"], projects: ["create", "read", "update", "delete"] },
-    Member: { issues: ["create", "read", "update"],           projects: ["read"] },
+    Member: { issues: ["read"],                                projects: ["read"] },
     Viewer: { issues: ["read"],                               projects: ["read"] },
 };
 
@@ -103,7 +103,7 @@ describe("RBAC role hierarchy — pure logic", () => {
         expect(canPerform("Viewer", INITIAL_PERMISSIONS, "issues", "create")).toBe(false);
     });
 
-    it("Member can update issues", () => {
-        expect(canPerform("Member", INITIAL_PERMISSIONS, "issues", "update")).toBe(true);
+    it("Member cannot update issues", () => {
+        expect(canPerform("Member", INITIAL_PERMISSIONS, "issues", "update")).toBe(false);
     });
 });

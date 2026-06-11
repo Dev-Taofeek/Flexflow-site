@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { authorize } from "../middleware/rbac.middleware.js";
 import { notifyIssueParticipants, notifyIssueUsers } from "../services/issue-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
@@ -55,16 +56,11 @@ router.get("/", async (req, res) => {
     }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", authorize("projects", "create"), async (req, res) => {
     try {
         const { workspaceId, name, description, color, visibility } = req.body;
         if (!workspaceId || !name?.trim()) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId and name are required"));
-        }
-
-        const member = await assertWorkspaceAccess(workspaceId, req.user.id);
-        if (!member || !["OWNER", "ADMIN", "MEMBER"].includes(member.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
         }
 
         const project = await prisma.project.create({
@@ -154,15 +150,10 @@ router.get("/:projectId/activity", async (req, res) => {
     }
 });
 
-router.patch("/:projectId", async (req, res) => {
+router.patch("/:projectId", authorize("projects", "update"), async (req, res) => {
     try {
         const project = await prisma.project.findUnique({ where: { id: req.params.projectId } });
         if (!project) return res.status(404).json(errorResponse("NOT_FOUND", "Project not found"));
-
-        const member = await assertWorkspaceAccess(project.workspaceId, req.user.id);
-        if (!member || !["OWNER", "ADMIN", "MEMBER"].includes(member.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
 
         const { name, description, color, visibility } = req.body;
         const updated = await prisma.project.update({
@@ -188,15 +179,10 @@ router.patch("/:projectId", async (req, res) => {
     }
 });
 
-router.delete("/:projectId", async (req, res) => {
+router.delete("/:projectId", authorize("projects", "delete"), async (req, res) => {
     try {
         const project = await prisma.project.findUnique({ where: { id: req.params.projectId } });
         if (!project) return res.status(404).json(errorResponse("NOT_FOUND", "Project not found"));
-
-        const member = await assertWorkspaceAccess(project.workspaceId, req.user.id);
-        if (!member || !["OWNER", "ADMIN"].includes(member.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
 
         await prisma.project.delete({ where: { id: req.params.projectId } });
         await notifyUser(req.user.id, {
@@ -258,15 +244,10 @@ router.get("/:projectId/issues/:issueId", async (req, res) => {
     }
 });
 
-router.post("/:projectId/issues", async (req, res) => {
+router.post("/:projectId/issues", authorize("issues", "create"), async (req, res) => {
     try {
         const project = await prisma.project.findUnique({ where: { id: req.params.projectId } });
         if (!project) return res.status(404).json(errorResponse("NOT_FOUND", "Project not found"));
-
-        const member = await assertWorkspaceAccess(project.workspaceId, req.user.id);
-        if (!member || !["OWNER", "ADMIN", "MEMBER"].includes(member.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
 
         const { title, description, priority, status, assigneeId, dueDate } = req.body;
         if (!title?.trim()) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Title is required"));
@@ -317,7 +298,7 @@ router.post("/:projectId/issues", async (req, res) => {
     }
 });
 
-router.patch("/:projectId/issues/:issueId/status", async (req, res) => {
+router.patch("/:projectId/issues/:issueId/status", authorize("issues", "update"), async (req, res) => {
     try {
         const { status } = req.body;
         const validStatuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
@@ -327,11 +308,6 @@ router.patch("/:projectId/issues/:issueId/status", async (req, res) => {
 
         const issue = await prisma.issue.findFirst({ where: { id: req.params.issueId, projectId: req.params.projectId }, include: { project: true } });
         if (!issue) return res.status(404).json(errorResponse("NOT_FOUND", "Issue not found"));
-
-        const member = await assertWorkspaceAccess(issue.project.workspaceId, req.user.id);
-        if (!member || !["OWNER", "ADMIN", "MEMBER"].includes(member.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
 
         const updated = await prisma.issue.update({ where: { id: issue.id }, data: { status }, include: { assignee: { select: USER_SELECT }, labels: { include: { label: true } } } });
 
@@ -362,15 +338,10 @@ router.patch("/:projectId/issues/:issueId/status", async (req, res) => {
     }
 });
 
-router.patch("/:projectId/issues/:issueId", async (req, res) => {
+router.patch("/:projectId/issues/:issueId", authorize("issues", "update"), async (req, res) => {
     try {
         const issue = await prisma.issue.findFirst({ where: { id: req.params.issueId, projectId: req.params.projectId }, include: { project: true } });
         if (!issue) return res.status(404).json(errorResponse("NOT_FOUND", "Issue not found"));
-
-        const member = await assertWorkspaceAccess(issue.project.workspaceId, req.user.id);
-        if (!member || !["OWNER", "ADMIN", "MEMBER"].includes(member.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
 
         const { title, description, priority, status, assigneeId, dueDate } = req.body;
         const updated = await prisma.issue.update({
@@ -425,13 +396,10 @@ router.patch("/:projectId/issues/:issueId", async (req, res) => {
     }
 });
 
-router.post("/:projectId/issues/:issueId/comments", async (req, res) => {
+router.post("/:projectId/issues/:issueId/comments", authorize("comments", "create"), async (req, res) => {
     try {
         const issue = await prisma.issue.findFirst({ where: { id: req.params.issueId, projectId: req.params.projectId }, include: { project: true } });
         if (!issue) return res.status(404).json(errorResponse("NOT_FOUND", "Issue not found"));
-
-        const member = await assertWorkspaceAccess(issue.project.workspaceId, req.user.id);
-        if (!member || member.role === "VIEWER") return res.status(403).json(errorResponse("FORBIDDEN", "Viewers cannot post comments"));
 
         const { content } = req.body;
         if (!content?.trim()) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Content is required"));

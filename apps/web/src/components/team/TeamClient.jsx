@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Send, Trash2, UserMinus } from "lucide-react";
+import { Mail, Send, Trash2, UserMinus, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -18,9 +18,11 @@ const ROLE_COLORS = {
 export function TeamClient({
   initialMembers = [],
   initialInvitations = [],
+  availableMembers = [],
   roles = ["OWNER", "ADMIN", "MEMBER", "VIEWER"],
   currentUserRole,
   onInvite,
+  onAddExisting,
   onRoleChange,
   onRemove,
   onCancelInvite,
@@ -28,11 +30,14 @@ export function TeamClient({
   const { addToast } = useToast();
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
+  const [orgMembers, setOrgMembers] = useState(availableMembers);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("MEMBER");
   const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteResult, setInviteResult] = useState(null); // { emailSent, inviteUrl }
+  const [addingId, setAddingId] = useState(null);
+  const [addRoles, setAddRoles] = useState({});
 
   const canManage = currentUserRole && ["OWNER", "ADMIN"].includes(currentUserRole);
   const editableInviteRoles = currentUserRole === "OWNER" ? ["ADMIN", "MEMBER", "VIEWER"] : ["MEMBER", "VIEWER"];
@@ -93,6 +98,18 @@ export function TeamClient({
       setMembers((prev) => prev.filter((m) => m.memberId !== memberId));
     } catch (err) {
       addToast(err.message || "Failed to remove member.", "error");
+    }
+  }
+
+  async function handleAddExisting(userId) {
+    setAddingId(userId);
+    try {
+      await onAddExisting?.({ userId, role: addRoles[userId] || "MEMBER" });
+      setOrgMembers((prev) => prev.filter((m) => m.id !== userId));
+    } catch (err) {
+      addToast(err.message || "Failed to add member.", "error");
+    } finally {
+      setAddingId(null);
     }
   }
 
@@ -192,6 +209,56 @@ export function TeamClient({
               )}
             </div>
           )}
+        </section>
+      )}
+
+      {/* Add from other workspaces */}
+      {canManage && orgMembers.length > 0 && (
+        <section className="rounded-xl border border-(--border) bg-(--bg-elevated) p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <UserPlus className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-(--text-primary)">Add from organization</h2>
+              <p className="text-xs text-(--text-muted)">
+                These people are already in your organization but not in this workspace.
+              </p>
+            </div>
+          </div>
+
+          <div className="divide-y divide-(--border)">
+            {orgMembers.map((member) => (
+              <div key={member.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-violet-500 text-xs font-semibold text-white">
+                  {getInitials(member.name)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-(--text-primary)">{member.name}</p>
+                  <p className="truncate text-xs text-(--text-muted)">{member.email}</p>
+                </div>
+                <select
+                  value={addRoles[member.id] || "MEMBER"}
+                  onChange={(e) => setAddRoles((prev) => ({ ...prev, [member.id]: e.target.value }))}
+                  className="h-8 rounded-md border border-(--border) bg-(--bg) px-2 text-xs text-(--text-secondary) focus:border-indigo-500 focus:outline-none"
+                >
+                  {(currentUserRole === "OWNER" ? ["ADMIN", "MEMBER", "VIEWER"] : ["MEMBER", "VIEWER"]).map((r) => (
+                    <option key={r} value={r}>
+                      {r.charAt(0) + r.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  size="sm"
+                  isLoading={addingId === member.id}
+                  onClick={() => handleAddExisting(member.id)}
+                >
+                  Add
+                </Button>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 

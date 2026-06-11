@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { requireOrgRole } from "../lib/permissions.js";
 import { getEmailConfigStatus, isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
@@ -53,11 +54,13 @@ router.get("/", async (req, res) => {
 
         const organizations = memberships.map((m) => ({
             ...m.organization,
-            workspaces: m.organization.workspaces.map((workspace) => ({
-                ...workspace,
-                role: workspace.members?.[0]?.role || m.role,
-                members: undefined,
-            })),
+            workspaces: m.organization.workspaces
+                .filter((workspace) => workspace.members.length > 0)
+                .map((workspace) => ({
+                    ...workspace,
+                    role: workspace.members[0].role,
+                    members: undefined,
+                })),
             role: m.role,
             memberId: m.id,
         }));
@@ -167,15 +170,8 @@ router.get("/:orgId", async (req, res) => {
     }
 });
 
-router.patch("/:orgId", async (req, res) => {
+router.patch("/:orgId", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
     try {
-        const membership = await prisma.organizationMember.findUnique({
-            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.user.id } },
-        });
-        if (!membership || !["OWNER", "ADMIN"].includes(membership.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
-
         const { name, description, logoUrl } = req.body;
         const org = await prisma.organization.update({
             where: { id: req.params.orgId },
@@ -199,15 +195,8 @@ router.patch("/:orgId", async (req, res) => {
     }
 });
 
-router.delete("/:orgId", async (req, res) => {
+router.delete("/:orgId", requireOrgRole("OWNER"), async (req, res) => {
     try {
-        const membership = await prisma.organizationMember.findUnique({
-            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.user.id } },
-        });
-        if (!membership || membership.role !== "OWNER") {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Only the owner can delete an organization"));
-        }
-
         const org = await prisma.organization.delete({ where: { id: req.params.orgId } });
         await notifyUser(req.user.id, {
             title: "Organization deleted",
@@ -247,15 +236,8 @@ router.get("/:orgId/members", async (req, res) => {
     }
 });
 
-router.patch("/:orgId/members/:userId/role", async (req, res) => {
+router.patch("/:orgId/members/:userId/role", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
     try {
-        const actorMembership = await prisma.organizationMember.findUnique({
-            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.user.id } },
-        });
-        if (!actorMembership || !["OWNER", "ADMIN"].includes(actorMembership.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
-
         const { role } = req.body;
         if (!VALID_ROLES.includes(role)) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Invalid role"));
@@ -266,7 +248,7 @@ router.patch("/:orgId/members/:userId/role", async (req, res) => {
         });
         if (!targetMembership) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
 
-        if (!canManageOrgRole(actorMembership.role, targetMembership.role, role)) {
+        if (!canManageOrgRole(req.organizationMember.role, targetMembership.role, role)) {
             return res.status(403).json(errorResponse("FORBIDDEN", "You cannot change this member's role"));
         }
 
@@ -296,15 +278,8 @@ router.patch("/:orgId/members/:userId/role", async (req, res) => {
     }
 });
 
-router.delete("/:orgId/members/:userId", async (req, res) => {
+router.delete("/:orgId/members/:userId", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
     try {
-        const actorMembership = await prisma.organizationMember.findUnique({
-            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.user.id } },
-        });
-        if (!actorMembership || !["OWNER", "ADMIN"].includes(actorMembership.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
-
         if (req.params.userId === req.user.id) {
             return res.status(400).json(errorResponse("BAD_REQUEST", "Cannot remove yourself from the organization"));
         }
@@ -313,7 +288,7 @@ router.delete("/:orgId/members/:userId", async (req, res) => {
             where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.params.userId } },
         });
         if (!targetMembership) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
-        if (targetMembership.role === "OWNER" || (actorMembership.role === "ADMIN" && targetMembership.role === "ADMIN")) {
+        if (targetMembership.role === "OWNER" || (req.organizationMember.role === "ADMIN" && targetMembership.role === "ADMIN")) {
             return res.status(403).json(errorResponse("FORBIDDEN", "You cannot remove this member"));
         }
 
@@ -342,21 +317,14 @@ router.delete("/:orgId/members/:userId", async (req, res) => {
     }
 });
 
-router.post("/:orgId/invite", async (req, res) => {
+router.post("/:orgId/invite", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
     try {
-        const membership = await prisma.organizationMember.findUnique({
-            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.user.id } },
-        });
-        if (!membership || !["OWNER", "ADMIN"].includes(membership.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
-
         const { email, role = "MEMBER" } = req.body;
         const normalizedEmail = email?.trim().toLowerCase();
         if (!normalizedEmail?.includes("@")) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Valid email is required"));
         }
-        if (!VALID_ROLES.includes(role) || role === "OWNER" || (membership.role === "ADMIN" && role === "ADMIN")) {
+        if (!VALID_ROLES.includes(role) || role === "OWNER" || (req.organizationMember.role === "ADMIN" && role === "ADMIN")) {
             return res.status(403).json(errorResponse("FORBIDDEN", "You cannot invite members with that role"));
         }
 
@@ -445,15 +413,8 @@ router.post("/:orgId/invite", async (req, res) => {
     }
 });
 
-router.delete("/:orgId/invites/:inviteId", async (req, res) => {
+router.delete("/:orgId/invites/:inviteId", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
     try {
-        const membership = await prisma.organizationMember.findUnique({
-            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.user.id } },
-        });
-        if (!membership || !["OWNER", "ADMIN"].includes(membership.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
-
         const invite = await prisma.invite.findUnique({ where: { id: req.params.inviteId } });
         if (!invite || invite.organizationId !== req.params.orgId || invite.accepted) {
             return res.status(404).json(errorResponse("NOT_FOUND", "Invitation not found"));

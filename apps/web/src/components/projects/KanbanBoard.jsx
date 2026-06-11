@@ -119,10 +119,11 @@ function QuickCreate({ projectId, status, members, token, onCreated, onCancel })
 }
 
 // ── Issue card ─────────────────────────────────────────────────────────────
-function IssueCard({ issue, isDragging = false, projectId }) {
+function IssueCard({ issue, isDragging = false, projectId, canManageIssues = true }) {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
         id: issue.id,
         data: { type: "issue", issue },
+        disabled: !canManageIssues,
     });
 
     const style = { transform: CSS.Transform.toString(transform), transition };
@@ -149,15 +150,17 @@ function IssueCard({ issue, isDragging = false, projectId }) {
                         {issue.title}
                     </p>
                 </Link>
-                <button
-                    type="button"
-                    aria-label={`Drag ${issue.title}`}
-                    className="mt-0.5 shrink-0 cursor-grab rounded-md p-0.5 text-(--text-muted) opacity-0 group-hover:opacity-100 hover:bg-(--bg-overlay) active:cursor-grabbing transition-opacity"
-                    {...attributes}
-                    {...listeners}
-                >
-                    <GripVertical className="h-4 w-4" />
-                </button>
+                {canManageIssues && (
+                    <button
+                        type="button"
+                        aria-label={`Drag ${issue.title}`}
+                        className="mt-0.5 shrink-0 cursor-grab rounded-md p-0.5 text-(--text-muted) opacity-0 group-hover:opacity-100 hover:bg-(--bg-overlay) active:cursor-grabbing transition-opacity"
+                        {...attributes}
+                        {...listeners}
+                    >
+                        <GripVertical className="h-4 w-4" />
+                    </button>
+                )}
             </div>
 
             {/* Bottom row: priority + assignee + due date */}
@@ -204,7 +207,7 @@ function IssueCard({ issue, isDragging = false, projectId }) {
 // ── Column ─────────────────────────────────────────────────────────────────
 function KanbanColumn({ column, issues, children, projectId, members, token, onCreated }) {
     const { setNodeRef, isOver } = useDroppable({ id: column.id });
-    const { canWrite } = useRole();
+    const { canManageIssues } = useRole();
     const [creating, setCreating] = useState(false);
 
     return (
@@ -224,7 +227,7 @@ function KanbanColumn({ column, issues, children, projectId, members, token, onC
                         {issues.length}
                     </span>
                 </div>
-                {canWrite && (
+                {canManageIssues && (
                     <button
                         aria-label={`Add issue to ${column.title}`}
                         onClick={() => setCreating(true)}
@@ -250,7 +253,7 @@ function KanbanColumn({ column, issues, children, projectId, members, token, onC
                     />
                 )}
 
-                {issues.length === 0 && !creating && canWrite && (
+                {issues.length === 0 && !creating && canManageIssues && (
                     <button
                         onClick={() => setCreating(true)}
                         className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-(--border) py-6 text-xs text-(--text-muted) transition-colors hover:border-indigo-300 hover:text-indigo-500"
@@ -265,6 +268,7 @@ function KanbanColumn({ column, issues, children, projectId, members, token, onC
 
 // ── Board ─────────────────────────────────────────────────────────────────
 export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
+    const { canManageIssues } = useRole();
     const [issuesByStatus, setIssuesByStatus] = useState(() => groupByStatus(initialIssues));
     const [activeIssue, setActiveIssue] = useState(null);
 
@@ -277,7 +281,6 @@ export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
     ), [issuesByStatus]);
 
     useEffect(() => {
-        socket.connect();
         socket.emit("project:join", projectId);
         function onStatusUpdated(payload) {
             if (payload.projectId !== projectId) return;
@@ -293,7 +296,6 @@ export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
         return () => {
             socket.emit("project:leave", projectId);
             socket.off("issue:status-updated", onStatusUpdated);
-            socket.disconnect();
         };
     }, [projectId]);
 
@@ -303,10 +305,12 @@ export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
     }
 
     function handleDragStart({ active }) {
+        if (!canManageIssues) return;
         setActiveIssue(issueLookup[active.id] || null);
     }
 
     function handleDragOver({ active, over }) {
+        if (!canManageIssues) return;
         if (!over) return;
         const fromCol = findColumn(active.id);
         const toCol = findColumn(over.id);
@@ -320,6 +324,7 @@ export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
 
     async function handleDragEnd({ active, over }) {
         setActiveIssue(null);
+        if (!canManageIssues) return;
         if (!over) return;
         const fromCol = findColumn(active.id);
         const toCol = findColumn(over.id);
@@ -374,7 +379,7 @@ export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
                         >
                             <SortableContext items={colIssues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                                 {colIssues.map((issue) => (
-                                    <IssueCard key={issue.id} issue={issue} projectId={projectId} />
+                                    <IssueCard key={issue.id} issue={issue} projectId={projectId} canManageIssues={canManageIssues} />
                                 ))}
                             </SortableContext>
                         </KanbanColumn>
@@ -383,7 +388,7 @@ export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
             </div>
 
             <DragOverlay>
-                {activeIssue ? <IssueCard issue={activeIssue} projectId={projectId} isDragging /> : null}
+                {activeIssue ? <IssueCard issue={activeIssue} projectId={projectId} isDragging canManageIssues={canManageIssues} /> : null}
             </DragOverlay>
         </DndContext>
     );

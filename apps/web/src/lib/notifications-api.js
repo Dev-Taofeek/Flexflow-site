@@ -8,3 +8,9 @@ export const markNotificationRead = (id, token) =>
 
 export const markAllNotificationsRead = (token) =>
     apiRequest("/notifications/read-all", { method: "PATCH", token });
+
+export const subscribeToPush = (subscription, token) =>
+    apiRequest("/notifications/push-subscriptions", { method: "POST", token, body: subscription });
+
+export const unsubscribeFromPush = (endpoint, token) =>
+    apiRequest("/notifications/push-subscriptions", { method: "DELETE", token, body: { endpoint } });
