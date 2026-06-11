@@ -240,6 +240,11 @@ router.post("/refresh", async (req, res) => {
 
             jwt.verify(user.refreshToken, env.JWT_REFRESH_SECRET);
             const accessToken = signAccessToken(user.id);
+
+            // Rotate the refresh token so the 30-day session slides forward on activity
+            const newRefreshToken = signRefreshToken(user.id);
+            await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefreshToken } }).catch(() => {});
+
             return res.status(200).json(successResponse({ accessToken }));
         }
 
