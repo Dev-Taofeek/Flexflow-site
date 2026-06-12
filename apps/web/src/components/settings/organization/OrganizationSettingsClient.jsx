@@ -121,7 +121,7 @@ export function OrganizationSettingsClient() {
             </h2>
 
             <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm leading-relaxed">
-              Deleting this organization permanently removes all projects, issues, comments,
+              Deleting this organization permanently removes all projects, tasks, comments,
               members, and audit logs.
             </p>
 

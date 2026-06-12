@@ -2,20 +2,13 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { authorize } from "../middleware/rbac.middleware.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
-import { resources, roleSeeds, ensureRoles } from "../lib/permissions.js";
+import { resources, roleSeeds, ensureRoles, checkPermission } from "../lib/permissions.js";
 
 const router = Router();
 router.use(authenticate);
-
-async function assertWorkspaceAdmin(workspaceId, userId) {
-    if (!workspaceId) return null;
-    const member = await prisma.workspaceMember.findUnique({
-        where: { workspaceId_userId: { workspaceId, userId } },
-    });
-    return member && ["OWNER", "ADMIN"].includes(member.role) ? member : null;
-}
 
 async function getMatrix(workspaceId) {
     await ensureRoles(workspaceId);
@@ -44,24 +37,21 @@ async function getMatrix(workspaceId) {
     };
 }
 
-router.get("/", async (req, res) => {
+router.get("/", authorize("roles", "read"), async (req, res) => {
     try {
         const { workspaceId } = req.query;
-        const member = await assertWorkspaceAdmin(workspaceId, req.user.id);
-        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
+        const { allowed: canEdit } = await checkPermission(workspaceId, req.user.id, "roles", "update");
 
-        return res.status(200).json(successResponse(await getMatrix(workspaceId)));
+        return res.status(200).json(successResponse({ ...(await getMatrix(workspaceId)), canEdit }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch roles"));
     }
 });
 
-router.patch("/", async (req, res) => {
+router.patch("/", authorize("roles", "update"), async (req, res) => {
     try {
         const { workspaceId, role, resource, action, enabled } = req.body;
-        const member = await assertWorkspaceAdmin(workspaceId, req.user.id);
-        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
         if (role === "Owner") return res.status(403).json(errorResponse("LOCKED_ROLE", "Owner permissions cannot be changed"));
 
         const foundResource = resources.find((item) => item.id === resource);

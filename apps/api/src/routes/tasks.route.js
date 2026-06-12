@@ -2,14 +2,14 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
-import { notifyIssueUsers } from "../services/issue-notification.service.js";
+import { notifyTaskUsers } from "../services/task-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
 router.use(authenticate);
 
-const ISSUE_INCLUDE = {
+const TASK_INCLUDE = {
     project: { select: { id: true, name: true, color: true } },
     assignee: { select: { id: true, name: true, avatarUrl: true } },
     assignees: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
@@ -18,7 +18,7 @@ const ISSUE_INCLUDE = {
     _count: { select: { comments: true } },
 };
 
-// GET /api/issues?workspaceId=...&status=...&priority=...&assigneeId=...&page=1
+// GET /api/tasks?workspaceId=...&status=...&priority=...&assigneeId=...&page=1
 router.get("/", async (req, res) => {
     try {
         const { workspaceId, status, priority, assigneeId, page = 1 } = req.query;
@@ -53,26 +53,26 @@ router.get("/", async (req, res) => {
                 : {}),
         };
 
-        const [issues, total] = await Promise.all([
-            prisma.issue.findMany({
+        const [tasks, total] = await Promise.all([
+            prisma.task.findMany({
                 where,
-                include: ISSUE_INCLUDE,
+                include: TASK_INCLUDE,
                 orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
                 take,
                 skip,
             }),
-            prisma.issue.count({ where }),
+            prisma.task.count({ where }),
         ]);
 
-        return res.status(200).json(successResponse({ issues, total, page: Number(page), pageSize: take }));
+        return res.status(200).json(successResponse({ tasks, total, page: Number(page), pageSize: take }));
     } catch (error) {
         console.error(error);
-        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch issues"));
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch tasks"));
     }
 });
 
-// POST /api/issues
-router.post("/", authorize("issues", "create"), async (req, res) => {
+// POST /api/tasks
+router.post("/", authorize("tasks", "create"), async (req, res) => {
     try {
         const { projectId, title, description, priority = "MEDIUM", status = "TODO", assigneeIds = [], dueDate } = req.body;
         if (!projectId || !title?.trim()) {
@@ -85,7 +85,7 @@ router.post("/", authorize("issues", "create"), async (req, res) => {
         const ids = Array.isArray(assigneeIds) ? assigneeIds.filter(Boolean) : [assigneeIds].filter(Boolean);
         const primaryAssigneeId = ids[0] || null;
 
-        const issue = await prisma.issue.create({
+        const task = await prisma.task.create({
             data: {
                 projectId,
                 createdById: req.user.id,
@@ -99,88 +99,88 @@ router.post("/", authorize("issues", "create"), async (req, res) => {
                     create: ids.map((userId) => ({ userId })),
                 } : undefined,
             },
-            include: ISSUE_INCLUDE,
+            include: TASK_INCLUDE,
         });
 
         await prisma.activityLog.create({
             data: {
                 userId: req.user.id,
                 projectId,
-                issueId: issue.id,
+                taskId: task.id,
                 action: "created",
-                entityType: "issue",
-                entityId: issue.id,
+                entityType: "task",
+                entityId: task.id,
             },
         });
 
         await notifyUser(req.user.id, {
-            title: "Issue created",
-            message: `${issue.title} was created.`,
+            title: "Task created",
+            message: `${task.title} was created.`,
             type: "SYSTEM",
         });
 
         const assignedOnCreate = ids.filter((id) => id !== req.user.id);
         if (assignedOnCreate.length > 0) {
-            await notifyIssueUsers(assignedOnCreate, issue, {
+            await notifyTaskUsers(assignedOnCreate, task, {
                 actorId: req.user.id,
-                title: "You've been assigned to an issue",
-                message: `${req.user.name} assigned you to: ${issue.title}`,
-                type: "ISSUE_ASSIGNED",
-                subject: `You've been assigned: ${issue.title}`,
-                actionText: "Open issue",
+                title: "You've been assigned to a task",
+                message: `${req.user.name} assigned you to: ${task.title}`,
+                type: "TASK_ASSIGNED",
+                subject: `You've been assigned: ${task.title}`,
+                actionText: "Open task",
             });
         }
 
-        return res.status(201).json(successResponse(issue));
+        return res.status(201).json(successResponse(task));
     } catch (error) {
         console.error(error);
-        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to create issue"));
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to create task"));
     }
 });
 
-// PATCH /api/issues/:issueId/assignees — update assignees list
-router.patch("/:issueId/assignees", authorize("issues", "update"), async (req, res) => {
+// PATCH /api/tasks/:taskId/assignees — update assignees list
+router.patch("/:taskId/assignees", authorize("tasks", "update"), async (req, res) => {
     try {
-        const { issueId } = req.params;
+        const { taskId } = req.params;
         const { assigneeIds = [] } = req.body;
 
-        const issue = await prisma.issue.findUnique({
-            where: { id: issueId },
+        const task = await prisma.task.findUnique({
+            where: { id: taskId },
             include: {
                 project: { select: { workspaceId: true } },
                 assignees: { select: { userId: true } },
             },
         });
-        if (!issue) return res.status(404).json(errorResponse("NOT_FOUND", "Issue not found"));
+        if (!task) return res.status(404).json(errorResponse("NOT_FOUND", "Task not found"));
 
         const ids = [...new Set(assigneeIds.filter(Boolean))];
         const primaryId = ids[0] || null;
 
         // Replace all assignees atomically
         await prisma.$transaction([
-            prisma.issueAssignee.deleteMany({ where: { issueId } }),
+            prisma.taskAssignee.deleteMany({ where: { taskId } }),
             ...(ids.length > 0
-                ? [prisma.issueAssignee.createMany({ data: ids.map((userId) => ({ issueId, userId })) })]
+                ? [prisma.taskAssignee.createMany({ data: ids.map((userId) => ({ taskId, userId })) })]
                 : []),
-            prisma.issue.update({ where: { id: issueId }, data: { assigneeId: primaryId } }),
+            prisma.task.update({ where: { id: taskId }, data: { assigneeId: primaryId } }),
         ]);
 
         // Notify newly added assignees
-        const oldIds = new Set((issue.assignees || []).map((a) => a.userId));
+        const oldIds = new Set((task.assignees || []).map((a) => a.userId));
         const newlyAdded = ids.filter((id) => !oldIds.has(id));
 
         if (newlyAdded.length > 0) {
-            await notifyIssueUsers(newlyAdded, issue, {
+            await notifyTaskUsers(newlyAdded, task, {
                 actorId: req.user.id,
-                title: "You've been assigned to an issue",
-                message: `${req.user.name} assigned you to: ${issue.title}`,
-                type: "ISSUE_ASSIGNED",
-                subject: `You've been assigned: ${issue.title}`,
-                actionText: "Open issue",
+                title: "You've been assigned to a task",
+                message: `${req.user.name} assigned you to: ${task.title}`,
+                type: "TASK_ASSIGNED",
+                subject: `You've been assigned: ${task.title}`,
+                actionText: "Open task",
             });
         }
 
-        const updated = await prisma.issue.findUnique({ where: { id: issueId }, include: ISSUE_INCLUDE });
+        const updated = await prisma.task.findUnique({ where: { id: taskId }, include: TASK_INCLUDE });
         return res.status(200).json(successResponse(updated));
     } catch (error) {
         console.error(error);
@@ -188,4 +188,4 @@ router.patch("/:issueId/assignees", authorize("issues", "update"), async (req, r
     }
 });
 
-export { router as issuesRouter };
+export { router as tasksRouter };

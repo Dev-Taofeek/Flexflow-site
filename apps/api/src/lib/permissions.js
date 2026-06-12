@@ -3,10 +3,11 @@ import { errorResponse } from "../utils/api-response.js";
 
 export const resources = [
     { id: "projects", label: "Projects", actions: ["create", "read", "update", "delete"] },
-    { id: "issues", label: "Issues", actions: ["create", "read", "update", "delete"] },
+    { id: "tasks", label: "Tasks", actions: ["create", "read", "update", "delete"] },
     { id: "comments", label: "Comments", actions: ["create", "read", "update", "delete"] },
     { id: "team", label: "Team", actions: ["invite", "read", "update", "remove"] },
     { id: "settings", label: "Settings", actions: ["read", "update", "billing", "danger_zone"] },
+    { id: "roles", label: "Roles & Permissions", actions: ["read", "update"] },
 ];
 
 export const roleSeeds = [
@@ -14,40 +15,44 @@ export const roleSeeds = [
         name: "Owner",
         permissions: {
             projects: ["create", "read", "update", "delete"],
-            issues: ["create", "read", "update", "delete"],
+            tasks: ["create", "read", "update", "delete"],
             comments: ["create", "read", "update", "delete"],
             team: ["invite", "read", "update", "remove"],
             settings: ["read", "update", "billing", "danger_zone"],
+            roles: ["read", "update"],
         },
     },
     {
         name: "Admin",
         permissions: {
             projects: ["create", "read", "update", "delete"],
-            issues: ["create", "read", "update", "delete"],
+            tasks: ["create", "read", "update", "delete"],
             comments: ["create", "read", "update", "delete"],
             team: ["invite", "read", "update"],
             settings: ["read", "update"],
+            roles: ["read"],
         },
     },
     {
         name: "Member",
         permissions: {
             projects: ["read"],
-            issues: ["read"],
+            tasks: ["read"],
             comments: ["create", "read", "update"],
             team: ["read"],
             settings: ["read"],
+            roles: [],
         },
     },
     {
         name: "Viewer",
         permissions: {
             projects: ["read"],
-            issues: ["read"],
+            tasks: ["read"],
             comments: ["read"],
             team: ["read"],
             settings: ["read"],
+            roles: [],
         },
     },
 ];
@@ -91,7 +96,7 @@ export async function ensureRoles(workspaceId) {
 }
 
 // Resolves a workspaceId for a request that may identify the workspace
-// directly, or only via a project or issue.
+// directly, or only via a project or task.
 export async function resolveWorkspaceId(req) {
     const direct = req.params.workspaceId || req.body?.workspaceId || req.query?.workspaceId;
     if (direct) return direct;
@@ -104,12 +109,12 @@ export async function resolveWorkspaceId(req) {
         return project?.workspaceId || null;
     }
 
-    if (req.params.issueId) {
-        const issue = await prisma.issue.findUnique({
-            where: { id: req.params.issueId },
+    if (req.params.taskId) {
+        const task = await prisma.task.findUnique({
+            where: { id: req.params.taskId },
             include: { project: { select: { workspaceId: true } } },
         });
-        return issue?.project?.workspaceId || null;
+        return task?.project?.workspaceId || null;
     }
 
     if (req.body?.projectId) {

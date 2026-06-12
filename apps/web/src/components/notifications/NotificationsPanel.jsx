@@ -7,7 +7,7 @@ import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 const TYPE_ICON = {
   INVITE: UserPlus,
-  ISSUE_ASSIGNED: Shield,
+  TASK_ASSIGNED: Shield,
   COMMENT: MessageSquare,
   SYSTEM: Bell,
   INFO: Info,

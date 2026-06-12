@@ -20,14 +20,14 @@ function getStatusColor(status) {
   }
 }
 
-export default async function IssuesPage() {
+export default async function TasksPage() {
   const response = await fetchProjects();
 
   const projects = response.data;
 
-  const issues = projects.flatMap((project) =>
-    (project.issues || []).map((issue) => ({
-      ...issue,
+  const tasks = projects.flatMap((project) =>
+    (project.tasks || []).map((task) => ({
+      ...task,
       project,
     }))
   );
@@ -35,10 +35,10 @@ export default async function IssuesPage() {
   return (
     <div className="space-y-6">
       <section className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-8">
-        <p className="text-brand-600 dark:text-brand-400 text-sm font-medium">Issues</p>
+        <p className="text-brand-600 dark:text-brand-400 text-sm font-medium">Tasks</p>
 
         <h1 className="text-foreground dark:text-foreground-dark mt-2 text-3xl font-semibold tracking-tight">
-          Track and manage all issues
+          Track and manage all tasks
         </h1>
 
         <p className="text-muted-foreground dark:text-muted-foreground-dark mt-3 max-w-2xl text-sm leading-relaxed">
@@ -48,51 +48,51 @@ export default async function IssuesPage() {
       </section>
 
       <div className="grid gap-4">
-        {issues.map((issue) => (
+        {tasks.map((task) => (
           <Link
-            key={issue.id}
-            href={`/projects/${issue.project.id}/issues/${issue.id}`}
+            key={task.id}
+            href={`/projects/${task.project.id}/tasks/${task.id}`}
             className="group border-border bg-surface hover:border-brand-500/40 dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
           >
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant="secondary">{issue.project.name}</Badge>
+                  <Badge variant="secondary">{task.project.name}</Badge>
 
                   <div className="flex items-center gap-2">
                     <span
-                      className={["h-2.5 w-2.5 rounded-full", getStatusColor(issue.status)].join(
+                      className={["h-2.5 w-2.5 rounded-full", getStatusColor(task.status)].join(
                         " "
                       )}
                     />
 
                     <span className="text-muted-foreground dark:text-muted-foreground-dark text-xs font-medium">
-                      {issue.status}
+                      {task.status}
                     </span>
                   </div>
                 </div>
 
                 <h2 className="text-foreground dark:text-foreground-dark mt-4 text-xl font-semibold">
-                  {issue.title}
+                  {task.title}
                 </h2>
 
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-2 line-clamp-2 text-sm leading-relaxed">
-                  {issue.description?.replace(/<[^>]*>/g, "")?.slice(0, 180)}
+                  {task.description?.replace(/<[^>]*>/g, "")?.slice(0, 180)}
                 </p>
 
                 <div className="mt-5 flex flex-wrap items-center gap-3">
-                  <Badge variant="outline">{issue.priority}</Badge>
+                  <Badge variant="outline">{task.priority}</Badge>
 
                   <div className="text-muted-foreground dark:text-muted-foreground-dark flex items-center gap-2 text-xs">
                     <CircleDot className="h-3.5 w-3.5" strokeWidth={1.8} />
 
-                    {issue.assignee}
+                    {task.assignee}
                   </div>
 
                   <div className="text-muted-foreground dark:text-muted-foreground-dark flex items-center gap-2 text-xs">
                     <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.8} />
 
-                    {issue.dueDate}
+                    {task.dueDate}
                   </div>
                 </div>
               </div>

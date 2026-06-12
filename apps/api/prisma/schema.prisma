@@ -26,14 +26,14 @@ enum ProjectVisibility {
   PUBLIC
 }
 
-enum IssuePriority {
+enum TaskPriority {
   LOW
   MEDIUM
   HIGH
   URGENT
 }
 
-enum IssueStatus {
+enum TaskStatus {
   TODO
   IN_PROGRESS
   IN_REVIEW
@@ -43,7 +43,7 @@ enum IssueStatus {
 enum NotificationType {
   INFO
   INVITE
-  ISSUE_ASSIGNED
+  TASK_ASSIGNED
   COMMENT
   SYSTEM
 }
@@ -68,8 +68,8 @@ model User {
 
   organizations  OrganizationMember[]
   workspaces     WorkspaceMember[]
-  assignedIssues   Issue[]            @relation("AssignedIssues")
-  issueAssignments IssueAssignee[]    @relation("IssueAssignees")
+  assignedTasks   Task[]            @relation("AssignedTasks")
+  taskAssignments TaskAssignee[]    @relation("TaskAssignees")
   comments       Comment[]
   notifications  Notification[]
   activities     ActivityLog[]
@@ -78,7 +78,7 @@ model User {
   pushSubscriptions PushSubscription[]
 
   createdProjects Project[]         @relation("CreatedProjects")
-  createdIssues   Issue[]           @relation("CreatedIssues")
+  createdTasks    Task[]            @relation("CreatedTasks")
 }
 
 model Organization {
@@ -167,53 +167,53 @@ model Project {
 
   workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy       User               @relation("CreatedProjects", fields: [createdById], references: [id])
-  issues          Issue[]
+  tasks           Task[]
   activities      ActivityLog[]
 }
 
-model Issue {
+model Task {
   id              String          @id @default(cuid())
   projectId       String
   createdById     String
   assigneeId      String?
   title           String
   description     String?
-  priority        IssuePriority   @default(MEDIUM)
-  status          IssueStatus     @default(TODO)
+  priority        TaskPriority    @default(MEDIUM)
+  status          TaskStatus      @default(TODO)
   dueDate         DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
   project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy       User            @relation("CreatedIssues", fields: [createdById], references: [id])
-  assignee        User?           @relation("AssignedIssues", fields: [assigneeId], references: [id])
+  createdBy       User            @relation("CreatedTasks", fields: [createdById], references: [id])
+  assignee        User?           @relation("AssignedTasks", fields: [assigneeId], references: [id])
 
   comments        Comment[]
-  labels          IssueLabel[]
+  labels          TaskLabel[]
   activities      ActivityLog[]
-  assignees       IssueAssignee[]
+  assignees       TaskAssignee[]
 }
 
-model IssueAssignee {
-  issueId    String
+model TaskAssignee {
+  taskId     String
   userId     String
   assignedAt DateTime @default(now())
 
-  issue      Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  user       User  @relation("IssueAssignees", fields: [userId], references: [id], onDelete: Cascade)
+  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User @relation("TaskAssignees", fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([issueId, userId])
+  @@id([taskId, userId])
 }
 
 model Comment {
   id          String      @id @default(cuid())
-  issueId     String
+  taskId      String
   authorId    String
   content     String
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  issue        Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
@@ -225,17 +225,17 @@ model Label {
   createdAt     DateTime     @default(now())
 
   workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  issues         IssueLabel[]
+  tasks          TaskLabel[]
 }
 
-model IssueLabel {
-  issueId      String
+model TaskLabel {
+  taskId       String
   labelId      String
 
-  issue        Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
   label        Label      @relation(fields: [labelId], references: [id], onDelete: Cascade)
 
-  @@id([issueId, labelId])
+  @@id([taskId, labelId])
 }
 
 model Role {
@@ -280,7 +280,7 @@ model ActivityLog {
   id           String      @id @default(cuid())
   userId       String
   projectId    String?
-  issueId      String?
+  taskId       String?
   action       String
   entityType   String
   entityId     String
@@ -289,7 +289,7 @@ model ActivityLog {
 
   user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   project      Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  issue        Issue?      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  task         Task?       @relation(fields: [taskId], references: [id], onDelete: Cascade)
 }
 
 model Notification {

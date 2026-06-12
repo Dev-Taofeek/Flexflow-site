@@ -49,6 +49,7 @@ export default function RolesSettingsPage() {
           roles={response.roles}
           resources={response.resources}
           initialPermissions={response.permissions}
+          canEdit={response.canEdit}
         />
       )}
     </div>

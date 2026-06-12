@@ -17,6 +17,12 @@ const nextConfig = {
             ],
         },
     },
+    async redirects() {
+        return [
+            { source: "/issues", destination: "/tasks", permanent: true },
+            { source: "/projects/:projectId/issues/:taskId", destination: "/projects/:projectId/tasks/:taskId", permanent: true },
+        ];
+    },
 };
 
 export default nextConfig;

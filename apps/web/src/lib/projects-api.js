@@ -20,14 +20,10 @@ export async function deleteProject(projectId, token) {
     return apiRequest(`/projects/${projectId}`, { token, method: "DELETE" });
 }
 
-export async function createIssue(projectId, data, token) {
-    return apiRequest(`/projects/${projectId}/issues`, { token, method: "POST", body: data });
+export async function createTask(projectId, data, token) {
+    return apiRequest(`/projects/${projectId}/tasks`, { token, method: "POST", body: data });
 }
 
-export async function updateIssueStatus({ projectId, issueId, status, token }) {
-    return apiRequest(`/projects/${projectId}/issues/${issueId}/status`, { token, method: "PATCH", body: { status } });
-}
-
-export async function updateIssue({ projectId, issueId, token, ...data }) {
-    return apiRequest(`/projects/${projectId}/issues/${issueId}`, { token, method: "PATCH", body: data });
+export async function updateTaskStatus({ projectId, taskId, status, token }) {
+    return apiRequest(`/projects/${projectId}/tasks/${taskId}/status`, { token, method: "PATCH", body: { status } });
 }

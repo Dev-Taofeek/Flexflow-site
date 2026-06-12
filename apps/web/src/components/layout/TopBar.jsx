@@ -19,7 +19,7 @@ function isUpgradeError(msg) {
 
 const PAGE_LABELS = {
     "/dashboard": "Dashboard",
-    "/issues":    "Issues",
+    "/tasks":    "Tasks",
     "/projects":  "Projects",
     "/team":      "Team",
     "/analytics": "Analytics",
@@ -479,7 +479,7 @@ export function TopBar({ onMenuClick }) {
 
                     {/* New */}
                     <Link
-                        href="/issues"
+                        href="/tasks"
                         className="flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-700 transition-colors"
                     >
                         <Plus className="h-3.5 w-3.5" />

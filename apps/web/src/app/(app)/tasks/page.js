@@ -38,9 +38,9 @@ function formatDate(d) {
     return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function AssigneeAvatars({ issue }) {
-    const people = (issue.assignees || []).map((a) => a.user).filter(Boolean);
-    if (people.length === 0 && issue.assignee) people.push(issue.assignee);
+function AssigneeAvatars({ task }) {
+    const people = (task.assignees || []).map((a) => a.user).filter(Boolean);
+    if (people.length === 0 && task.assignee) people.push(task.assignee);
     if (people.length === 0) return null;
     return (
         <span className="flex items-center gap-1">
@@ -115,11 +115,11 @@ function MultiAssigneePicker({ members, selected, onChange }) {
     );
 }
 
-export default function IssuesPage() {
+export default function TasksPage() {
     const { currentWorkspace, currentWorkspaceId, currentOrg, accessToken, isReady } = useApp();
-    const { canManageIssues } = useRole();
+    const { canManageTasks } = useRole();
 
-    const [issues, setIssues] = useState([]);
+    const [tasks, setTasks] = useState([]);
     const [projects, setProjects] = useState([]);
     const [members, setMembers] = useState([]);
     const [total, setTotal] = useState(0);
@@ -138,7 +138,7 @@ export default function IssuesPage() {
     const [assigneeIds, setAssigneeIds] = useState([]);
     const [formError, setFormError] = useState("");
 
-    const loadIssues = useCallback(async () => {
+    const loadTasks = useCallback(async () => {
         if (!isReady || !currentWorkspaceId || !accessToken) return;
         setLoading(true);
         setError(null);
@@ -147,8 +147,8 @@ export default function IssuesPage() {
             if (statusFilter) params.status = statusFilter;
             if (priorityFilter) params.priority = priorityFilter;
             if (assigneeFilter) params.assigneeId = assigneeFilter;
-            const data = await apiRequest("/issues", { token: accessToken, params });
-            setIssues(data.issues);
+            const data = await apiRequest("/tasks", { token: accessToken, params });
+            setTasks(data.tasks);
             setTotal(data.total);
         } catch (e) {
             setError(e.message);
@@ -157,7 +157,7 @@ export default function IssuesPage() {
         }
     }, [isReady, currentWorkspaceId, accessToken, statusFilter, priorityFilter, assigneeFilter]);
 
-    useEffect(() => { loadIssues(); }, [loadIssues]);
+    useEffect(() => { loadTasks(); }, [loadTasks]);
 
     useEffect(() => {
         if (!isReady || !currentWorkspaceId || !accessToken) return;
@@ -178,7 +178,7 @@ export default function IssuesPage() {
         setFormError("");
         setCreating(true);
         try {
-            const issue = await apiRequest("/issues", {
+            const task = await apiRequest("/tasks", {
                 method: "POST",
                 token: accessToken,
                 body: {
@@ -187,7 +187,7 @@ export default function IssuesPage() {
                     dueDate: form.dueDate || null,
                 },
             });
-            setIssues((prev) => [issue, ...prev]);
+            setTasks((prev) => [task, ...prev]);
             setTotal((t) => t + 1);
             setForm({ title: "", description: "", projectId: "", priority: "MEDIUM", status: "TODO", dueDate: "" });
             setAssigneeIds([]);
@@ -206,26 +206,26 @@ export default function IssuesPage() {
             {/* Header */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold text-(--text-primary)">Issues</h1>
+                    <h1 className="text-xl font-semibold text-(--text-primary)">Tasks</h1>
                     <p className="mt-0.5 text-sm text-(--text-muted)">
-                        {total} issue{total !== 1 ? "s" : ""} in {currentWorkspace?.name}
+                        {total} task{total !== 1 ? "s" : ""} in {currentWorkspace?.name}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={loadIssues}
+                        onClick={loadTasks}
                         className="flex h-9 items-center gap-1.5 rounded-lg border border-(--border) bg-(--bg-elevated) px-3 text-sm text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
                     >
                         <RefreshCw className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Refresh</span>
                     </button>
-                    {canManageIssues && (
+                    {canManageTasks && (
                         <button
                             onClick={() => setShowCreate((s) => !s)}
                             className="flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
                         >
                             <Plus className="h-4 w-4" />
-                            <span>New Issue</span>
+                            <span>New Task</span>
                         </button>
                     )}
                 </div>
@@ -272,14 +272,14 @@ export default function IssuesPage() {
             </div>
 
             {/* Create form */}
-            {showCreate && canManageIssues && (
+            {showCreate && canManageTasks && (
                 <form onSubmit={handleCreate} className="rounded-xl border border-(--border) bg-(--bg-elevated) p-5 space-y-4">
-                    <h3 className="text-sm font-semibold text-(--text-primary)">New issue</h3>
+                    <h3 className="text-sm font-semibold text-(--text-primary)">New task</h3>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="sm:col-span-2">
                             <input
                                 type="text"
-                                placeholder="Issue title *"
+                                placeholder="Task title *"
                                 value={form.title}
                                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                                 className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
@@ -342,13 +342,13 @@ export default function IssuesPage() {
                             className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
                         >
                             {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                            Create issue
+                            Create task
                         </button>
                     </div>
                 </form>
             )}
 
-            {/* Issue list */}
+            {/* Task list */}
             {loading ? (
                 <div className="space-y-2">
                     {[1, 2, 3, 4, 5].map((i) => (
@@ -360,65 +360,65 @@ export default function IssuesPage() {
                     <AlertCircle className="mx-auto h-6 w-6 text-red-500" />
                     <p className="mt-2 text-sm text-(--text-muted)">{error}</p>
                 </div>
-            ) : issues.length === 0 ? (
+            ) : tasks.length === 0 ? (
                 <div className="rounded-xl border border-(--border) bg-(--bg-elevated) p-12 text-center">
                     <CircleDot className="mx-auto h-8 w-8 text-(--text-muted)" />
-                    <p className="mt-3 text-sm font-medium text-(--text-primary)">No issues found</p>
+                    <p className="mt-3 text-sm font-medium text-(--text-primary)">No tasks found</p>
                     <p className="mt-1 text-xs text-(--text-muted)">
-                        {hasFilters ? "Try clearing your filters" : "Create your first issue to get started"}
+                        {hasFilters ? "Try clearing your filters" : "Create your first task to get started"}
                     </p>
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-xl border border-(--border) bg-(--bg-elevated)">
-                    {issues.map((issue, idx) => (
+                    {tasks.map((task, idx) => (
                         <Link
-                            key={issue.id}
-                            href={`/projects/${issue.project.id}/issues/${issue.id}`}
+                            key={task.id}
+                            href={`/projects/${task.project.id}/tasks/${task.id}`}
                             className={[
                                 "flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-(--bg-overlay)",
                                 idx > 0 ? "border-t border-(--border)" : "",
                             ].join(" ")}
                         >
-                            <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_COLOR[issue.status]}`} />
+                            <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_COLOR[task.status]}`} />
 
                             <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <p className="text-sm font-medium text-(--text-primary) leading-snug">{issue.title}</p>
-                                    <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_COLOR[issue.priority]}`}>
-                                        {issue.priority}
+                                    <p className="text-sm font-medium text-(--text-primary) leading-snug">{task.title}</p>
+                                    <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_COLOR[task.priority]}`}>
+                                        {task.priority}
                                     </span>
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-(--text-muted)">
                                     <span className="flex items-center gap-1">
-                                        <span className={`h-1.5 w-1.5 rounded-full ${STATUS_COLOR[issue.status]}`} />
-                                        {STATUS_LABEL[issue.status]}
+                                        <span className={`h-1.5 w-1.5 rounded-full ${STATUS_COLOR[task.status]}`} />
+                                        {STATUS_LABEL[task.status]}
                                     </span>
                                     <span className="text-(--text-muted)">·</span>
-                                    <span>{issue.project.name}</span>
+                                    <span>{task.project.name}</span>
                                     {(() => {
-                                        const people = (issue.assignees || []).map((a) => a.user).filter(Boolean);
-                                        if (people.length === 0 && issue.assignee) people.push(issue.assignee);
+                                        const people = (task.assignees || []).map((a) => a.user).filter(Boolean);
+                                        if (people.length === 0 && task.assignee) people.push(task.assignee);
                                         if (people.length === 0) return null;
                                         return (
                                             <>
                                                 <span className="text-(--text-muted)">·</span>
-                                                <AssigneeAvatars issue={issue} />
+                                                <AssigneeAvatars task={task} />
                                             </>
                                         );
                                     })()}
-                                    {issue.dueDate && (
+                                    {task.dueDate && (
                                         <>
                                             <span className="text-(--text-muted)">·</span>
                                             <span className="flex items-center gap-1">
                                                 <CalendarDays className="h-3 w-3" />
-                                                {formatDate(issue.dueDate)}
+                                                {formatDate(task.dueDate)}
                                             </span>
                                         </>
                                     )}
-                                    {issue._count?.comments > 0 && (
+                                    {task._count?.comments > 0 && (
                                         <>
                                             <span className="text-(--text-muted)">·</span>
-                                            <span>{issue._count.comments} comment{issue._count.comments !== 1 ? "s" : ""}</span>
+                                            <span>{task._count.comments} comment{task._count.comments !== 1 ? "s" : ""}</span>
                                         </>
                                     )}
                                 </div>

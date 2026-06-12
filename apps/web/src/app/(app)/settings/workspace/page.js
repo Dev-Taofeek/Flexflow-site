@@ -13,7 +13,7 @@ export default function WorkspaceSettingsPage() {
         </h1>
 
         <p className="text-muted-foreground dark:text-muted-foreground-dark mt-3 max-w-2xl text-sm leading-relaxed">
-          Customize workflow columns, issue labels, and workspace integrations.
+          Customize workflow columns, task labels, and workspace integrations.
         </p>
       </section>
 

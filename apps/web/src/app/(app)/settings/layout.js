@@ -28,7 +28,7 @@ export default function SettingsLayout({ children }) {
         { href: "/settings/profile",      label: "Profile",             show: true },
         { href: "/settings/organization", label: "Organization",        show: isAdmin },
         { href: "/settings/workspace",    label: "Workspace",           show: isAdmin },
-        { href: "/settings/roles",        label: "Roles & Permissions", show: isAdmin },
+        { href: "/settings/roles",        label: "Roles & Permissions", show: true },
     ].filter((n) => n.show);
 
     return (

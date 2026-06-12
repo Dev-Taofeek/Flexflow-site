@@ -11,20 +11,20 @@ export function SearchModal({ open, onClose }) {
     const { currentWorkspaceId, accessToken } = useApp();
     const inputRef = useRef(null);
     const [query, setQuery] = useState("");
-    const [results, setResults] = useState({ issues: [], projects: [], members: [] });
+    const [results, setResults] = useState({ tasks: [], projects: [], members: [] });
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         if (open) {
             setQuery("");
-            setResults({ issues: [], projects: [], members: [] });
+            setResults({ tasks: [], projects: [], members: [] });
             setTimeout(() => inputRef.current?.focus(), 50);
         }
     }, [open]);
 
     useEffect(() => {
         if (!query.trim() || query.length < 2) {
-            setResults({ issues: [], projects: [], members: [] });
+            setResults({ tasks: [], projects: [], members: [] });
             return;
         }
         const timer = setTimeout(async () => {
@@ -43,7 +43,7 @@ export function SearchModal({ open, onClose }) {
         onClose();
     }
 
-    const hasResults = results.issues.length + results.projects.length + results.members.length > 0;
+    const hasResults = results.tasks.length + results.projects.length + results.members.length > 0;
 
     if (!open) return null;
 
@@ -61,7 +61,7 @@ export function SearchModal({ open, onClose }) {
                         ref={inputRef}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search issues, projects, people…"
+                        placeholder="Search tasks, projects, people…"
                         className="flex-1 bg-transparent text-sm text-(--text-primary) placeholder-(--text-muted) outline-none"
                     />
                     {query && (
@@ -106,13 +106,13 @@ export function SearchModal({ open, onClose }) {
                         </div>
                     )}
 
-                    {results.issues.length > 0 && (
+                    {results.tasks.length > 0 && (
                         <div className="mb-1">
-                            <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-(--text-muted) uppercase">Issues</p>
-                            {results.issues.map((i) => (
+                            <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-(--text-muted) uppercase">Tasks</p>
+                            {results.tasks.map((i) => (
                                 <button
                                     key={i.id}
-                                    onClick={() => navigate(`/projects/${i.project.id}/issues/${i.id}`)}
+                                    onClick={() => navigate(`/projects/${i.project.id}/tasks/${i.id}`)}
                                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-(--bg-overlay)"
                                 >
                                     <FileText className="h-4 w-4 shrink-0 text-(--text-muted)" />

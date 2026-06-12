@@ -18,7 +18,7 @@ router.get("/", async (req, res) => {
         if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
 
         const [myTasks, recentActivity, projects, upcomingDeadlines] = await Promise.all([
-            prisma.issue.findMany({
+            prisma.task.findMany({
                 where: {
                     OR: [
                         { assigneeId: req.user.id },
@@ -36,17 +36,17 @@ router.get("/", async (req, res) => {
             }),
             prisma.activityLog.findMany({
                 where: { project: { workspaceId } },
-                include: { user: { select: { id: true, name: true, avatarUrl: true } }, project: { select: { name: true } }, issue: { select: { title: true } } },
+                include: { user: { select: { id: true, name: true, avatarUrl: true } }, project: { select: { name: true } }, task: { select: { title: true } } },
                 orderBy: { createdAt: "desc" },
                 take: 5,
             }),
             prisma.project.findMany({
                 where: { workspaceId },
-                include: { issues: { select: { status: true } } },
+                include: { tasks: { select: { status: true } } },
                 orderBy: { updatedAt: "desc" },
                 take: 6,
             }),
-            prisma.issue.findMany({
+            prisma.task.findMany({
                 where: { project: { workspaceId }, dueDate: { gte: new Date() }, status: { not: "DONE" } },
                 include: {
                     project: { select: { name: true, color: true } },
@@ -59,14 +59,14 @@ router.get("/", async (req, res) => {
         ]);
 
         const projectProgress = projects.map((p) => {
-            const total = p.issues.length;
-            const done = p.issues.filter((i) => i.status === "DONE").length;
-            return { id: p.id, name: p.name, color: p.color, completedIssues: done, totalIssues: total, progress: total ? Math.round((done / total) * 100) : 0 };
+            const total = p.tasks.length;
+            const done = p.tasks.filter((i) => i.status === "DONE").length;
+            return { id: p.id, name: p.name, color: p.color, completedTasks: done, totalTasks: total, progress: total ? Math.round((done / total) * 100) : 0 };
         });
 
         return res.status(200).json(successResponse({
             myTasks: myTasks.map((t) => ({ id: t.id, title: t.title, project: t.project.name, projectColor: t.project.color, status: t.status, priority: t.priority, dueDate: t.dueDate, assignees: t.assignees.map((a) => a.user) })),
-            recentActivity: recentActivity.map((a) => ({ id: a.id, actor: a.user.name, actorAvatar: a.user.avatarUrl, action: a.action, target: a.issue?.title || a.project?.name || "", createdAt: a.createdAt })),
+            recentActivity: recentActivity.map((a) => ({ id: a.id, actor: a.user.name, actorAvatar: a.user.avatarUrl, action: a.action, target: a.task?.title || a.project?.name || "", createdAt: a.createdAt })),
             projectProgress,
             upcomingDeadlines: upcomingDeadlines.map((i) => ({ id: i.id, title: i.title, project: i.project.name, projectColor: i.project.color, dueDate: i.dueDate, assignee: i.assignee, assignees: i.assignees.map((a) => a.user) })),
         }));

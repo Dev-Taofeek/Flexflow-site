@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/api-client";
 import dynamic from "next/dynamic";
 
 const RichTextEditor = dynamic(
-    () => import("@/components/issues/RichTextEditor").then((m) => m.RichTextEditor),
+    () => import("@/components/tasks/RichTextEditor").then((m) => m.RichTextEditor),
     {
         loading: () => <div className="h-32 animate-pulse rounded-lg bg-(--border)" />,
         ssr: false,
@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { socket } from "@/lib/socket";
-import { createIssueComment, updateIssue } from "@/lib/issues-api";
+import { createTaskComment, updateTask } from "@/lib/tasks-api";
 import { useRole } from "@/hooks/useRole";
 
 const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
@@ -27,14 +27,14 @@ function getInitials(name) {
     return name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "?";
 }
 
-function AssigneePicker({ issue, people, token, onUpdated, disabled = false }) {
+function AssigneePicker({ task, people, token, onUpdated, disabled = false }) {
     const [open, setOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const ref = useRef(null);
 
     // Current assignee IDs from the junction table
     const currentIds = new Set(
-        (issue.assignees || []).map((a) => a.userId || a.user?.id).filter(Boolean)
+        (task.assignees || []).map((a) => a.userId || a.user?.id).filter(Boolean)
     );
 
     useEffect(() => {
@@ -50,7 +50,7 @@ function AssigneePicker({ issue, people, token, onUpdated, disabled = false }) {
         if (next.has(userId)) next.delete(userId); else next.add(userId);
         setSaving(true);
         try {
-            const updated = await apiRequest(`/issues/${issue.id}/assignees`, {
+            const updated = await apiRequest(`/tasks/${task.id}/assignees`, {
                 method: "PATCH",
                 token,
                 body: { assigneeIds: [...next] },
@@ -63,7 +63,7 @@ function AssigneePicker({ issue, people, token, onUpdated, disabled = false }) {
         }
     }
 
-    const assigned = (issue.assignees || []).map((a) => a.user || { id: a.userId, name: "Unknown" });
+    const assigned = (task.assignees || []).map((a) => a.user || { id: a.userId, name: "Unknown" });
 
     return (
         <div ref={ref} className="relative">
@@ -123,21 +123,21 @@ function AssigneePicker({ issue, people, token, onUpdated, disabled = false }) {
     );
 }
 
-export function IssueDetailView({
+export function TaskDetailView({
     project,
-    issue: initialIssue,
+    task: initialTask,
     comments: initialComments,
     activityLog: initialActivityLog,
     people = [],
     availableLabels = [],
     token,
 }) {
-    const { canManageIssues } = useRole();
-    const [issue, setIssue] = useState(initialIssue);
+    const { canManageTasks } = useRole();
+    const [task, setTask] = useState(initialTask);
     const [comments, setComments] = useState(initialComments ?? []);
     const [activityLog, setActivityLog] = useState(initialActivityLog ?? []);
-    const [title, setTitle] = useState(initialIssue?.title ?? "");
-    const [description, setDescription] = useState(initialIssue?.description ?? "");
+    const [title, setTitle] = useState(initialTask?.title ?? "");
+    const [description, setDescription] = useState(initialTask?.description ?? "");
     const [newComment, setNewComment] = useState("");
     const [saving, setSaving] = useState(false);
 
@@ -146,39 +146,39 @@ export function IssueDetailView({
         if (!project?.id) return;
         socket.emit("project:join", project.id);
 
-        function onIssueUpdated(payload) {
-            if (payload.issue?.id !== issue?.id) return;
-            setIssue(payload.issue);
+        function onTaskUpdated(payload) {
+            if (payload.task?.id !== task?.id) return;
+            setTask(payload.task);
             if (payload.activity) setActivityLog((prev) => [payload.activity, ...prev]);
         }
         function onCommentCreated(payload) {
-            if (payload.issueId !== issue?.id) return;
+            if (payload.taskId !== task?.id) return;
             setComments((prev) => [...prev, payload.comment]);
             if (payload.activity) setActivityLog((prev) => [payload.activity, ...prev]);
         }
 
-        socket.on("issue:updated", onIssueUpdated);
-        socket.on("issue:comment-created", onCommentCreated);
+        socket.on("task:updated", onTaskUpdated);
+        socket.on("task:comment-created", onCommentCreated);
 
         return () => {
             socket.emit("project:leave", project.id);
-            socket.off("issue:updated", onIssueUpdated);
-            socket.off("issue:comment-created", onCommentCreated);
+            socket.off("task:updated", onTaskUpdated);
+            socket.off("task:comment-created", onCommentCreated);
         };
-    }, [project?.id, issue?.id]);
+    }, [project?.id, task?.id]);
 
-    async function saveIssue(payload) {
+    async function saveTask(payload) {
         setSaving(true);
         try {
-            const updated = await updateIssue({
+            const updated = await updateTask({
                 projectId: project.id,
-                issueId: issue.id,
+                taskId: task.id,
                 payload,
                 token,
             });
-            setIssue(updated);
+            setTask(updated);
         } catch (err) {
-            console.error("Failed to update issue:", err);
+            console.error("Failed to update task:", err);
         } finally {
             setSaving(false);
         }
@@ -188,9 +188,9 @@ export function IssueDetailView({
         e.preventDefault();
         if (!newComment.trim()) return;
         try {
-            await createIssueComment({
+            await createTaskComment({
                 projectId: project.id,
-                issueId: issue.id,
+                taskId: task.id,
                 content: newComment.trim(),
                 token,
             });
@@ -201,9 +201,9 @@ export function IssueDetailView({
     }
 
     // Label helpers — API returns [{ label: { id, name, color } }]
-    const activeLabels = issue?.labels?.map((l) => l.label?.name ?? l) ?? [];
+    const activeLabels = task?.labels?.map((l) => l.label?.name ?? l) ?? [];
 
-    if (!issue) return null;
+    if (!task) return null;
 
     return (
         <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
@@ -216,32 +216,32 @@ export function IssueDetailView({
                             {project?.name}
                         </span>
                         <span className="rounded-full border border-(--border) bg-(--bg-sunken) px-2.5 py-1 text-xs font-medium text-(--text-secondary)">
-                            {issue.status}
+                            {task.status}
                         </span>
                         <span className="rounded-full border border-(--border) bg-(--bg-sunken) px-2.5 py-1 text-xs font-medium text-(--text-secondary)">
-                            {issue.priority}
+                            {task.priority}
                         </span>
                     </div>
 
                     <input
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        onBlur={() => title !== issue.title && saveIssue({ title })}
-                        readOnly={!canManageIssues}
+                        onBlur={() => title !== task.title && saveTask({ title })}
+                        readOnly={!canManageTasks}
                         className="w-full bg-transparent text-2xl font-semibold tracking-tight text-(--text-primary) outline-none placeholder-(--text-muted) border-none"
-                        placeholder="Issue title"
+                        placeholder="Task title"
                     />
 
                     <div className="mt-6">
                         <div className="mb-3 flex items-center justify-between">
                             <h2 className="text-sm font-semibold text-(--text-primary)">Description</h2>
-                            {canManageIssues && (
-                                <Button size="sm" disabled={saving} onClick={() => saveIssue({ description })}>
+                            {canManageTasks && (
+                                <Button size="sm" disabled={saving} onClick={() => saveTask({ description })}>
                                     Save
                                 </Button>
                             )}
                         </div>
-                        <RichTextEditor value={description} onChange={setDescription} readOnly={!canManageIssues} />
+                        <RichTextEditor value={description} onChange={setDescription} readOnly={!canManageTasks} />
                     </div>
                 </section>
 
@@ -299,7 +299,7 @@ export function IssueDetailView({
             {/* Sidebar */}
             <aside className="space-y-5">
                 <section className="rounded-xl border border-(--border) bg-(--bg-elevated) p-5">
-                    <h2 className="text-sm font-semibold text-(--text-primary) mb-5">Issue details</h2>
+                    <h2 className="text-sm font-semibold text-(--text-primary) mb-5">Task details</h2>
 
                     <div className="space-y-4">
                         {/* Status */}
@@ -308,9 +308,9 @@ export function IssueDetailView({
                                 <Clock3 className="h-3 w-3" /> Status
                             </label>
                             <select
-                                value={issue.status}
-                                onChange={(e) => { setIssue((p) => ({ ...p, status: e.target.value })); saveIssue({ status: e.target.value }); }}
-                                disabled={!canManageIssues}
+                                value={task.status}
+                                onChange={(e) => { setTask((p) => ({ ...p, status: e.target.value })); saveTask({ status: e.target.value }); }}
+                                disabled={!canManageTasks}
                                 className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             >
                                 {STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
@@ -323,9 +323,9 @@ export function IssueDetailView({
                                 <Tag className="h-3 w-3" /> Priority
                             </label>
                             <select
-                                value={issue.priority}
-                                onChange={(e) => { setIssue((p) => ({ ...p, priority: e.target.value })); saveIssue({ priority: e.target.value }); }}
-                                disabled={!canManageIssues}
+                                value={task.priority}
+                                onChange={(e) => { setTask((p) => ({ ...p, priority: e.target.value })); saveTask({ priority: e.target.value }); }}
+                                disabled={!canManageTasks}
                                 className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             >
                                 {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -334,11 +334,11 @@ export function IssueDetailView({
 
                         {/* Assignees — multi-select */}
                         <AssigneePicker
-                            issue={issue}
+                            task={task}
                             people={people}
                             token={token}
-                            onUpdated={(updated) => setIssue(updated)}
-                            disabled={!canManageIssues}
+                            onUpdated={(updated) => setTask(updated)}
+                            disabled={!canManageTasks}
                         />
 
                         {/* Due date */}
@@ -348,9 +348,9 @@ export function IssueDetailView({
                             </label>
                             <input
                                 type="date"
-                                value={issue.dueDate ? new Date(issue.dueDate).toISOString().split("T")[0] : ""}
-                                onChange={(e) => { setIssue((p) => ({ ...p, dueDate: e.target.value })); saveIssue({ dueDate: e.target.value || null }); }}
-                                disabled={!canManageIssues}
+                                value={task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : ""}
+                                onChange={(e) => { setTask((p) => ({ ...p, dueDate: e.target.value })); saveTask({ dueDate: e.target.value || null }); }}
+                                disabled={!canManageTasks}
                                 className="h-9 w-full rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             />
                         </div>
@@ -369,7 +369,7 @@ export function IssueDetailView({
                                             <button
                                                 key={name}
                                                 type="button"
-                                                disabled={!canManageIssues}
+                                                disabled={!canManageTasks}
                                                 className={["rounded-full px-2.5 py-1 text-xs font-medium border transition-colors disabled:cursor-not-allowed",
                                                     active ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-(--border) bg-(--bg) text-(--text-secondary) hover:border-indigo-300"
                                                 ].join(" ")}

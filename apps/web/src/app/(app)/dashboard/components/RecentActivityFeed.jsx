@@ -9,7 +9,7 @@ export function RecentActivityFeed({ activities }) {
         </h2>
 
         <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-          Team updates and issue events happening now
+          Team updates and task events happening now
         </p>
       </div>
 

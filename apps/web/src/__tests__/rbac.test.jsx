@@ -9,13 +9,13 @@ jest.mock("@/lib/roles-api", () => ({
 
 const ROLES = ["Admin", "Member", "Viewer"];
 const RESOURCES = [
-    { id: "issues",   label: "Issues",   actions: ["create", "read", "update", "delete"] },
+    { id: "tasks",   label: "Tasks",   actions: ["create", "read", "update", "delete"] },
     { id: "projects", label: "Projects", actions: ["create", "read", "update", "delete"] },
 ];
 const INITIAL_PERMISSIONS = {
-    Admin:  { issues: ["create", "read", "update", "delete"], projects: ["create", "read", "update", "delete"] },
-    Member: { issues: ["read"],                                projects: ["read"] },
-    Viewer: { issues: ["read"],                               projects: ["read"] },
+    Admin:  { tasks: ["create", "read", "update", "delete"], projects: ["create", "read", "update", "delete"] },
+    Member: { tasks: ["read"],                                projects: ["read"] },
+    Viewer: { tasks: ["read"],                               projects: ["read"] },
 };
 
 describe("PermissionMatrix", () => {
@@ -91,19 +91,19 @@ describe("RBAC role hierarchy — pure logic", () => {
         return permissions[role]?.[resource]?.includes(action) ?? false;
     }
 
-    it("Admin can delete issues", () => {
-        expect(canPerform("Admin", INITIAL_PERMISSIONS, "issues", "delete")).toBe(true);
+    it("Admin can delete tasks", () => {
+        expect(canPerform("Admin", INITIAL_PERMISSIONS, "tasks", "delete")).toBe(true);
     });
 
-    it("Member cannot delete issues", () => {
-        expect(canPerform("Member", INITIAL_PERMISSIONS, "issues", "delete")).toBe(false);
+    it("Member cannot delete tasks", () => {
+        expect(canPerform("Member", INITIAL_PERMISSIONS, "tasks", "delete")).toBe(false);
     });
 
-    it("Viewer cannot create issues", () => {
-        expect(canPerform("Viewer", INITIAL_PERMISSIONS, "issues", "create")).toBe(false);
+    it("Viewer cannot create tasks", () => {
+        expect(canPerform("Viewer", INITIAL_PERMISSIONS, "tasks", "create")).toBe(false);
     });
 
-    it("Member cannot update issues", () => {
-        expect(canPerform("Member", INITIAL_PERMISSIONS, "issues", "update")).toBe(false);
+    it("Member cannot update tasks", () => {
+        expect(canPerform("Member", INITIAL_PERMISSIONS, "tasks", "update")).toBe(false);
     });
 });

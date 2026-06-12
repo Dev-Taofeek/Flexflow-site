@@ -334,7 +334,7 @@ export function WorkspaceSettingsClient() {
             </h2>
 
             <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-              Create and manage issue labels for filtering work.
+              Create and manage task labels for filtering work.
             </p>
           </div>
         </div>
@@ -444,7 +444,7 @@ export function WorkspaceSettingsClient() {
                 </div>
 
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                  Send issue updates to a Slack channel.
+                  Send task updates to a Slack channel.
                 </p>
               </div>
             </div>
@@ -484,7 +484,7 @@ export function WorkspaceSettingsClient() {
                 </div>
 
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                  Link commits and pull requests to issues.
+                  Link commits and pull requests to tasks.
                 </p>
               </div>
             </div>

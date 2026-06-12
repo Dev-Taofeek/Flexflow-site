@@ -420,7 +420,7 @@ export default function OrganizationSettingsPage() {
           <h2 className="text-sm font-semibold text-red-700">Danger zone</h2>
         </div>
         <p className="mb-4 text-sm text-red-600">
-          Deleting this organization permanently removes all projects, issues, and members. This
+          Deleting this organization permanently removes all projects, tasks, and members. This
           cannot be undone.
         </p>
         <div className="flex items-center gap-3">

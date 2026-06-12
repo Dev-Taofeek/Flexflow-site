@@ -17,7 +17,7 @@ export function useRole() {
         isViewer:      role === "VIEWER",
         canWrite:      rank >= 2,   // create/edit comments
         canManageProjects: rank >= 3, // create/edit/delete projects (OWNER/ADMIN only)
-        canManageIssues:   rank >= 3, // create/edit/delete issues (OWNER/ADMIN only)
+        canManageTasks:   rank >= 3, // create/edit/delete tasks (OWNER/ADMIN only)
         canManage:     rank >= 3,   // invite members, manage workspace settings
         canAdminister: rank >= 4,   // 2FA, integrations, delete org
         canCreateWorkspace: currentOrg?.role === "OWNER", // only the org owner can create workspaces

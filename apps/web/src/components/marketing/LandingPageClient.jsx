@@ -31,13 +31,13 @@ const features = [
   {
     title: "Project workflows",
     description:
-      "Plan work with projects, issues, labels, comments, subtasks, and deadline tracking.",
+      "Plan work with projects, tasks, labels, comments, subtasks, and deadline tracking.",
     icon: Workflow,
   },
   {
     title: "Live collaboration",
     description:
-      "Keep teams in sync with real-time issue updates, comments, activity logs, and presence-ready architecture.",
+      "Keep teams in sync with real-time task updates, comments, activity logs, and presence-ready architecture.",
     icon: Users,
   },
   {
@@ -68,7 +68,7 @@ const steps = [
   {
     title: "Plan and prioritize",
     description:
-      "Create projects, define issues, add labels, assign owners, and organize deadlines.",
+      "Create projects, define tasks, add labels, assign owners, and organize deadlines.",
   },
   {
     title: "Ship with confidence",
@@ -132,7 +132,7 @@ const faqs = [
   {
     question: "Is FlexFlow built for engineering teams?",
     answer:
-      "Yes. FlexFlow is designed around projects, issues, roles, comments, activity logs, analytics, and team workflows.",
+      "Yes. FlexFlow is designed around projects, tasks, roles, comments, activity logs, analytics, and team workflows.",
   },
   {
     question: "Does it support role-based permissions?",
@@ -142,7 +142,7 @@ const faqs = [
   {
     question: "Can teams collaborate in real time?",
     answer:
-      "Yes. Issue updates use Socket.io-powered live sync, so board changes and issue updates can be reflected across clients.",
+      "Yes. Task updates use Socket.io-powered live sync, so board changes and task updates can be reflected across clients.",
   },
   {
     question: "Is this responsive?",
@@ -212,7 +212,7 @@ export function LandingPageClient() {
             </h1>
 
             <p className="text-muted-foreground dark:text-muted-foreground-dark mx-auto mt-6 max-w-2xl text-base leading-8 md:text-lg">
-              FlexFlow brings projects, issues, permissions, comments, workflows, analytics, and
+              FlexFlow brings projects, tasks, permissions, comments, workflows, analytics, and
               team management into a clean dashboard inspired by Linear, Vercel, and Notion.
             </p>
 
@@ -247,7 +247,7 @@ export function LandingPageClient() {
                 <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark hidden rounded-2xl border p-4 lg:block">
                   <div className="bg-muted dark:bg-muted-dark h-8 w-28 rounded-lg" />
                   <div className="mt-8 space-y-3">
-                    {["Dashboard", "Projects", "Issues", "Team", "Analytics"].map((item, index) => (
+                    {["Dashboard", "Projects", "Tasks", "Team", "Analytics"].map((item, index) => (
                       <div
                         key={item}
                         className={[

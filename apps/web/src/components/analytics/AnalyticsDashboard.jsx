@@ -54,11 +54,11 @@ export function AnalyticsDashboard({ analytics }) {
           <Badge variant="secondary">Velocity</Badge>
 
           <p className="text-foreground dark:text-foreground-dark mt-4 text-3xl font-semibold">
-            {summary.issuesClosed}
+            {summary.tasksClosed}
           </p>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-            Issues closed
+            Tasks closed
           </p>
         </div>
 
@@ -100,7 +100,7 @@ export function AnalyticsDashboard({ analytics }) {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <ChartCard title="Velocity chart" description="Issues created vs issues closed per week.">
+        <ChartCard title="Velocity chart" description="Tasks created vs tasks closed per week.">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={velocity}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,120,120,0.15)" />
@@ -210,13 +210,13 @@ export function AnalyticsDashboard({ analytics }) {
 
         <ChartCard
           title="Cycle time distribution"
-          description="How long issues take to move from open to done."
+          description="How long tasks take to move from open to done."
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={cycleTime}
-                dataKey="issues"
+                dataKey="tasks"
                 nameKey="range"
                 innerRadius={70}
                 outerRadius={110}

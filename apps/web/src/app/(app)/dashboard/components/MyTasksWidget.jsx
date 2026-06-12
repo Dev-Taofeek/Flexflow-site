@@ -17,7 +17,7 @@ export function MyTasksWidget({ tasks }) {
           </h2>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-            Assigned issues across your projects
+            Assigned tasks across your projects
           </p>
         </div>
 

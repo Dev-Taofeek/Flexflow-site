@@ -32,7 +32,7 @@ async function renderReady() {
     return result;
 }
 
-describe("Issue / Project creation form", () => {
+describe("Task / Project creation form", () => {
     beforeEach(() => {
         createProject.mockReset();
         fetchProjects.mockReset();

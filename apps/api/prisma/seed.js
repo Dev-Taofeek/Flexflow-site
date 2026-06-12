@@ -95,10 +95,10 @@ async function main() {
             create: { workspaceId: workspace.id, createdById: user.id, ...pd },
         });
 
-        // Create issues for each project
-        const issueStatuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
+        // Create tasks for each project
+        const taskStatuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
         const priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"];
-        const issueTitles = [
+        const taskTitles = [
             "Set up authentication middleware",
             "Design system tokens",
             "Implement rate limiting",
@@ -106,18 +106,18 @@ async function main() {
             "Write integration tests",
         ];
 
-        for (let i = 0; i < issueTitles.length; i++) {
+        for (let i = 0; i < taskTitles.length; i++) {
             const dueDate = new Date();
             dueDate.setDate(dueDate.getDate() + (i + 1) * 3);
 
-            await prisma.issue.create({
+            await prisma.task.create({
                 data: {
                     projectId: project.id,
                     createdById: user.id,
                     assigneeId: user.id,
-                    title: issueTitles[i],
-                    description: `<p>Task: ${issueTitles[i]} for ${project.name}.</p>`,
-                    status: issueStatuses[i % issueStatuses.length],
+                    title: taskTitles[i],
+                    description: `<p>Task: ${taskTitles[i]} for ${project.name}.</p>`,
+                    status: taskStatuses[i % taskStatuses.length],
                     priority: priorities[i % priorities.length],
                     dueDate,
                 },
@@ -135,7 +135,7 @@ async function main() {
             },
         });
 
-        console.log(`✅ Project: ${project.name} (5 issues)`);
+        console.log(`✅ Project: ${project.name} (5 tasks)`);
     }
 
     console.log("\n🎉 Seed complete!");

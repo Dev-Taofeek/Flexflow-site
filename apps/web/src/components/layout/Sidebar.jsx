@@ -31,7 +31,7 @@ import Image from "next/image";
 
 const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: Home },
-  { label: "My Issues", href: "/issues", icon: ListTodo },
+  { label: "My Tasks", href: "/tasks", icon: ListTodo },
   { label: "Projects", href: "/projects", icon: FolderKanban },
   { label: "Team", href: "/team", icon: Users },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },

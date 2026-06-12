@@ -13,7 +13,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { CalendarDays, GripVertical, Loader2, Plus, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
-import { updateIssueStatus } from "@/lib/projects-api";
+import { updateTaskStatus } from "@/lib/projects-api";
 import { apiRequest } from "@/lib/api-client";
 import { socket } from "@/lib/socket";
 import { useRole } from "@/hooks/useRole";
@@ -32,9 +32,9 @@ const PRIORITY_STYLE = {
     URGENT: "text-red-600 bg-red-50",
 };
 
-function groupByStatus(issues) {
+function groupByStatus(tasks) {
     return COLUMNS.reduce((acc, col) => {
-        acc[col.id] = issues.filter((i) => i.status === col.id);
+        acc[col.id] = tasks.filter((i) => i.status === col.id);
         return acc;
     }, {});
 }
@@ -57,12 +57,12 @@ function QuickCreate({ projectId, status, members, token, onCreated, onCancel })
         if (!title.trim()) { setErr("Title required"); return; }
         setLoading(true);
         try {
-            const issue = await apiRequest("/issues", {
+            const task = await apiRequest("/tasks", {
                 method: "POST",
                 token,
                 body: { projectId, title: title.trim(), status, priority, assigneeId: assigneeId || null },
             });
-            onCreated(issue);
+            onCreated(task);
         } catch (ex) {
             setErr(ex.message);
         } finally {
@@ -76,7 +76,7 @@ function QuickCreate({ projectId, status, members, token, onCreated, onCancel })
                 autoFocus
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Issue title…"
+                placeholder="Task title…"
                 className="w-full rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
             />
             <div className="grid grid-cols-2 gap-2">
@@ -118,18 +118,18 @@ function QuickCreate({ projectId, status, members, token, onCreated, onCancel })
     );
 }
 
-// ── Issue card ─────────────────────────────────────────────────────────────
-function IssueCard({ issue, isDragging = false, projectId, canManageIssues = true }) {
+// ── Task card ─────────────────────────────────────────────────────────────
+function TaskCard({ task, isDragging = false, projectId, canManageTasks = true }) {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
-        id: issue.id,
-        data: { type: "issue", issue },
-        disabled: !canManageIssues,
+        id: task.id,
+        data: { type: "task", task },
+        disabled: !canManageTasks,
     });
 
     const style = { transform: CSS.Transform.toString(transform), transition };
 
-    const dueDate = formatDate(issue.dueDate);
-    const isOverdue = issue.dueDate && new Date(issue.dueDate) < new Date() && issue.status !== "DONE";
+    const dueDate = formatDate(task.dueDate);
+    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "DONE";
 
     return (
         <article
@@ -143,17 +143,17 @@ function IssueCard({ issue, isDragging = false, projectId, canManageIssues = tru
             {/* Top row: title + drag handle */}
             <div className="flex items-start gap-2">
                 <Link
-                    href={`/projects/${projectId}/issues/${issue.id}`}
+                    href={`/projects/${projectId}/tasks/${task.id}`}
                     className="flex-1 min-w-0"
                 >
                     <p className="text-sm font-medium text-(--text-primary) leading-snug line-clamp-2 hover:text-indigo-600 transition-colors">
-                        {issue.title}
+                        {task.title}
                     </p>
                 </Link>
-                {canManageIssues && (
+                {canManageTasks && (
                     <button
                         type="button"
-                        aria-label={`Drag ${issue.title}`}
+                        aria-label={`Drag ${task.title}`}
                         className="mt-0.5 shrink-0 cursor-grab rounded-md p-0.5 text-(--text-muted) opacity-0 group-hover:opacity-100 hover:bg-(--bg-overlay) active:cursor-grabbing transition-opacity"
                         {...attributes}
                         {...listeners}
@@ -165,13 +165,13 @@ function IssueCard({ issue, isDragging = false, projectId, canManageIssues = tru
 
             {/* Bottom row: priority + assignee + due date */}
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${PRIORITY_STYLE[issue.priority]}`}>
-                    {issue.priority}
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${PRIORITY_STYLE[task.priority]}`}>
+                    {task.priority}
                 </span>
 
                 {(() => {
-                    const people = (issue.assignees || []).map((a) => a.user).filter(Boolean);
-                    if (people.length === 0 && issue.assignee) people.push(issue.assignee);
+                    const people = (task.assignees || []).map((a) => a.user).filter(Boolean);
+                    if (people.length === 0 && task.assignee) people.push(task.assignee);
                     if (people.length === 0) return null;
                     return (
                         <div className="flex items-center -space-x-1">
@@ -205,9 +205,9 @@ function IssueCard({ issue, isDragging = false, projectId, canManageIssues = tru
 }
 
 // ── Column ─────────────────────────────────────────────────────────────────
-function KanbanColumn({ column, issues, children, projectId, members, token, onCreated }) {
+function KanbanColumn({ column, tasks, children, projectId, members, token, onCreated }) {
     const { setNodeRef, isOver } = useDroppable({ id: column.id });
-    const { canManageIssues } = useRole();
+    const { canManageTasks } = useRole();
     const [creating, setCreating] = useState(false);
 
     return (
@@ -224,12 +224,12 @@ function KanbanColumn({ column, issues, children, projectId, members, token, onC
                     <span className={`h-2 w-2 rounded-full ${column.color}`} />
                     <h2 className="text-sm font-semibold text-(--text-primary)">{column.title}</h2>
                     <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-(--bg-overlay) px-1 text-[11px] font-medium text-(--text-muted)">
-                        {issues.length}
+                        {tasks.length}
                     </span>
                 </div>
-                {canManageIssues && (
+                {canManageTasks && (
                     <button
-                        aria-label={`Add issue to ${column.title}`}
+                        aria-label={`Add task to ${column.title}`}
                         onClick={() => setCreating(true)}
                         className="flex h-6 w-6 items-center justify-center rounded-md text-(--text-muted) hover:bg-(--bg-overlay) hover:text-indigo-600 transition-colors"
                     >
@@ -248,17 +248,17 @@ function KanbanColumn({ column, issues, children, projectId, members, token, onC
                         status={column.id}
                         members={members}
                         token={token}
-                        onCreated={(issue) => { onCreated(issue, column.id); setCreating(false); }}
+                        onCreated={(task) => { onCreated(task, column.id); setCreating(false); }}
                         onCancel={() => setCreating(false)}
                     />
                 )}
 
-                {issues.length === 0 && !creating && canManageIssues && (
+                {tasks.length === 0 && !creating && canManageTasks && (
                     <button
                         onClick={() => setCreating(true)}
                         className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-(--border) py-6 text-xs text-(--text-muted) transition-colors hover:border-indigo-300 hover:text-indigo-500"
                     >
-                        <Plus className="h-3.5 w-3.5" /> Add issue
+                        <Plus className="h-3.5 w-3.5" /> Add task
                     </button>
                 )}
             </div>
@@ -267,71 +267,71 @@ function KanbanColumn({ column, issues, children, projectId, members, token, onC
 }
 
 // ── Board ─────────────────────────────────────────────────────────────────
-export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
-    const { canManageIssues } = useRole();
-    const [issuesByStatus, setIssuesByStatus] = useState(() => groupByStatus(initialIssues));
-    const [activeIssue, setActiveIssue] = useState(null);
+export function KanbanBoard({ projectId, initialTasks, token, members = [] }) {
+    const { canManageTasks } = useRole();
+    const [tasksByStatus, setTasksByStatus] = useState(() => groupByStatus(initialTasks));
+    const [activeTask, setActiveTask] = useState(null);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
     );
 
-    const issueLookup = useMemo(() => (
-        Object.values(issuesByStatus).flat().reduce((acc, i) => { acc[i.id] = i; return acc; }, {})
-    ), [issuesByStatus]);
+    const taskLookup = useMemo(() => (
+        Object.values(tasksByStatus).flat().reduce((acc, i) => { acc[i.id] = i; return acc; }, {})
+    ), [tasksByStatus]);
 
     useEffect(() => {
         socket.emit("project:join", projectId);
         function onStatusUpdated(payload) {
             if (payload.projectId !== projectId) return;
-            setIssuesByStatus((cur) => {
+            setTasksByStatus((cur) => {
                 const next = Object.fromEntries(
-                    Object.entries(cur).map(([s, issues]) => [s, issues.filter((i) => i.id !== payload.issue.id)])
+                    Object.entries(cur).map(([s, tasks]) => [s, tasks.filter((i) => i.id !== payload.task.id)])
                 );
-                next[payload.issue.status] = [payload.issue, ...(next[payload.issue.status] || [])];
+                next[payload.task.status] = [payload.task, ...(next[payload.task.status] || [])];
                 return next;
             });
         }
-        socket.on("issue:status-updated", onStatusUpdated);
+        socket.on("task:status-updated", onStatusUpdated);
         return () => {
             socket.emit("project:leave", projectId);
-            socket.off("issue:status-updated", onStatusUpdated);
+            socket.off("task:status-updated", onStatusUpdated);
         };
     }, [projectId]);
 
     function findColumn(id) {
-        if (issuesByStatus[id]) return id;
-        return Object.keys(issuesByStatus).find((s) => issuesByStatus[s].some((i) => i.id === id));
+        if (tasksByStatus[id]) return id;
+        return Object.keys(tasksByStatus).find((s) => tasksByStatus[s].some((i) => i.id === id));
     }
 
     function handleDragStart({ active }) {
-        if (!canManageIssues) return;
-        setActiveIssue(issueLookup[active.id] || null);
+        if (!canManageTasks) return;
+        setActiveTask(taskLookup[active.id] || null);
     }
 
     function handleDragOver({ active, over }) {
-        if (!canManageIssues) return;
+        if (!canManageTasks) return;
         if (!over) return;
         const fromCol = findColumn(active.id);
         const toCol = findColumn(over.id);
         if (!fromCol || !toCol || fromCol === toCol) return;
-        setIssuesByStatus((cur) => ({
+        setTasksByStatus((cur) => ({
             ...cur,
             [fromCol]: cur[fromCol].filter((i) => i.id !== active.id),
-            [toCol]: [{ ...issueLookup[active.id], status: toCol }, ...cur[toCol]],
+            [toCol]: [{ ...taskLookup[active.id], status: toCol }, ...cur[toCol]],
         }));
     }
 
     async function handleDragEnd({ active, over }) {
-        setActiveIssue(null);
-        if (!canManageIssues) return;
+        setActiveTask(null);
+        if (!canManageTasks) return;
         if (!over) return;
         const fromCol = findColumn(active.id);
         const toCol = findColumn(over.id);
         if (!fromCol || !toCol) return;
 
         if (fromCol === toCol) {
-            setIssuesByStatus((cur) => {
+            setTasksByStatus((cur) => {
                 const items = cur[fromCol];
                 const oi = items.findIndex((i) => i.id === active.id);
                 const ni = items.findIndex((i) => i.id === over.id);
@@ -342,16 +342,16 @@ export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
         }
 
         try {
-            await updateIssueStatus({ projectId, issueId: active.id, status: toCol, token });
+            await updateTaskStatus({ projectId, taskId: active.id, status: toCol, token });
         } catch {
-            setIssuesByStatus(groupByStatus(initialIssues));
+            setTasksByStatus(groupByStatus(initialTasks));
         }
     }
 
-    function handleCreated(issue, colId) {
-        setIssuesByStatus((cur) => ({
+    function handleCreated(task, colId) {
+        setTasksByStatus((cur) => ({
             ...cur,
-            [colId]: [issue, ...(cur[colId] || [])],
+            [colId]: [task, ...(cur[colId] || [])],
         }));
     }
 
@@ -366,20 +366,20 @@ export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
             {/* Horizontal scroll on mobile, 4-col grid on xl */}
             <div className="flex gap-4 overflow-x-auto pb-4 md:grid md:grid-cols-2 xl:grid-cols-4">
                 {COLUMNS.map((col) => {
-                    const colIssues = issuesByStatus[col.id] || [];
+                    const colTasks = tasksByStatus[col.id] || [];
                     return (
                         <KanbanColumn
                             key={col.id}
                             column={col}
-                            issues={colIssues}
+                            tasks={colTasks}
                             projectId={projectId}
                             members={members}
                             token={token}
                             onCreated={handleCreated}
                         >
-                            <SortableContext items={colIssues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-                                {colIssues.map((issue) => (
-                                    <IssueCard key={issue.id} issue={issue} projectId={projectId} canManageIssues={canManageIssues} />
+                            <SortableContext items={colTasks.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                                {colTasks.map((task) => (
+                                    <TaskCard key={task.id} task={task} projectId={projectId} canManageTasks={canManageTasks} />
                                 ))}
                             </SortableContext>
                         </KanbanColumn>
@@ -388,7 +388,7 @@ export function KanbanBoard({ projectId, initialIssues, token, members = [] }) {
             </div>
 
             <DragOverlay>
-                {activeIssue ? <IssueCard issue={activeIssue} projectId={projectId} isDragging canManageIssues={canManageIssues} /> : null}
+                {activeTask ? <TaskCard task={activeTask} projectId={projectId} isDragging canManageTasks={canManageTasks} /> : null}
             </DragOverlay>
         </DndContext>
     );

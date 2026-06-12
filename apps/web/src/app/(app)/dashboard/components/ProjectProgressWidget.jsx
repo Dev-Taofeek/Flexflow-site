@@ -21,7 +21,7 @@ export function ProjectProgressWidget({ projects }) {
                 </h3>
 
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                  {project.completedIssues}/{project.totalIssues} issues completed
+                  {project.completedTasks}/{project.totalTasks} tasks completed
                 </p>
               </div>
 

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/contexts/ToastContext";
 import { updatePermission } from "@/lib/roles-api";
 
-export function PermissionMatrix({ workspaceId, token, roles, resources, initialPermissions }) {
+export function PermissionMatrix({ workspaceId, token, roles, resources, initialPermissions, canEdit = true }) {
   const { addToast } = useToast();
   const [permissions, setPermissions] = useState(initialPermissions);
   const [savingKey, setSavingKey] = useState("");
@@ -15,6 +15,11 @@ export function PermissionMatrix({ workspaceId, token, roles, resources, initial
   async function handleToggle({ role, resource, action }) {
     if (role === "Owner") {
       addToast("Owner permissions are locked.", "info");
+      return;
+    }
+
+    if (!canEdit) {
+      addToast("You don't have permission to edit roles & permissions.", "info");
       return;
     }
 
@@ -78,6 +83,12 @@ export function PermissionMatrix({ workspaceId, token, roles, resources, initial
         <Badge variant="secondary">{roles.length} roles</Badge>
       </div>
 
+      {!canEdit && (
+        <p className="text-muted-foreground dark:text-muted-foreground-dark mt-4 text-sm">
+          You have read-only access to this page. Ask an Owner to grant you permission to edit roles & permissions.
+        </p>
+      )}
+
       <div className="border-border dark:border-border-dark mt-8 overflow-x-auto rounded-2xl border">
         <table className="w-full min-w-245 border-collapse">
           <thead className="bg-muted dark:bg-muted-dark">
@@ -119,7 +130,7 @@ export function PermissionMatrix({ workspaceId, token, roles, resources, initial
                     const isEnabled = permissions[role]?.[resource.id]?.includes(action);
                     const key = `${role}-${resource.id}-${action}`;
                     const isSaving = savingKey === key;
-                    const isLocked = role === "Owner";
+                    const isLocked = role === "Owner" || !canEdit;
 
                     return (
                       <td key={key} className="px-4 py-4">

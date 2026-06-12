@@ -82,8 +82,8 @@ function ActivityFeed({ projectId, token }) {
                         <p className="text-sm text-(--text-primary)">
                             <span className="font-medium">{a.user?.name}</span>
                             {" "}<span className="text-(--text-muted)">{a.action}</span>
-                            {a.issue?.title && (
-                                <> <span className="text-(--text-secondary) font-medium">"{a.issue.title}"</span></>
+                            {a.task?.title && (
+                                <> <span className="text-(--text-secondary) font-medium">"{a.task.title}"</span></>
                             )}
                         </p>
                     </div>
@@ -113,7 +113,7 @@ export default function ProjectDetailPage() {
     const { projectId } = useParams();
     const { accessToken, isReady, currentOrg } = useApp();
     const [project, setProject] = useState(null);
-    const [issues, setIssues] = useState([]);
+    const [tasks, setTasks] = useState([]);
     const [members, setMembers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -122,7 +122,7 @@ export default function ProjectDetailPage() {
         if (!isReady || !accessToken || !projectId) return;
         setLoading(true);
         fetchProject(projectId, accessToken)
-            .then((data) => { setProject(data.project); setIssues(data.issues); })
+            .then((data) => { setProject(data.project); setTasks(data.tasks); })
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     }, [projectId, accessToken, isReady]);
@@ -151,8 +151,8 @@ export default function ProjectDetailPage() {
         );
     }
 
-    const total = issues.length;
-    const done = issues.filter((i) => i.status === "DONE").length;
+    const total = tasks.length;
+    const done = tasks.filter((i) => i.status === "DONE").length;
     const progress = total ? Math.round((done / total) * 100) : 0;
 
     return (
@@ -174,13 +174,13 @@ export default function ProjectDetailPage() {
                         <p className="text-xl font-semibold text-(--text-primary)">{progress}%</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-xs text-(--text-muted)">Issues</p>
+                        <p className="text-xs text-(--text-muted)">Tasks</p>
                         <p className="text-xl font-semibold text-(--text-primary)">{total}</p>
                     </div>
                 </div>
             </div>
 
-            <KanbanBoard projectId={project.id} initialIssues={issues} token={accessToken} members={members} />
+            <KanbanBoard projectId={project.id} initialTasks={tasks} token={accessToken} members={members} />
 
             {/* Activity feed */}
             <section className="rounded-xl border border-(--border) bg-(--bg-elevated) p-5">

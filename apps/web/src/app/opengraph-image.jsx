@@ -84,7 +84,7 @@ export default function OpenGraphImage() {
               color: "#d4d4d8",
             }}
           >
-            Projects, issues, RBAC, analytics, and real-time collaboration in one polished
+            Projects, tasks, RBAC, analytics, and real-time collaboration in one polished
             workspace.
           </p>
         </div>

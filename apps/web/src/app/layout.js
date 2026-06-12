@@ -13,7 +13,7 @@ export const metadata = {
         default: "FlexFlow — Project Management",
         template: "%s | FlexFlow",
     },
-    description: "Manage projects, track issues, and collaborate with your team.",
+    description: "Manage projects, track tasks, and collaborate with your team.",
     metadataBase: new URL("https://flexflow.app"),
     manifest: "/manifest.webmanifest",
     icons: {

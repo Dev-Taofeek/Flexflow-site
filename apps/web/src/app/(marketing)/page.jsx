@@ -6,7 +6,7 @@ export const metadata = {
   metadataBase: new URL(siteUrl),
   title: "FlexFlow — RBAC and Team Collaboration for Modern SaaS Teams",
   description:
-    "FlexFlow is a polished SaaS platform for project management, RBAC, team collaboration, Kanban workflows, issue tracking, and analytics.",
+    "FlexFlow is a polished SaaS platform for project management, RBAC, team collaboration, Kanban workflows, task tracking, and analytics.",
   alternates: {
     canonical: "/",
   },
@@ -31,7 +31,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "FlexFlow — RBAC and Team Collaboration",
     description:
-      "A production-grade SaaS platform for teams that need projects, issues, RBAC, analytics, and real-time collaboration.",
+      "A production-grade SaaS platform for teams that need projects, tasks, RBAC, analytics, and real-time collaboration.",
     images: ["/opengraph-image"],
   },
 };
@@ -44,7 +44,7 @@ export default function MarketingHomePage() {
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
     description:
-      "FlexFlow is a role-based access control and team collaboration platform for project management, issue tracking, Kanban workflows, and analytics.",
+      "FlexFlow is a role-based access control and team collaboration platform for project management, task tracking, Kanban workflows, and analytics.",
     offers: {
       "@type": "Offer",
       price: "0",
@@ -53,7 +53,7 @@ export default function MarketingHomePage() {
     featureList: [
       "Role-based access control",
       "Project management",
-      "Issue tracking",
+      "Task tracking",
       "Kanban board",
       "Team collaboration",
       "Analytics dashboard",

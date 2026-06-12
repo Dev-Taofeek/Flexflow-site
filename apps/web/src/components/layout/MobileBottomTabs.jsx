@@ -7,7 +7,7 @@ import { BarChart3, FolderKanban, Home, ListTodo, Settings, Users } from "lucide
 const tabs = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "Projects", href: "/projects", icon: FolderKanban },
-  { label: "Issues", href: "/issues", icon: ListTodo },
+  { label: "Tasks", href: "/tasks", icon: ListTodo },
   { label: "Team", href: "/team", icon: Users },
   { label: "Settings", href: "/settings/profile", icon: Settings },
 ];

@@ -4,12 +4,12 @@ import { notifyUser } from "./notification.service.js";
 
 const USER_SELECT = { id: true, name: true, email: true };
 
-function issueUrl(projectId, issueId) {
+function taskUrl(projectId, taskId) {
     const origin = process.env.CLIENT_ORIGIN || "";
-    return `${origin}/projects/${projectId}/issues/${issueId}`;
+    return `${origin}/projects/${projectId}/tasks/${taskId}`;
 }
 
-async function sendIssueEmail(user, { subject, title, message, actionText, actionUrl }) {
+async function sendTaskEmail(user, { subject, title, message, actionText, actionUrl }) {
     if (!isEmailConfigured() || !user?.email) return;
 
     await sendTransactionalEmail({
@@ -19,26 +19,26 @@ async function sendIssueEmail(user, { subject, title, message, actionText, actio
         message,
         actionText,
         actionUrl,
-        footer: "You're receiving this because this issue relates to you in FlexFlow.",
+        footer: "You're receiving this because this task relates to you in FlexFlow.",
     }).catch((error) => {
-        console.error("Issue email failed:", error.message);
+        console.error("Task email failed:", error.message);
     });
 }
 
-export async function notifyIssueUsers(userIds, issue, { actorId, title, message, type = "INFO", subject, actionText = "Open issue" }) {
+export async function notifyTaskUsers(userIds, task, { actorId, title, message, type = "INFO", subject, actionText = "Open task" }) {
     const ids = [...new Set((userIds || []).filter(Boolean).filter((id) => id !== actorId))];
-    if (ids.length === 0 || !issue?.id || !issue?.projectId) return;
+    if (ids.length === 0 || !task?.id || !task?.projectId) return;
 
     const users = await prisma.user.findMany({
         where: { id: { in: ids } },
         select: USER_SELECT,
     });
-    const actionUrl = issueUrl(issue.projectId, issue.id);
+    const actionUrl = taskUrl(task.projectId, task.id);
 
     await Promise.all(users.map((user) =>
         Promise.all([
             notifyUser(user.id, { title, message, type, url: actionUrl }),
-            sendIssueEmail(user, {
+            sendTaskEmail(user, {
                 subject: subject || title,
                 title,
                 message,
@@ -49,9 +49,9 @@ export async function notifyIssueUsers(userIds, issue, { actorId, title, message
     ));
 }
 
-export async function notifyIssueParticipants(issueId, { actorId, title, message, type = "INFO", subject, actionText = "Open issue", extraUserIds = [], excludeUserIds = [] }) {
-    const issue = await prisma.issue.findUnique({
-        where: { id: issueId },
+export async function notifyTaskParticipants(taskId, { actorId, title, message, type = "INFO", subject, actionText = "Open task", extraUserIds = [], excludeUserIds = [] }) {
+    const task = await prisma.task.findUnique({
+        where: { id: taskId },
         select: {
             id: true,
             projectId: true,
@@ -62,18 +62,18 @@ export async function notifyIssueParticipants(issueId, { actorId, title, message
             comments: { select: { authorId: true } },
         },
     });
-    if (!issue) return;
+    if (!task) return;
 
     const excluded = new Set(excludeUserIds);
     const participantIds = [
-        issue.createdById,
-        issue.assigneeId,
-        ...issue.assignees.map((assignee) => assignee.userId),
-        ...issue.comments.map((comment) => comment.authorId),
+        task.createdById,
+        task.assigneeId,
+        ...task.assignees.map((assignee) => assignee.userId),
+        ...task.comments.map((comment) => comment.authorId),
         ...extraUserIds,
     ].filter((id) => !excluded.has(id));
 
-    await notifyIssueUsers(participantIds, issue, {
+    await notifyTaskUsers(participantIds, task, {
         actorId,
         title,
         message,
