@@ -5,7 +5,8 @@
         "buildCommand": "corepack enable pnpm && cd apps/api && pnpm install --no-frozen-lockfile && pnpm prisma generate"
     },
     "deploy": {
-        "startCommand": "cd apps/api && pnpm prisma db push && node src/server.js",
+        "preDeployCommand": "cd apps/api && pnpm prisma db push --accept-data-loss",
+        "startCommand": "cd apps/api && node src/server.js",
         "restartPolicyType": "ON_FAILURE",
         "restartPolicyMaxRetries": 3,
         "healthcheckPath": "/"
