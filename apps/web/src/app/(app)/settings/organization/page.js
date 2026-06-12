@@ -411,33 +411,35 @@ export default function OrganizationSettingsPage() {
         </section>
       )}
 
-      {/* Danger zone */}
-      <section className="rounded-xl border border-red-200 bg-red-50 p-5">
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100 text-red-600">
-            <AlertTriangle className="h-4 w-4" />
+      {/* Danger zone — Owner only */}
+      {currentOrg?.role === "OWNER" && (
+        <section className="rounded-xl border border-red-200 bg-red-50 p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100 text-red-600">
+              <AlertTriangle className="h-4 w-4" />
+            </div>
+            <h2 className="text-sm font-semibold text-red-700">Danger zone</h2>
           </div>
-          <h2 className="text-sm font-semibold text-red-700">Danger zone</h2>
-        </div>
-        <p className="mb-4 text-sm text-red-600">
-          Deleting this organization permanently removes all projects, tasks, and members. This
-          cannot be undone.
-        </p>
-        <div className="flex items-center gap-3">
-          <Input
-            value={deleteConfirm}
-            onChange={(e) => setDeleteConfirm(e.target.value)}
-            placeholder="Type DELETE to confirm"
-            className="max-w-xs"
-          />
-          <button
-            disabled={deleteConfirm !== "DELETE"}
-            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-40"
-          >
-            <Trash2 className="h-4 w-4" /> Delete organization
-          </button>
-        </div>
-      </section>
+          <p className="mb-4 text-sm text-red-600">
+            Deleting this organization permanently removes all projects, tasks, and members. This
+            cannot be undone.
+          </p>
+          <div className="flex items-center gap-3">
+            <Input
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder="Type DELETE to confirm"
+              className="max-w-xs"
+            />
+            <button
+              disabled={deleteConfirm !== "DELETE"}
+              className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-40"
+            >
+              <Trash2 className="h-4 w-4" /> Delete organization
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

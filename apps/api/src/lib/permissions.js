@@ -83,14 +83,18 @@ export async function ensureRoles(workspaceId) {
             });
         }
 
-        const existing = await prisma.permission.count({ where: { roleId: role.id } });
-        if (existing === 0) {
-            const data = Object.entries(seed.permissions).flatMap(([resource, actions]) =>
-                actions.map((action) => ({ roleId: role.id, resource, action })),
-            );
-            if (data.length > 0) {
-                await prisma.permission.createMany({ data, skipDuplicates: true });
-            }
+        const existingPermissions = await prisma.permission.findMany({ where: { roleId: role.id } });
+        const seededResources = new Set(existingPermissions.map((p) => p.resource));
+
+        // Only seed defaults for resources this role has never seen before,
+        // so newly-added resources (e.g. "roles") get backfilled without
+        // re-creating permissions an Owner deliberately removed via the matrix.
+        const data = Object.entries(seed.permissions)
+            .filter(([resource]) => !seededResources.has(resource))
+            .flatMap(([resource, actions]) => actions.map((action) => ({ roleId: role.id, resource, action })));
+
+        if (data.length > 0) {
+            await prisma.permission.createMany({ data, skipDuplicates: true });
         }
     }
 }
