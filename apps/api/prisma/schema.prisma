@@ -207,13 +207,13 @@ model TaskAssignee {
 
 model Comment {
   id          String      @id @default(cuid())
-  taskId      String?     // temporarily optional — will lock down after backfill
+  taskId      String      // back to required
   authorId    String
   content     String
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  task         Task?      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
