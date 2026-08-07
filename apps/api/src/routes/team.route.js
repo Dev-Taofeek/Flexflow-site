@@ -138,12 +138,14 @@ router.post("/invite", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) 
             try {
                 await sendTransactionalEmail({
                     to: email,
-                    subject: `Join ${workspace.organization.name} on FlexFlow`,
-                    title: "You've been invited",
-                    message: `${req.user.name} invited you to join ${workspace.organization.name} on FlexFlow as ${role}.`,
-                    actionText: "Accept invitation",
-                    actionUrl: inviteUrl,
-                    footer: "This invitation expires in 7 days.",
+                    subject: `${req.user.name} invited you to join ${workspace.organization.name} on FlexFlow`,
+                    extraParams: {
+                        to_name: email,
+                        inviter_name: req.user.name,
+                        org_name: workspace.organization.name,
+                        role,
+                        invite_link: inviteUrl,
+                    },
                 });
                 emailSent = true;
             } catch (emailErr) {

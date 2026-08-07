@@ -35,6 +35,7 @@ export function getEmailConfigStatus() {
     };
 }
 
+
 export async function sendTransactionalEmail({
     to,
     subject,
@@ -43,6 +44,7 @@ export async function sendTransactionalEmail({
     actionText,
     actionUrl,
     footer,
+    extraParams = {},
 }) {
     const config = getEmailConfig();
 
@@ -67,6 +69,7 @@ export async function sendTransactionalEmail({
                 action_text: actionText,
                 action_url: actionUrl,
                 footer,
+                ...extraParams,
             },
         }),
     });
