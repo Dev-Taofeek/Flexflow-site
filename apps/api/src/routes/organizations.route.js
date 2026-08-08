@@ -148,7 +148,13 @@ router.get("/:orgId", async (req, res) => {
             where: { id: req.params.orgId },
             include: {
                 workspaces: {
-                    include: { _count: { select: { members: true, projects: true } } },
+                    // Only include the user's own membership row per workspace so we can
+                    // filter to workspaces they actually belong to below — someone being
+                    // an org member does not mean they can see every workspace in it.
+                    include: {
+                        members: { where: { userId: req.user.id }, select: { role: true } },
+                        _count: { select: { members: true, projects: true } },
+                    },
                     orderBy: { createdAt: "asc" },
                 },
                 members: {
@@ -156,14 +162,33 @@ router.get("/:orgId", async (req, res) => {
                     orderBy: { createdAt: "asc" },
                 },
                 invites: {
-                    where: { accepted: false, expiresAt: { gt: new Date() } },
+                    // Only org-level invites belong on the Organization settings page —
+                    // workspace-scoped invites (created from the Team page) are excluded.
+                    where: { accepted: false, expiresAt: { gt: new Date() }, workspaceId: null },
                     orderBy: { createdAt: "desc" },
                 },
                 _count: { select: { members: true, workspaces: true } },
             },
         });
 
-        return res.status(200).json(successResponse({ ...org, role: membership.role }));
+        // Org OWNER/ADMIN can see every workspace in the org for management purposes,
+        // even ones they haven't personally joined. Everyone else only sees workspaces
+        // they're actually a member of.
+        const canSeeAllWorkspaces = membership.role === "OWNER" || membership.role === "ADMIN";
+        const visibleWorkspaces = org.workspaces
+            .filter((workspace) => canSeeAllWorkspaces || workspace.members.length > 0)
+            .map((workspace) => ({
+                ...workspace,
+                role: workspace.members[0]?.role ?? null,
+                members: undefined,
+            }));
+
+        return res.status(200).json(successResponse({
+            ...org,
+            workspaces: visibleWorkspaces,
+            _count: { ...org._count, workspaces: visibleWorkspaces.length },
+            role: membership.role,
+        }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch organization"));
@@ -224,7 +249,8 @@ router.get("/:orgId/members", async (req, res) => {
         });
 
         const invites = await prisma.invite.findMany({
-            where: { organizationId: req.params.orgId, accepted: false, expiresAt: { gt: new Date() } },
+            // Only org-level invites — exclude workspace-scoped invites from the Team page.
+            where: { organizationId: req.params.orgId, accepted: false, expiresAt: { gt: new Date() }, workspaceId: null },
             include: { invitedBy: { select: { id: true, name: true } } },
             orderBy: { createdAt: "desc" },
         });
@@ -346,9 +372,12 @@ router.post("/:orgId/invite", requireOrgRole("OWNER", "ADMIN"), async (req, res)
         }
 
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        // Scope this lookup to org-level invites only (workspaceId: null) so it never
+        // reuses/overwrites a workspace-scoped invite (from the Team page) for the same email.
         let invite = await prisma.invite.findFirst({
             where: {
                 organizationId: req.params.orgId,
+                workspaceId: null,
                 email: normalizedEmail,
                 accepted: false,
                 expiresAt: { gt: new Date() },
@@ -443,6 +472,32 @@ router.post("/join", async (req, res) => {
                 return res.status(400).json(errorResponse("INVALID_INVITE", "Invite is invalid or expired"));
             }
 
+            // Workspace-scoped invite (created from the Team page) — add ONLY to the
+            // workspace, never to the organization.
+            if (invite.workspaceId) {
+                const alreadyInWs = await prisma.workspaceMember.findUnique({
+                    where: { workspaceId_userId: { workspaceId: invite.workspaceId, userId: req.user.id } },
+                });
+                if (alreadyInWs) return res.status(409).json(errorResponse("ALREADY_MEMBER", "Already a member"));
+
+                const [, workspace] = await prisma.$transaction([
+                    prisma.invite.update({ where: { id: invite.id }, data: { accepted: true } }),
+                    prisma.workspace.update({
+                        where: { id: invite.workspaceId },
+                        data: {
+                            members: { create: { userId: req.user.id, role: invite.role } },
+                        },
+                        include: { organization: { select: { id: true, name: true, slug: true } } },
+                    }),
+                ]);
+
+                await prisma.user.update({ where: { id: req.user.id }, data: { onboarded: true } });
+
+                return res.status(200).json(successResponse({ ...workspace, role: invite.role }));
+            }
+
+            // Org-level invite (created from Organization settings) — original behavior:
+            // add to the organization, then to the org's first workspace as MEMBER.
             const already = await prisma.organizationMember.findUnique({
                 where: { organizationId_userId: { organizationId: invite.organizationId, userId: req.user.id } },
             });

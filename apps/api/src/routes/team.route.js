@@ -48,8 +48,9 @@ router.get("/", async (req, res) => {
                 include: { user: { select: { id: true, name: true, email: true, avatarUrl: true, status: true, createdAt: true } } },
                 orderBy: { createdAt: "asc" },
             }),
+            // Only invites created FOR THIS WORKSPACE from the Team page — not org-wide invites.
             prisma.invite.findMany({
-                where: { organizationId: workspace.organizationId, accepted: false, expiresAt: { gt: new Date() } },
+                where: { workspaceId, accepted: false, expiresAt: { gt: new Date() } },
                 include: { invitedBy: { select: { id: true, name: true } } },
                 orderBy: { createdAt: "desc" },
             }),
@@ -107,9 +108,14 @@ router.post("/invite", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) 
         }
 
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        // Scope the "already pending" lookup to this workspace specifically —
+        // otherwise a pending org-level invite (from Organization settings) for the
+        // same email would get silently reused/updated here and turned into a
+        // workspace-only invite (or vice versa).
         let invite = await prisma.invite.findFirst({
             where: {
                 organizationId: workspace.organizationId,
+                workspaceId,
                 email: normalizedEmail,
                 accepted: false,
                 expiresAt: { gt: new Date() },
@@ -121,11 +127,18 @@ router.post("/invite", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) 
         if (invite) {
             invite = await prisma.invite.update({
                 where: { id: invite.id },
-                data: { role, expiresAt, invitedById: req.user.id },
+                data: { role, expiresAt, invitedById: req.user.id, workspaceId },
             });
         } else {
             invite = await prisma.invite.create({
-                data: { organizationId: workspace.organizationId, invitedById: req.user.id, email: normalizedEmail, role, expiresAt },
+                data: {
+                    organizationId: workspace.organizationId,
+                    workspaceId,
+                    invitedById: req.user.id,
+                    email: normalizedEmail,
+                    role,
+                    expiresAt,
+                },
             });
         }
 
@@ -181,9 +194,8 @@ router.delete("/invites/:inviteId", requireWorkspaceRole("OWNER", "ADMIN"), asyn
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId is required"));
 
-        const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
         const invite = await prisma.invite.findUnique({ where: { id: req.params.inviteId } });
-        if (!workspace || !invite || invite.organizationId !== workspace.organizationId || invite.accepted) {
+        if (!invite || invite.workspaceId !== workspaceId || invite.accepted) {
             return res.status(404).json(errorResponse("NOT_FOUND", "Invitation not found"));
         }
 
