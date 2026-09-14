@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 
 import { apiUrl } from "@/lib/api-url";
@@ -40,27 +40,38 @@ export function AppProvider({ children }) {
 
     useEffect(() => {
         if (!accessToken) return;
-        fetchOrgs(accessToken);
+        let cancelled = false;
+        (async () => { await fetchOrgs(accessToken); })();
+        return () => { cancelled = true; };
     }, [accessToken, fetchOrgs]);
 
-    // Hydrate currentOrg/Workspace from localStorage once orgs are loaded
+    // Hydrate currentOrg/Workspace from localStorage the FIRST time orgs load for
+    // a session. Runs once per login (guarded by hydratedUserRef) so later
+    // refreshes (e.g. after creating an org) never clobber an explicit selection.
+    const hydratedUserRef = useRef(null);
     useEffect(() => {
         if (!session?.user?.id || organizations.length === 0) return;
+        if (hydratedUserRef.current === session.user.id) return;
 
-        const savedOrgId = localStorage.getItem(`flexflow:org:${session.user.id}`);
-        const savedWsId  = localStorage.getItem(`flexflow:ws:${session.user.id}`);
+        let cancelled = false;
+        (async () => {
+            const savedOrgId = localStorage.getItem(`flexflow:org:${session.user.id}`);
+            const savedWsId  = localStorage.getItem(`flexflow:ws:${session.user.id}`);
 
-        const orgExists  = organizations.find((o) => o.id === savedOrgId);
-        const targetOrg  = orgExists || organizations[0];
+            const orgExists  = organizations.find((o) => o.id === savedOrgId);
+            const targetOrg  = orgExists || organizations[0];
 
-        if (targetOrg) {
-            setCurrentOrgId(targetOrg.id);
-            const wsExists = targetOrg.workspaces?.find((w) => w.id === savedWsId);
-            const targetWs = wsExists || targetOrg.workspaces?.[0];
-            if (targetWs) setCurrentWorkspaceId(targetWs.id);
-        }
+            if (targetOrg) {
+                setCurrentOrgId(targetOrg.id);
+                const wsExists = targetOrg.workspaces?.find((w) => w.id === savedWsId);
+                const targetWs = wsExists || targetOrg.workspaces?.[0];
+                if (targetWs) setCurrentWorkspaceId(targetWs.id);
+            }
 
-        setIsReady(true);
+            hydratedUserRef.current = session.user.id;
+            setIsReady(true);
+        })();
+        return () => { cancelled = true; };
     }, [session?.user?.id, organizations]);
 
     const currentOrg = organizations.find((o) => o.id === currentOrgId) || organizations[0] || null;
@@ -80,16 +91,29 @@ export function AppProvider({ children }) {
             localStorage.setItem(`flexflow:org:${session.user.id}`, orgId);
             if (wsId) localStorage.setItem(`flexflow:ws:${session.user.id}`, wsId);
         }
-    }, [organizations, session?.user?.id]);
+    }, [organizations, session]);
+
+    // Select any org/workspace without validating against state — used right
+    // after a refresh (e.g. a freshly created organization) when `organizations`
+    // may not have re-rendered yet. Persists the same way switchOrg does.
+    const selectOrganization = useCallback((orgId, workspaceId) => {
+        setCurrentOrgId(orgId);
+        const wsId = workspaceId || null;
+        setCurrentWorkspaceId(wsId);
+        if (session?.user?.id) {
+            localStorage.setItem(`flexflow:org:${session.user.id}`, orgId);
+            if (wsId) localStorage.setItem(`flexflow:ws:${session.user.id}`, wsId);
+        }
+    }, [session]);
 
     const switchWorkspace = useCallback((workspaceId) => {
         setCurrentWorkspaceId(workspaceId);
         if (session?.user?.id) {
             localStorage.setItem(`flexflow:ws:${session.user.id}`, workspaceId);
         }
-    }, [session?.user?.id]);
+    }, [session]);
 
-    const refreshOrganizations = useCallback(async () => {
+const refreshOrganizations = useCallback(async () => {
         if (!accessToken) return;
         try {
             const res = await fetch(apiUrl("/auth/me"), {
@@ -116,6 +140,7 @@ export function AppProvider({ children }) {
             isReady,
             switchOrg,
             switchWorkspace,
+            selectOrganization,
             refreshOrganizations,
         }}>
             {children}

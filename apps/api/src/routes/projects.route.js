@@ -1,14 +1,18 @@
 import { Router } from "express";
-
 import { prisma } from "../lib/prisma.js";
+
 import { authenticate } from "../middleware/auth.middleware.js";
+import { trackApiUsage } from "../middleware/usage.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
+import { checkPermission } from "../lib/permissions.js";
+import { enforceMinLimit } from "../lib/entitlements.js";
 import { notifyTaskParticipants, notifyTaskUsers } from "../services/task-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
 router.use(authenticate);
+router.use(trackApiUsage);
 
 const USER_SELECT = { id: true, name: true, email: true, avatarUrl: true };
 
@@ -17,6 +21,30 @@ async function assertWorkspaceAccess(workspaceId, userId) {
         where: { workspaceId_userId: { workspaceId, userId } },
     });
     return member;
+}
+
+// Work states an assignee may move a task through; DONE is reserved for
+// the assigner (task creator) and users with the tasks:update permission.
+const WORK_STATES = ["TODO", "IN_PROGRESS", "IN_REVIEW"];
+
+// Resolves who may set a task's status:
+// - "admin"    → has tasks:update permission (OWNER/ADMIN or a custom role granting it)
+// - "creator"  → the task creator (the assigner who reviews)
+// - "assignee" → an assigned user, limited to the work states
+// - "none"     → no access
+async function resolveTaskStatusAccess(userId, task) {
+    const member = await assertWorkspaceAccess(task.project.workspaceId, userId);
+    if (!member) return "none";
+
+    const { allowed } = await checkPermission(task.project.workspaceId, userId, "tasks", "update");
+    if (allowed) return "admin";
+
+    if (userId === task.createdById) return "creator";
+
+    const isAssignee =
+        userId === task.assigneeId ||
+        (task.assignees || []).some((a) => a.userId === userId);
+    return isAssignee ? "assignee" : "none";
 }
 
 router.get("/", async (req, res) => {
@@ -62,6 +90,19 @@ router.post("/", authorize("projects", "create"), async (req, res) => {
         if (!workspaceId || !name?.trim()) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId and name are required"));
         }
+
+        // ── Plan-based project-limit enforcement (project counts across the org) ──
+        const workspace = await prisma.workspace.findUnique({
+            where: { id: workspaceId },
+            select: { organizationId: true },
+        });
+        if (!workspace) return res.status(404).json(errorResponse("NOT_FOUND", "Workspace not found"));
+
+        const projectCount = await prisma.project.count({
+            where: { workspace: { organizationId: workspace.organizationId } },
+        });
+        const entitlements = await enforceMinLimit(req, res, workspace.organizationId, "projects", projectCount + 1);
+        if (!entitlements) return;
 
         const project = await prisma.project.create({
             data: {
@@ -203,6 +244,7 @@ router.get("/:projectId/tasks/:taskId", async (req, res) => {
             where: { id: req.params.taskId, projectId: req.params.projectId },
             include: {
                 assignee: { select: USER_SELECT },
+                assignees: { include: { user: { select: USER_SELECT } } },
                 createdBy: { select: USER_SELECT },
                 labels: { include: { label: true } },
                 comments: {
@@ -298,7 +340,7 @@ router.post("/:projectId/tasks", authorize("tasks", "create"), async (req, res) 
     }
 });
 
-router.patch("/:projectId/tasks/:taskId/status", authorize("tasks", "update"), async (req, res) => {
+router.patch("/:projectId/tasks/:taskId/status", async (req, res) => {
     try {
         const { status } = req.body;
         const validStatuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
@@ -306,10 +348,34 @@ router.patch("/:projectId/tasks/:taskId/status", authorize("tasks", "update"), a
             return res.status(422).json(errorResponse("INVALID_STATUS", "Invalid status"));
         }
 
-        const task = await prisma.task.findFirst({ where: { id: req.params.taskId, projectId: req.params.projectId }, include: { project: true } });
+        const task = await prisma.task.findFirst({
+            where: { id: req.params.taskId, projectId: req.params.projectId },
+            include: {
+                project: { select: { workspaceId: true } },
+                assignees: { select: { userId: true } },
+                createdBy: { select: USER_SELECT },
+            },
+        });
         if (!task) return res.status(404).json(errorResponse("NOT_FOUND", "Task not found"));
 
-        const updated = await prisma.task.update({ where: { id: task.id }, data: { status }, include: { assignee: { select: USER_SELECT }, labels: { include: { label: true } } } });
+        const access = await resolveTaskStatusAccess(req.user.id, task);
+        const allowedStatuses = access === "assignee" ? WORK_STATES : validStatuses;
+        if (access === "none" || !allowedStatuses.includes(status)) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You do not have permission to set this task's status"));
+        }
+
+        const previousStatus = task.status;
+
+        const updated = await prisma.task.update({
+            where: { id: task.id },
+            data: { status },
+            include: {
+                assignee: { select: USER_SELECT },
+                assignees: { include: { user: { select: USER_SELECT } } },
+                createdBy: { select: USER_SELECT },
+                labels: { include: { label: true } },
+            },
+        });
 
         const activity = await prisma.activityLog.create({
             data: { userId: req.user.id, projectId: task.projectId, taskId: task.id, action: `changed status to ${status}`, entityType: "task", entityId: task.id },
@@ -321,14 +387,54 @@ router.patch("/:projectId/tasks/:taskId/status", authorize("tasks", "update"), a
             message: `${updated.title} moved to ${status.replaceAll("_", " ")}.`,
             type: "SYSTEM",
         });
-        await notifyTaskParticipants(task.id, {
-            actorId: req.user.id,
-            title: "Task status updated",
-            message: `${req.user.name} moved ${updated.title} to ${status.replaceAll("_", " ")}.`,
-            type: "SYSTEM",
-            subject: `Task updated: ${updated.title}`,
-            actionText: "View update",
-        });
+
+        if (status === "IN_REVIEW" && previousStatus !== "IN_REVIEW") {
+            // Assignee submitted for review → alert the assigner (task creator)
+            await notifyTaskUsers([task.createdById], updated, {
+                actorId: req.user.id,
+                title: "Review requested",
+                message: `${req.user.name} submitted "${updated.title}" for your review.`,
+                type: "TASK_ASSIGNED",
+                subject: `Review requested: ${updated.title}`,
+                actionText: "Review task",
+            });
+            await notifyTaskParticipants(task.id, {
+                actorId: req.user.id,
+                title: "Task submitted for review",
+                message: `${req.user.name} submitted ${updated.title} for review.`,
+                type: "SYSTEM",
+                subject: `Task submitted: ${updated.title}`,
+                actionText: "View task",
+                excludeUserIds: [task.createdById],
+            });
+        } else if (previousStatus === "IN_REVIEW" && status === "DONE") {
+            await notifyTaskParticipants(task.id, {
+                actorId: req.user.id,
+                title: "Task approved",
+                message: `${req.user.name} approved ${updated.title}.`,
+                type: "SYSTEM",
+                subject: `Task approved: ${updated.title}`,
+                actionText: "View task",
+            });
+        } else if (previousStatus === "IN_REVIEW" && status !== "DONE") {
+            await notifyTaskParticipants(task.id, {
+                actorId: req.user.id,
+                title: "Changes requested",
+                message: `${req.user.name} requested changes on ${updated.title} (moved to ${status.replaceAll("_", " ")}).`,
+                type: "SYSTEM",
+                subject: `Changes requested: ${updated.title}`,
+                actionText: "View task",
+            });
+        } else {
+            await notifyTaskParticipants(task.id, {
+                actorId: req.user.id,
+                title: "Task status updated",
+                message: `${req.user.name} moved ${updated.title} to ${status.replaceAll("_", " ")}.`,
+                type: "SYSTEM",
+                subject: `Task updated: ${updated.title}`,
+                actionText: "View update",
+            });
+        }
 
         req.app.get("io")?.emit("task:status-updated", { projectId: req.params.projectId, task: updated, activity });
         return res.status(200).json(successResponse(updated));

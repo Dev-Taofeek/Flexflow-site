@@ -43,7 +43,7 @@ export function ToastProvider({ children }) {
                     ].join(" ")}>
                         {t.type === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" /> :
                          t.type === "error" ? <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" /> :
-                         <Info className="h-4 w-4 shrink-0 mt-0.5 text-indigo-500" />}
+                         <Info className="h-4 w-4 shrink-0 mt-0.5 text-brand-500" />}
                         <span className="flex-1 leading-snug">{t.message}</span>
                         <button onClick={() => dismiss(t.id)} className="shrink-0 text-(--text-muted) hover:text-(--text-primary)">
                             <X className="h-3.5 w-3.5" />

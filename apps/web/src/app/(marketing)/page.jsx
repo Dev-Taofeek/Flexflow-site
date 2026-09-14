@@ -1,4 +1,6 @@
-import { LandingPageWrapper } from "@/components/marketing/LandingPageWrapper";
+import { LandingPageClient } from "@/components/marketing/LandingPageClient";
+import { MarketingFooter } from "@/components/marketing/MarketingFooter";
+import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
@@ -66,7 +68,9 @@ export default function MarketingHomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <LandingPageWrapper />
+      <MarketingHeader />
+          <LandingPageClient />
+      <MarketingFooter />
     </>
   );
 }

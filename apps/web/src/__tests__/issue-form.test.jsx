@@ -16,6 +16,10 @@ jest.mock("@/contexts/AppContext", () => ({
     }),
 }));
 
+jest.mock("@/hooks/useRole", () => ({
+    useRole: () => ({ canManageProjects: true }),
+}));
+
 jest.mock("next/navigation", () => ({
     useRouter: () => ({ push: jest.fn() }),
     useParams: () => ({}),

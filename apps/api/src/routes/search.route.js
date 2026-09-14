@@ -23,6 +23,17 @@ router.get("/", async (req, res) => {
         });
         const orgIds = memberships.map((m) => m.organizationId);
 
+        // Workspace-scoped search must only reach workspaces the user belongs to
+        if (workspaceId) {
+            const member = await prisma.workspaceMember.findUnique({
+                where: { workspaceId_userId: { workspaceId, userId: req.user.id } },
+                select: { id: true },
+            });
+            if (!member) {
+                return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
+            }
+        }
+
         const [tasks, projects, members] = await Promise.all([
             workspaceId
                 ? prisma.task.findMany({

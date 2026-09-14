@@ -19,6 +19,7 @@ import {
 } from "recharts";
 
 import { Badge } from "@/components/ui/Badge";
+import { useI18n } from "@/i18n";
 
 const chartColors = {
   primary: "#6366f1",
@@ -45,62 +46,63 @@ function ChartCard({ title, description, children }) {
 }
 
 export function AnalyticsDashboard({ analytics }) {
+  const { t } = useI18n();
   const { velocity, burndown, workload, cycleTime, summary } = analytics;
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
-          <Badge variant="secondary">Velocity</Badge>
+          <Badge variant="secondary">{t("analytics.velocity")}</Badge>
 
           <p className="text-foreground dark:text-foreground-dark mt-4 text-3xl font-semibold">
             {summary.tasksClosed}
           </p>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-            Tasks closed
+            {t("analytics.tasksClosed")}
           </p>
         </div>
 
         <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
-          <Badge variant="secondary">Cycle Time</Badge>
+          <Badge variant="secondary">{t("analytics.cycleTime")}</Badge>
 
           <p className="text-foreground dark:text-foreground-dark mt-4 text-3xl font-semibold">
             {summary.averageCycleTime}
           </p>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-            Average delivery time
+            {t("analytics.averageDeliveryTime")}
           </p>
         </div>
 
         <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
-          <Badge variant="secondary">Utilization</Badge>
+          <Badge variant="secondary">{t("analytics.utilization")}</Badge>
 
           <p className="text-foreground dark:text-foreground-dark mt-4 text-3xl font-semibold">
             {summary.teamUtilization}
           </p>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-            Team workload balance
+            {t("analytics.teamWorkloadBalance")}
           </p>
         </div>
 
         <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
-          <Badge variant="secondary">Sprint</Badge>
+          <Badge variant="secondary">{t("analytics.sprint")}</Badge>
 
           <p className="text-foreground dark:text-foreground-dark mt-4 text-3xl font-semibold">
             {summary.sprintCompletion}
           </p>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-            Sprint completion rate
+            {t("analytics.sprintCompletionRate")}
           </p>
         </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <ChartCard title="Velocity chart" description="Tasks created vs tasks closed per week.">
+        <ChartCard title={t("analytics.velocityChart")} description={t("analytics.velocityChartDescription")}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={velocity}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,120,120,0.15)" />
@@ -135,8 +137,8 @@ export function AnalyticsDashboard({ analytics }) {
         </ChartCard>
 
         <ChartCard
-          title="Burndown chart"
-          description="Track sprint remaining work against the ideal path."
+          title={t("analytics.burndownChart")}
+          description={t("analytics.burndownChartDescription")}
         >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={burndown}>
@@ -174,8 +176,8 @@ export function AnalyticsDashboard({ analytics }) {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <ChartCard
-          title="Team workload"
-          description="Compare current task distribution across the team."
+          title={t("analytics.teamWorkload")}
+          description={t("analytics.teamWorkloadDescription")}
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={workload}>
@@ -209,8 +211,8 @@ export function AnalyticsDashboard({ analytics }) {
         </ChartCard>
 
         <ChartCard
-          title="Cycle time distribution"
-          description="How long tasks take to move from open to done."
+          title={t("analytics.cycleTimeDistribution")}
+          description={t("analytics.cycleTimeDistributionDescription")}
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>

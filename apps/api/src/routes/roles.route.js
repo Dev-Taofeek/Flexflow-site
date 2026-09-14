@@ -3,6 +3,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
+import { enforceFeature } from "../lib/entitlements.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 import { resources, roleSeeds, ensureRoles, checkPermission } from "../lib/permissions.js";
@@ -53,6 +54,13 @@ router.patch("/", authorize("roles", "update"), async (req, res) => {
     try {
         const { workspaceId, role, resource, action, enabled } = req.body;
         if (role === "Owner") return res.status(403).json(errorResponse("LOCKED_ROLE", "Owner permissions cannot be changed"));
+
+        // Editing the permission matrix is a paid entitlement: PRO can tune the
+        // built-in matrix; CUSTOM adds unlimited custom roles on top.
+        const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+        if (!workspace) return res.status(404).json(errorResponse("NOT_FOUND", "Workspace not found"));
+        const entitlements = await enforceFeature(req, res, workspace.organizationId, "customizable_permissions");
+        if (!entitlements) return;
 
         const foundResource = resources.find((item) => item.id === resource);
         if (!foundResource || !foundResource.actions.includes(action)) {

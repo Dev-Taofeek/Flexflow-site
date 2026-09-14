@@ -1,14 +1,19 @@
 import { Router } from "express";
 
+import { PLANS } from "@flexflow/plans";
+
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { trackApiUsage } from "../middleware/usage.middleware.js";
 import { requireOrgRole } from "../lib/permissions.js";
+import { effectivePlanId, getOrgEntitlements, planInfoForOrg } from "../lib/entitlements.js";
 import { getEmailConfigStatus, isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
 router.use(authenticate);
+router.use(trackApiUsage);
 
 function slugify(str) {
     return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -54,6 +59,7 @@ router.get("/", async (req, res) => {
 
         const organizations = memberships.map((m) => ({
             ...m.organization,
+            planInfo: planInfoForOrg(m.organization),
             workspaces: m.organization.workspaces
                 .filter((workspace) => workspace.members.length > 0)
                 .map((workspace) => ({
@@ -80,11 +86,35 @@ router.post("/", async (req, res) => {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Organization name is required"));
         }
 
-        const existingOwned = await prisma.organizationMember.count({
-            where: { userId: req.user.id, role: "OWNER" },
+        // ── Plan-based org-count enforcement ────────────────────────────────
+        // Free users are limited to a single organization. Creating another one
+        // is only possible once they hold a paid (PRO/CUSTOM) org membership,
+        // which raises their allowance to the PRO organization limit.
+        const memberships = await prisma.organizationMember.findMany({
+            where: { userId: req.user.id },
+            include: { organization: true },
         });
-        if (existingOwned >= 1) {
-            return res.status(403).json(errorResponse("ORG_LIMIT_REACHED", "Free plan allows creating 1 organization. Upgrade to Premium to create more."));
+
+        const hasPaidOrg = memberships.some((m) => effectivePlanId(m.organization) !== "free");
+        const freeOrgCount = memberships.filter((m) => effectivePlanId(m.organization) === "free").length;
+        const freeOrgLimit = PLANS.free.limits.organizations;
+
+        if (!hasPaidOrg && freeOrgCount >= freeOrgLimit) {
+            return res.status(403).json({
+                ...errorResponse(
+                    "PLAN_REQUIRED",
+                    `You're limited to ${freeOrgLimit} organization on the Free plan. Upgrade an existing organization to Pro to create more.`,
+                ),
+                data: { code: "PLAN_REQUIRED", feature: "multiple_organizations", planId: "free", upgradeAvailable: true },
+            });
+        }
+
+        const proOrgLimit = PLANS.pro.limits.organizations;
+        if (hasPaidOrg && memberships.length >= proOrgLimit) {
+            return res.status(403).json({
+                ...errorResponse("LIMIT_REACHED", `You have reached the ${proOrgLimit} organization limit.`),
+                data: { code: "LIMIT_REACHED", limitKey: "organizations", limit: proOrgLimit, current: memberships.length, upgradeAvailable: true },
+            });
         }
 
         const baseSlug = slugify(name);
@@ -130,7 +160,7 @@ router.post("/", async (req, res) => {
             type: "SYSTEM",
         });
 
-        return res.status(201).json(successResponse({ ...org, role: "OWNER" }));
+        return res.status(201).json(successResponse({ ...org, planInfo: planInfoForOrg(org), role: "OWNER" }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to create organization"));
@@ -185,6 +215,7 @@ router.get("/:orgId", async (req, res) => {
 
         return res.status(200).json(successResponse({
             ...org,
+            planInfo: planInfoForOrg(org),
             workspaces: visibleWorkspaces,
             _count: { ...org._count, workspaces: visibleWorkspaces.length },
             role: membership.role,
@@ -355,6 +386,33 @@ router.post("/:orgId/invite", requireOrgRole("OWNER", "ADMIN"), async (req, res)
         }
 
         const org = await prisma.organization.findUnique({ where: { id: req.params.orgId } });
+
+        // ── Plan-based member-limit enforcement ─────────────────────────────
+        const entitlements = getOrgEntitlements(org);
+        if (Number.isFinite(entitlements.limits.members)) {
+            const [memberCount, pendingInvites] = await Promise.all([
+                prisma.organizationMember.count({ where: { organizationId: req.params.orgId } }),
+                prisma.invite.count({
+                    where: { organizationId: req.params.orgId, workspaceId: null, accepted: false, expiresAt: { gt: new Date() } },
+                }),
+            ]);
+            if (memberCount + pendingInvites + 1 > entitlements.limits.members) {
+                return res.status(403).json({
+                    ...errorResponse(
+                        "LIMIT_REACHED",
+                        `You've reached the ${entitlements.limits.members} member limit for the ${org.plan === "FREE" ? "Free" : "Pro"} plan.`,
+                    ),
+                    data: {
+                        code: "LIMIT_REACHED",
+                        limitKey: "members",
+                        limit: entitlements.limits.members,
+                        current: memberCount + pendingInvites,
+                        planId: entitlements.planId,
+                        upgradeAvailable: true,
+                    },
+                });
+            }
+        }
 
         const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (existingUser) {

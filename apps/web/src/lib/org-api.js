@@ -8,6 +8,10 @@ export async function updateOrganization(orgId, data, token) {
     return apiRequest(`/organizations/${orgId}`, { token, method: "PATCH", body: data });
 }
 
+export async function deleteOrganization(orgId, token) {
+    return apiRequest(`/organizations/${orgId}`, { token, method: "DELETE" });
+}
+
 export async function fetchOrgMembers(orgId, token) {
     return apiRequest(`/organizations/${orgId}/members`, { token });
 }

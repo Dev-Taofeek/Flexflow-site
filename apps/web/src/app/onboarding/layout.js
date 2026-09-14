@@ -1,6 +1,6 @@
 export const metadata = {
-    title: "Set Up Your Workspace",
-    description: "Create or join an organization to get started with FlexFlow.",
+    title: "Get Started",
+    description: "Create your organization, pick your plan, and launch your first workspace on FlexFlow.",
     robots: { index: false },
 };
 

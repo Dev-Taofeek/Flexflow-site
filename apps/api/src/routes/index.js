@@ -1,7 +1,10 @@
 import { Router } from "express";
 
 import { analyticsRouter } from "./analytics.route.js";
+import { auditRouter } from "./audit.route.js";
 import { authRouter } from "./auth.route.js";
+import { billingRouter } from "./billing.route.js";
+import { intelligenceRouter } from "./intelligence.route.js";
 import { tasksRouter } from "./tasks.route.js";
 import { dashboardRouter } from "./dashboard.route.js";
 import { healthRouter } from "./health.route.js";
@@ -29,5 +32,8 @@ router.use("/projects", projectsRouter);
 router.use("/roles", rolesRouter);
 router.use("/team", teamRouter);
 router.use("/analytics", analyticsRouter);
+router.use("/audit", auditRouter);
+router.use("/billing", billingRouter);
+router.use("/intelligence", intelligenceRouter);
 
 export { router };

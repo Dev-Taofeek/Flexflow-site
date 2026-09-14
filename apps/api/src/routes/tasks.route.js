@@ -1,13 +1,16 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { trackApiUsage } from "../middleware/usage.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
 import { notifyTaskUsers } from "../services/task-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
+import { enforceMinLimit } from "../lib/entitlements.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
 router.use(authenticate);
+router.use(trackApiUsage);
 
 const TASK_INCLUDE = {
     project: { select: { id: true, name: true, color: true } },
@@ -82,7 +85,39 @@ router.post("/", authorize("tasks", "create"), async (req, res) => {
         const project = await prisma.project.findUnique({ where: { id: projectId } });
         if (!project) return res.status(404).json(errorResponse("NOT_FOUND", "Project not found"));
 
+        // ── Plan-based task-limit enforcement (tasks created this calendar month) ──
+        const workspace = await prisma.workspace.findUnique({
+            where: { id: project.workspaceId },
+            select: { organizationId: true },
+        });
+        if (!workspace) return res.status(404).json(errorResponse("NOT_FOUND", "Workspace not found"));
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        const taskCount = await prisma.task.count({
+            where: {
+                project: { workspace: { organizationId: workspace.organizationId } },
+                createdAt: { gte: monthStart },
+            },
+        });
+        const entitlements = await enforceMinLimit(req, res, workspace.organizationId, "tasksPerMonth", taskCount + 1);
+        if (!entitlements) return;
+
         const ids = Array.isArray(assigneeIds) ? assigneeIds.filter(Boolean) : [assigneeIds].filter(Boolean);
+
+        // Assignees must be members of the project's workspace
+        if (ids.length > 0) {
+            const members = await prisma.workspaceMember.findMany({
+                where: { workspaceId: project.workspaceId, userId: { in: ids } },
+                select: { userId: true },
+            });
+            const validIds = new Set(members.map((m) => m.userId));
+            const invalid = ids.filter((id) => !validIds.has(id));
+            if (invalid.length > 0) {
+                return res.status(422).json(errorResponse("VALIDATION_ERROR", "One or more assignees are not members of this workspace"));
+            }
+        }
+
         const primaryAssigneeId = ids[0] || null;
 
         const task = await prisma.task.create({
@@ -154,6 +189,20 @@ router.patch("/:taskId/assignees", authorize("tasks", "update"), async (req, res
         if (!task) return res.status(404).json(errorResponse("NOT_FOUND", "Task not found"));
 
         const ids = [...new Set(assigneeIds.filter(Boolean))];
+
+        // Assignees must be members of the task's workspace
+        if (ids.length > 0) {
+            const members = await prisma.workspaceMember.findMany({
+                where: { workspaceId: task.project.workspaceId, userId: { in: ids } },
+                select: { userId: true },
+            });
+            const validIds = new Set(members.map((m) => m.userId));
+            const invalid = ids.filter((id) => !validIds.has(id));
+            if (invalid.length > 0) {
+                return res.status(422).json(errorResponse("VALIDATION_ERROR", "One or more assignees are not members of this workspace"));
+            }
+        }
+
         const primaryId = ids[0] || null;
 
         // Replace all assignees atomically

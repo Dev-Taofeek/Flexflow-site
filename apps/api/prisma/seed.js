@@ -21,7 +21,7 @@ async function main() {
 
     console.log(`✅ User: ${user.email}`);
 
-    // Create organization
+    // ── FREE demo org (baseline experience) ────────────────────────────────
     const org = await prisma.organization.upsert({
         where: { slug: "demo-org" },
         update: {},
@@ -29,19 +29,19 @@ async function main() {
             name: "Demo Organization",
             slug: "demo-org",
             description: "FlexFlow demo organization",
+            plan: "FREE",
+            subscriptionStatus: "ACTIVE",
         },
     });
 
-    // Add owner membership
     await prisma.organizationMember.upsert({
         where: { organizationId_userId: { organizationId: org.id, userId: user.id } },
         update: {},
         create: { organizationId: org.id, userId: user.id, role: "OWNER" },
     });
 
-    console.log(`✅ Organization: ${org.name}`);
+    console.log(`✅ Organization: ${org.name} (FREE)`);
 
-    // Create workspace
     const workspace = await prisma.workspace.upsert({
         where: { slug: "demo-org-engineering" },
         update: {},
@@ -53,7 +53,6 @@ async function main() {
         },
     });
 
-    // Add workspace member
     await prisma.workspaceMember.upsert({
         where: { workspaceId_userId: { workspaceId: workspace.id, userId: user.id } },
         update: {},
@@ -62,7 +61,109 @@ async function main() {
 
     console.log(`✅ Workspace: ${workspace.name}`);
 
-    // Create labels
+    // ── PRO demo org (paid experience source-of-truth) ─────────────────────
+    const proOrg = await prisma.organization.upsert({
+        where: { slug: "acme-pro" },
+        update: {},
+        create: {
+            name: "Acme Pro",
+            slug: "acme-pro",
+            description: "Demo organization on the Pro plan",
+            plan: "PRO",
+            billingCycle: "MONTHLY",
+            subscriptionStatus: "ACTIVE",
+        },
+    });
+
+    const now = new Date();
+    const proEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    await prisma.organization.update({
+        where: { id: proOrg.id },
+        data: { subscriptionStartAt: now, subscriptionEndAt: proEnd },
+    });
+
+    await prisma.organizationMember.upsert({
+        where: { organizationId_userId: { organizationId: proOrg.id, userId: user.id } },
+        update: {},
+        create: { organizationId: proOrg.id, userId: user.id, role: "OWNER" },
+    });
+
+    const proWorkspace = await prisma.workspace.upsert({
+        where: { slug: "acme-pro-product" },
+        update: {},
+        create: {
+            organizationId: proOrg.id,
+            name: "Product",
+            slug: "acme-pro-product",
+            description: "Pro plan workspace",
+        },
+    });
+
+    await prisma.workspaceMember.upsert({
+        where: { workspaceId_userId: { workspaceId: proWorkspace.id, userId: user.id } },
+        update: {},
+        create: { workspaceId: proWorkspace.id, userId: user.id, role: "OWNER" },
+    });
+
+    await prisma.billingEvent.create({
+        data: {
+            organizationId: proOrg.id,
+            provider: "mock",
+            eventType: "checkout.completed",
+            status: "ACTIVE",
+            raw: { planId: "pro", billingCycle: "MONTHLY", seed: true },
+        },
+    });
+
+    console.log(`✅ Organization: ${proOrg.name} (PRO)`);
+
+    // ── CUSTOM demo org with enterprise add-ons ────────────────────────────
+    const customOrg = await prisma.organization.upsert({
+        where: { slug: "nebula-custom" },
+        update: {},
+        create: {
+            name: "Nebula Custom",
+            slug: "nebula-custom",
+            description: "Demo organization on the Custom plan",
+            plan: "CUSTOM",
+            billingCycle: "ANNUAL",
+            subscriptionStatus: "ACTIVE",
+            customAddOns: ["sso", "audit_logs", "custom_roles", "dedicated_support"],
+        },
+    });
+
+    const customEnd = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+    await prisma.organization.update({
+        where: { id: customOrg.id },
+        data: { subscriptionStartAt: now, subscriptionEndAt: customEnd },
+    });
+
+    await prisma.organizationMember.upsert({
+        where: { organizationId_userId: { organizationId: customOrg.id, userId: user.id } },
+        update: {},
+        create: { organizationId: customOrg.id, userId: user.id, role: "OWNER" },
+    });
+
+    const customWorkspace = await prisma.workspace.upsert({
+        where: { slug: "nebula-custom-platform" },
+        update: {},
+        create: {
+            organizationId: customOrg.id,
+            name: "Platform",
+            slug: "nebula-custom-platform",
+            description: "Custom plan workspace",
+        },
+    });
+
+    await prisma.workspaceMember.upsert({
+        where: { workspaceId_userId: { workspaceId: customWorkspace.id, userId: user.id } },
+        update: {},
+        create: { workspaceId: customWorkspace.id, userId: user.id, role: "OWNER" },
+    });
+
+    console.log(`✅ Organization: ${customOrg.name} (CUSTOM + add-ons)`);
+
+    // ── Labels ─────────────────────────────────────────────────────────────
     const labelData = [
         { name: "Bug", color: "#ef4444" },
         { name: "Feature", color: "#6366f1" },
@@ -81,7 +182,7 @@ async function main() {
         labels.push(label);
     }
 
-    // Create projects
+    // ── Projects & tasks ───────────────────────────────────────────────────
     const projectData = [
         { name: "Core Platform", description: "RBAC, authentication, and API foundation.", color: "#6366f1" },
         { name: "Growth", description: "Onboarding flows, invite system, and activation.", color: "#8b5cf6" },
@@ -90,12 +191,11 @@ async function main() {
 
     for (const pd of projectData) {
         const project = await prisma.project.upsert({
-            where: { id: `proj-${pd.name.toLowerCase().replace(/\s/g,"-")}-${workspace.id}`.slice(0, 25) },
+            where: { id: `proj-${pd.name.toLowerCase().replace(/\s/g, "-")}-${workspace.id}`.slice(0, 25) },
             update: {},
             create: { workspaceId: workspace.id, createdById: user.id, ...pd },
         });
 
-        // Create tasks for each project
         const taskStatuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
         const priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"];
         const taskTitles = [
@@ -124,7 +224,6 @@ async function main() {
             });
         }
 
-        // Log activity
         await prisma.activityLog.create({
             data: {
                 userId: user.id,
@@ -138,10 +237,105 @@ async function main() {
         console.log(`✅ Project: ${project.name} (5 tasks)`);
     }
 
+    // ── Team Intelligence lookups ──────────────────────────────────────────
+
+    const knowledgeSeeds = [
+        {
+            orgSlug: "nebula-custom",
+            title: "Launch freeze policy",
+            content: "No production deploys between December 15 and January 5. Customer-facing changes are frozen; bug fixes and security patches still ship.",
+            sourceType: "DECISION",
+            tags: ["policy", "launch", "freeze"],
+        },
+        {
+            orgSlug: "nebula-custom",
+            title: "Why we standardized on TypeScript for new services",
+            content: "After the 2025 incidents, the platform team agreed new services must be TypeScript with strict mode. Gives us type safety on the event pipeline and cuts integration bugs.",
+            sourceType: "DECISION",
+            tags: ["typescript", "architecture", "decision"],
+        },
+        {
+            orgSlug: "acme-pro",
+            title: "Sprint cadence decision",
+            content: "Team adopted two-week sprints starting Monday, with review on the last Thursday. Standups moved to async in the #product channel.",
+            sourceType: "DECISION",
+            tags: ["sprint", "cadence", "workflow"],
+        },
+    ];
+
+    for (const seed of knowledgeSeeds) {
+        const orgRow = await prisma.organization.findUnique({ where: { slug: seed.orgSlug } });
+        if (!orgRow) continue;
+        const workspaceRow = seed.orgSlug === "acme-pro" ? proWorkspace : null;
+        await prisma.knowledgeEntry.upsert({
+            where: {
+                // No natural unique key — scope by title+organization.
+                id: `k-${seed.orgSlug}-${seed.title.toLowerCase().replace(/\s+/g, "-")}`,
+            },
+            update: {},
+            create: {
+                organizationId: orgRow.id,
+                workspaceId: workspaceRow?.id || null,
+                createdById: user.id,
+                title: seed.title,
+                content: seed.content,
+                sourceType: seed.sourceType,
+                tags: seed.tags,
+            },
+        });
+    }
+
+    console.log("✅ Knowledge entries (Team Intelligence)");
+
+    // ── Audit events & usage snapshot ──────────────────────────────────────
+    await prisma.auditEvent.createMany({
+        data: [
+            {
+                actorId: user.id,
+                action: "billing.checkout_confirmed",
+                resource: "billing",
+                metadata: { planId: "pro", seed: true },
+                organizationId: proOrg.id,
+            },
+            {
+                actorId: user.id,
+                action: "settings.roles_updated",
+                resource: "roles",
+                metadata: { matrix: "Admin" },
+                organizationId: customOrg.id,
+            },
+            {
+                actorId: user.id,
+                action: "intelligence.query",
+                resource: "intelligence",
+                metadata: { query: "launch freeze", sample: true },
+                organizationId: customOrg.id,
+            },
+        ],
+        skipDuplicates: true,
+    });
+
+    await prisma.apiUsage.upsert({
+        where: { organizationId_month: { organizationId: proOrg.id, month: new Date().toISOString().slice(0, 7) } },
+        update: {},
+        create: { organizationId: proOrg.id, month: new Date().toISOString().slice(0, 7), requestCount: 1240 },
+    });
+
+    await prisma.intelligenceUsage.upsert({
+        where: { organizationId_day: { organizationId: proOrg.id, day: new Date().toISOString().slice(0, 10) } },
+        update: {},
+        create: { organizationId: proOrg.id, day: new Date().toISOString().slice(0, 10), queryCount: 7 },
+    });
+
+    console.log("✅ Audit + usage records");
+
     console.log("\n🎉 Seed complete!");
     console.log("──────────────────────────────");
     console.log("Login:    demo@flexflow.app");
     console.log("Password: Password123!");
+    console.log("  • demo-org      → Free plan");
+    console.log("  • acme-pro      → Pro plan (active subscription)");
+    console.log("  • nebula-custom → Custom plan + enterprise add-ons");
     console.log("──────────────────────────────");
 }
 

@@ -10,6 +10,15 @@ jest.mock("@/lib/api-client", () => ({
     apiRequest: jest.fn(),
 }));
 
+jest.mock("@/contexts/AppContext", () => ({
+    useApp: () => ({
+        user: { id: "u1" },
+        currentWorkspace: { role: "OWNER" },
+        currentOrg: null,
+        organizations: [],
+    }),
+}));
+
 jest.mock("@/lib/socket", () => ({
     socket: {
         connect: jest.fn(),

@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { enforceFeature } from "../lib/entitlements.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -16,6 +17,14 @@ router.get("/", async (req, res) => {
             where: { workspaceId_userId: { workspaceId, userId: req.user.id } },
         });
         if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
+
+        // Velocity/workload/cycle-time analytics are a PRO entitlement.
+        const workspace = await prisma.workspace.findUnique({
+            where: { id: workspaceId },
+            select: { organizationId: true },
+        });
+        const entitlements = await enforceFeature(req, res, workspace.organizationId, "advanced_analytics");
+        if (!entitlements) return;
 
         const now = new Date();
         const sixWeeksAgo = new Date(now.getTime() - 42 * 24 * 60 * 60 * 1000);

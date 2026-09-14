@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { FileText, FolderKanban, Search, User2, X } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { searchAll } from "@/lib/search-api";
+import { useI18n } from "@/i18n";
 
 export function SearchModal({ open, onClose }) {
+    const { t } = useI18n();
     const router = useRouter();
     const { currentWorkspaceId, accessToken } = useApp();
     const inputRef = useRef(null);
@@ -15,17 +17,13 @@ export function SearchModal({ open, onClose }) {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (open) {
-            setQuery("");
-            setResults({ tasks: [], projects: [], members: [] });
-            setTimeout(() => inputRef.current?.focus(), 50);
-        }
+        if (open) setTimeout(() => inputRef.current?.focus(), 50);
     }, [open]);
 
     useEffect(() => {
         if (!query.trim() || query.length < 2) {
-            setResults({ tasks: [], projects: [], members: [] });
-            return;
+            const t = setTimeout(() => setResults({ tasks: [], projects: [], members: [] }), 0);
+            return () => clearTimeout(t);
         }
         const timer = setTimeout(async () => {
             setLoading(true);
@@ -61,7 +59,7 @@ export function SearchModal({ open, onClose }) {
                         ref={inputRef}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search tasks, projects, people…"
+                        placeholder={t("shell.search.full")}
                         className="flex-1 bg-transparent text-sm text-(--text-primary) placeholder-(--text-muted) outline-none"
                     />
                     {query && (
@@ -77,20 +75,20 @@ export function SearchModal({ open, onClose }) {
                 {/* Results */}
                 <div className="max-h-96 overflow-y-auto p-2">
                     {loading && (
-                        <p className="px-3 py-6 text-center text-sm text-(--text-muted)">Searching…</p>
+                        <p className="px-3 py-6 text-center text-sm text-(--text-muted)">{t("shell.search.searching")}</p>
                     )}
 
                     {!loading && query.length >= 2 && !hasResults && (
-                        <p className="px-3 py-6 text-center text-sm text-(--text-muted)">No results for &ldquo;{query}&rdquo;</p>
+                        <p className="px-3 py-6 text-center text-sm text-(--text-muted)">{t("shell.search.noResults", { query })}</p>
                     )}
 
                     {!loading && query.length < 2 && (
-                        <p className="px-3 py-6 text-center text-sm text-(--text-muted)">Type at least 2 characters to search</p>
+                        <p className="px-3 py-6 text-center text-sm text-(--text-muted)">{t("shell.search.minChars")}</p>
                     )}
 
                     {results.projects.length > 0 && (
                         <div className="mb-1">
-                            <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-(--text-muted) uppercase">Projects</p>
+                            <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-(--text-muted) uppercase">{t("shell.nav.projects")}</p>
                             {results.projects.map((p) => (
                                 <button
                                     key={p.id}
@@ -108,7 +106,7 @@ export function SearchModal({ open, onClose }) {
 
                     {results.tasks.length > 0 && (
                         <div className="mb-1">
-                            <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-(--text-muted) uppercase">Tasks</p>
+                            <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-(--text-muted) uppercase">{t("shell.nav.tasks")}</p>
                             {results.tasks.map((i) => (
                                 <button
                                     key={i.id}
@@ -118,7 +116,7 @@ export function SearchModal({ open, onClose }) {
                                     <FileText className="h-4 w-4 shrink-0 text-(--text-muted)" />
                                     <div className="min-w-0">
                                         <p className="truncate text-(--text-primary)">{i.title}</p>
-                                        <p className="text-xs text-(--text-muted)">{i.project.name} · {i.status.replace(/_/g, " ")}</p>
+                                        <p className="text-xs text-(--text-muted)">{i.project.name} · {t(`shell.status.${i.status.toLowerCase()}`)}</p>
                                     </div>
                                 </button>
                             ))}
@@ -127,10 +125,10 @@ export function SearchModal({ open, onClose }) {
 
                     {results.members.length > 0 && (
                         <div className="mb-1">
-                            <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-(--text-muted) uppercase">People</p>
+                            <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-(--text-muted) uppercase">{t("shell.search.people")}</p>
                             {results.members.map((m) => (
                                 <div key={m.id} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm">
-                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">
+                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">
                                         {m.name?.[0]?.toUpperCase() || <User2 className="h-3 w-3" />}
                                     </div>
                                     <div>

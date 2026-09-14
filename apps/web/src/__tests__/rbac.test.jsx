@@ -2,10 +2,15 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PermissionMatrix } from "@/components/settings/roles/PermissionMatrix";
 import { updatePermission } from "@/lib/roles-api";
+import { ToastProvider } from "@/contexts/ToastContext";
 
 jest.mock("@/lib/roles-api", () => ({
     updatePermission: jest.fn(),
 }));
+
+function renderWithProvider(ui) {
+    return render(<ToastProvider>{ui}</ToastProvider>);
+}
 
 const ROLES = ["Admin", "Member", "Viewer"];
 const RESOURCES = [
@@ -24,7 +29,7 @@ describe("PermissionMatrix", () => {
     });
 
     function renderMatrix() {
-        return render(
+        return renderWithProvider(
             <PermissionMatrix
                 roles={ROLES}
                 resources={RESOURCES}
@@ -50,7 +55,7 @@ describe("PermissionMatrix", () => {
     it("calls updatePermission when a toggle is clicked", async () => {
         const user = userEvent.setup();
         updatePermission.mockResolvedValue({
-            data: { permissions: INITIAL_PERMISSIONS },
+            permissions: INITIAL_PERMISSIONS,
         });
         renderMatrix();
 
@@ -82,7 +87,7 @@ describe("PermissionMatrix", () => {
             expect(target.getAttribute("aria-label")).not.toBe(label);
         });
 
-        resolve({ data: { permissions: INITIAL_PERMISSIONS } });
+        resolve({ permissions: INITIAL_PERMISSIONS });
     });
 });
 

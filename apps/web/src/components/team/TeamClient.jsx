@@ -6,10 +6,11 @@ import { Mail, Send, Trash2, UserMinus, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/contexts/ToastContext";
+import { useI18n } from "@/i18n";
 import Image from "next/image";
 
 const ROLE_COLORS = {
-  OWNER: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  OWNER: "bg-brand-50 text-brand-700 border-brand-200",
   ADMIN: "bg-violet-50 text-violet-700 border-violet-200",
   MEMBER: "bg-slate-50 text-slate-700 border-slate-200",
   VIEWER: "bg-zinc-50 text-zinc-600 border-zinc-200",
@@ -28,6 +29,7 @@ export function TeamClient({
   onCancelInvite,
 }) {
   const { addToast } = useToast();
+  const { t } = useI18n();
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [orgMembers, setOrgMembers] = useState(availableMembers);
@@ -57,7 +59,7 @@ export function TeamClient({
   async function handleInvite(e) {
     e.preventDefault();
     if (!email.trim() || !email.includes("@")) {
-      setInviteError("Enter a valid email");
+      setInviteError(t("team.invalidEmail"));
       return;
     }
     setInviteError("");
@@ -87,17 +89,17 @@ export function TeamClient({
     try {
       await onRoleChange?.({ memberId, role: nextRole });
     } catch (err) {
-      addToast(err.message || "Failed to update role.", "error");
+      addToast(err.message || t("team.roleUpdateFailed"), "error");
     }
   }
 
   async function handleRemove(memberId) {
-    if (!confirm("Remove this member from the workspace?")) return;
+    if (!confirm(t("team.confirmRemove"))) return;
     try {
       await onRemove?.(memberId);
       setMembers((prev) => prev.filter((m) => m.memberId !== memberId));
     } catch (err) {
-      addToast(err.message || "Failed to remove member.", "error");
+      addToast(err.message || t("team.removeFailed"), "error");
     }
   }
 
@@ -107,7 +109,7 @@ export function TeamClient({
       await onAddExisting?.({ userId, role: addRoles[userId] || "MEMBER" });
       setOrgMembers((prev) => prev.filter((m) => m.id !== userId));
     } catch (err) {
-      addToast(err.message || "Failed to add member.", "error");
+      addToast(err.message || t("team.addFailed"), "error");
     } finally {
       setAddingId(null);
     }
@@ -118,7 +120,7 @@ export function TeamClient({
       await onCancelInvite?.(inviteId);
       setInvitations((prev) => prev.filter((inv) => inv.id !== inviteId));
     } catch (err) {
-      addToast(err.message || `Failed to cancel invite for ${inviteEmail}.`, "error");
+      addToast(err.message || t("team.cancelInviteFailed", { email: inviteEmail }), "error");
     }
   }
 
@@ -133,19 +135,23 @@ export function TeamClient({
     );
   }
 
+  function roleLabel(r) {
+    return t(`team.role.${String(r).toLowerCase()}`);
+  }
+
   return (
     <div className="space-y-5">
       {/* Invite */}
       {canManage && (
         <section className="rounded-xl border border-(--border) bg-(--bg-elevated) p-5">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
               <Send className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-(--text-primary)">Invite teammate</h2>
+              <h2 className="text-sm font-semibold text-(--text-primary)">{t("team.inviteTeammate")}</h2>
               <p className="text-xs text-(--text-muted)">
-                Send an email invite and assign a starting role.
+                {t("team.inviteDescription")}
               </p>
             </div>
           </div>
@@ -156,7 +162,7 @@ export function TeamClient({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="teammate@company.com"
+                placeholder={t("team.emailPlaceholder")}
                 isInvalid={Boolean(inviteError)}
               />
               {inviteError && <p className="mt-1 text-xs text-red-500">{inviteError}</p>}
@@ -164,16 +170,16 @@ export function TeamClient({
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="h-10 rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
+              className="h-10 rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none"
             >
               {editableInviteRoles.map((r) => (
                   <option key={r} value={r}>
-                    {r.charAt(0) + r.slice(1).toLowerCase()}
+                    {roleLabel(r)}
                   </option>
                 ))}
             </select>
             <Button type="submit" isLoading={isInviting}>
-              Send invite
+              {t("team.sendInvite")}
             </Button>
           </form>
 
@@ -181,14 +187,13 @@ export function TeamClient({
           {inviteResult && (
             <div className={`mt-3 rounded-lg border px-3 py-2.5 text-sm ${inviteResult.emailSent ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
               {inviteResult.emailSent ? (
-                "Invite email sent successfully."
+                t("team.inviteSentFeedback")
               ) : (
                 <div className="space-y-1">
-                  <p className="font-medium">Invite link created, but no email was sent.</p>
+                  <p className="font-medium">{t("team.inviteLinkCreated")}</p>
                   <p className="text-xs">
-                    EmailJS is not configured on the server yet
-                    {inviteResult.emailConfig?.missing?.length ? ` (${inviteResult.emailConfig.missing.join(", ")} missing)` : ""}.
-                    Share this invite link manually:
+                    {t("team.emailJsNotConfigured", { missing: inviteResult.emailConfig?.missing?.length ? ` (${inviteResult.emailConfig.missing.join(", ")} missing)` : "" })}{" "}
+                    {t("team.shareInviteLink")}
                   </p>
                   <div className="flex items-center gap-2 mt-1">
                     <input
@@ -202,7 +207,7 @@ export function TeamClient({
                       onClick={() => navigator.clipboard.writeText(inviteResult.inviteUrl)}
                       className="rounded px-2 py-1 text-xs font-medium bg-amber-100 hover:bg-amber-200 transition-colors"
                     >
-                      Copy
+                      {t("team.copy")}
                     </button>
                   </div>
                 </div>
@@ -216,13 +221,13 @@ export function TeamClient({
       {canManage && orgMembers.length > 0 && (
         <section className="rounded-xl border border-(--border) bg-(--bg-elevated) p-5">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
               <UserPlus className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-(--text-primary)">Add from organization</h2>
+              <h2 className="text-sm font-semibold text-(--text-primary)">{t("team.addFromOrg")}</h2>
               <p className="text-xs text-(--text-muted)">
-                These people are already in your organization but not in this workspace.
+                {t("team.addFromOrgDescription")}
               </p>
             </div>
           </div>
@@ -230,7 +235,7 @@ export function TeamClient({
           <div className="divide-y divide-(--border)">
             {orgMembers.map((member) => (
               <div key={member.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-violet-500 text-xs font-semibold text-white">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-brand-500 to-violet-500 text-xs font-semibold text-white">
                   {getInitials(member.name)}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -240,11 +245,11 @@ export function TeamClient({
                 <select
                   value={addRoles[member.id] || "MEMBER"}
                   onChange={(e) => setAddRoles((prev) => ({ ...prev, [member.id]: e.target.value }))}
-                  className="h-8 rounded-md border border-(--border) bg-(--bg) px-2 text-xs text-(--text-secondary) focus:border-indigo-500 focus:outline-none"
+                  className="h-8 rounded-md border border-(--border) bg-(--bg) px-2 text-xs text-(--text-secondary) focus:border-brand-500 focus:outline-none"
                 >
                   {(currentUserRole === "OWNER" ? ["ADMIN", "MEMBER", "VIEWER"] : ["MEMBER", "VIEWER"]).map((r) => (
                     <option key={r} value={r}>
-                      {r.charAt(0) + r.slice(1).toLowerCase()}
+                      {roleLabel(r)}
                     </option>
                   ))}
                 </select>
@@ -254,7 +259,7 @@ export function TeamClient({
                   isLoading={addingId === member.id}
                   onClick={() => handleAddExisting(member.id)}
                 >
-                  Add
+                  {t("team.add")}
                 </Button>
               </div>
             ))}
@@ -266,9 +271,9 @@ export function TeamClient({
       <section className="overflow-hidden rounded-xl border border-(--border) bg-(--bg-elevated)">
         <div className="flex items-center justify-between border-b border-(--border) px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold text-(--text-primary)">Members</h2>
+            <h2 className="text-sm font-semibold text-(--text-primary)">{t("team.members")}</h2>
             <p className="mt-0.5 text-xs text-(--text-muted)">
-              {members.length} member{members.length !== 1 ? "s" : ""}
+              {t(members.length === 1 ? "team.memberListCountOne" : "team.memberListCountMany", { count: members.length })}
             </p>
           </div>
         </div>
@@ -276,7 +281,7 @@ export function TeamClient({
         <div className="divide-y divide-(--border)">
           {members.map((member) => (
             <div key={member.memberId || member.id} className="flex items-center gap-3 px-5 py-3.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-violet-500 text-xs font-semibold text-white">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-brand-500 to-violet-500 text-xs font-semibold text-white">
                 {member.avatarUrl ? (
                   <Image
                     src={member.avatarUrl}
@@ -299,7 +304,7 @@ export function TeamClient({
                   ROLE_COLORS[member.role] || ROLE_COLORS.MEMBER,
                 ].join(" ")}
               >
-                {member.role?.charAt(0) + member.role?.slice(1).toLowerCase()}
+                {roleLabel(member.role)}
               </span>
 
               {canManage && (
@@ -308,11 +313,11 @@ export function TeamClient({
                     value={member.role}
                     onChange={(e) => handleRoleChange(member.memberId || member.id, e.target.value)}
                     disabled={!canEditMember(member)}
-                    className="h-7 rounded-md border border-(--border) bg-(--bg) px-2 text-xs text-(--text-secondary) focus:border-indigo-500 focus:outline-none"
+                    className="h-7 rounded-md border border-(--border) bg-(--bg) px-2 text-xs text-(--text-secondary) focus:border-brand-500 focus:outline-none"
                   >
                     {editableRolesFor(member).map((r) => (
                       <option key={r} value={r}>
-                        {r.charAt(0) + r.slice(1).toLowerCase()}
+                        {roleLabel(r)}
                       </option>
                     ))}
                   </select>
@@ -320,7 +325,7 @@ export function TeamClient({
                     <button
                       onClick={() => handleRemove(member.memberId || member.id)}
                       className="flex h-7 w-7 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-red-50 hover:text-red-500"
-                      title="Remove member"
+                      title={t("team.removeMember")}
                     >
                       <UserMinus className="h-3.5 w-3.5" />
                     </button>
@@ -332,7 +337,7 @@ export function TeamClient({
 
           {members.length === 0 && (
             <div className="px-5 py-10 text-center">
-              <p className="text-sm text-(--text-muted)">No members found.</p>
+              <p className="text-sm text-(--text-muted)">{t("team.noMembers")}</p>
             </div>
           )}
         </div>
@@ -343,7 +348,7 @@ export function TeamClient({
         <section className="overflow-hidden rounded-xl border border-(--border) bg-(--bg-elevated)">
           <div className="flex items-center gap-3 border-b border-(--border) px-5 py-4">
             <Mail className="h-4 w-4 text-(--text-muted)" />
-            <h2 className="text-sm font-semibold text-(--text-primary)">Pending invitations</h2>
+            <h2 className="text-sm font-semibold text-(--text-primary)">{t("team.pendingInvitations")}</h2>
             <span className="ml-auto text-xs text-(--text-muted)">{invitations.length}</span>
           </div>
 
@@ -353,19 +358,19 @@ export function TeamClient({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-(--text-primary)">{inv.email}</p>
                   <p className="text-xs text-(--text-muted)">
-                    Invited as {inv.role?.charAt(0) + inv.role?.slice(1).toLowerCase()}
+                    {t("team.invitedAs", { role: roleLabel(inv.role) })}
                   </p>
                 </div>
                 <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                  Pending
+                  {t("team.pending")}
                 </span>
                 {canManage && (
                   <button
                     type="button"
                     onClick={() => handleCancelInvite(inv.id, inv.email)}
                     className="flex h-7 w-7 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-red-50 hover:text-red-500"
-                    title="Cancel invitation"
-                    aria-label={`Cancel invitation for ${inv.email}`}
+                    title={t("team.cancelInvitation")}
+                    aria-label={t("team.cancelInvitationFor", { email: inv.email })}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

@@ -17,12 +17,15 @@ import { updateTaskStatus } from "@/lib/projects-api";
 import { apiRequest } from "@/lib/api-client";
 import { socket } from "@/lib/socket";
 import { useRole } from "@/hooks/useRole";
+import { useApp } from "@/contexts/AppContext";
+import { canChangeTaskStatus, canSetTaskStatus } from "@/lib/task-permissions";
+import { useI18n } from "@/i18n";
 
 const COLUMNS = [
-    { id: "TODO",        title: "To Do",       color: "bg-zinc-400" },
-    { id: "IN_PROGRESS", title: "In Progress",  color: "bg-blue-500" },
-    { id: "IN_REVIEW",   title: "In Review",    color: "bg-amber-500" },
-    { id: "DONE",        title: "Done",         color: "bg-emerald-500" },
+    { id: "TODO",        color: "bg-zinc-400" },
+    { id: "IN_PROGRESS", color: "bg-blue-500" },
+    { id: "IN_REVIEW",   color: "bg-amber-500" },
+    { id: "DONE",        color: "bg-emerald-500" },
 ];
 
 const PRIORITY_STYLE = {
@@ -46,15 +49,24 @@ function formatDate(d) {
 
 // ── Inline create form per column ──────────────────────────────────────────
 function QuickCreate({ projectId, status, members, token, onCreated, onCancel }) {
+    const { t } = useI18n();
     const [title, setTitle] = useState("");
     const [assigneeId, setAssigneeId] = useState("");
     const [priority, setPriority] = useState("MEDIUM");
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
 
+    const priorityLabel = (p) =>
+        ({
+            LOW: t("tasks.priority.low"),
+            MEDIUM: t("tasks.priority.medium"),
+            HIGH: t("tasks.priority.high"),
+            URGENT: t("tasks.priority.urgent"),
+        }[p]);
+
     async function submit(e) {
         e.preventDefault();
-        if (!title.trim()) { setErr("Title required"); return; }
+        if (!title.trim()) { setErr(t("tasks.titleRequiredShort")); return; }
         setLoading(true);
         try {
             const task = await apiRequest("/tasks", {
@@ -71,13 +83,13 @@ function QuickCreate({ projectId, status, members, token, onCreated, onCancel })
     }
 
     return (
-        <form onSubmit={submit} className="mt-2 rounded-xl border border-indigo-300 bg-(--bg-elevated) p-3 space-y-2 shadow-sm">
+        <form onSubmit={submit} className="mt-2 rounded-xl border border-brand-300 bg-(--bg-elevated) p-3 space-y-2 shadow-sm">
             <input
                 autoFocus
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Task title…"
-                className="w-full rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
+                placeholder={t("tasks.quickCreatePlaceholder")}
+                className="w-full rounded-lg border border-(--border) bg-(--bg) px-2.5 py-1.5 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-brand-500 focus:outline-none"
             />
             <div className="grid grid-cols-2 gap-2">
                 <select
@@ -86,7 +98,7 @@ function QuickCreate({ projectId, status, members, token, onCreated, onCancel })
                     className="rounded-lg border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--text-secondary) focus:outline-none"
                 >
                     {["LOW","MEDIUM","HIGH","URGENT"].map((p) => (
-                        <option key={p} value={p}>{p}</option>
+                        <option key={p} value={p}>{priorityLabel(p)}</option>
                     ))}
                 </select>
                 <select
@@ -94,7 +106,7 @@ function QuickCreate({ projectId, status, members, token, onCreated, onCancel })
                     onChange={(e) => setAssigneeId(e.target.value)}
                     className="rounded-lg border border-(--border) bg-(--bg) px-2 py-1.5 text-xs text-(--text-secondary) focus:outline-none"
                 >
-                    <option value="">Unassigned</option>
+                    <option value="">{t("tasks.unassigned")}</option>
                     {members.map((m) => (
                         <option key={m.user.id} value={m.user.id}>{m.user.name}</option>
                     ))}
@@ -108,10 +120,10 @@ function QuickCreate({ projectId, status, members, token, onCreated, onCancel })
                 <button
                     type="submit"
                     disabled={loading}
-                    className="flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                    className="flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                     {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                    Add
+                    {t("tasks.addButton")}
                 </button>
             </div>
         </form>
@@ -119,14 +131,23 @@ function QuickCreate({ projectId, status, members, token, onCreated, onCancel })
 }
 
 // ── Task card ─────────────────────────────────────────────────────────────
-function TaskCard({ task, isDragging = false, projectId, canManageTasks = true }) {
+function TaskCard({ task, isDragging = false, projectId, canDrag = true }) {
+    const { t } = useI18n();
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
         id: task.id,
         data: { type: "task", task },
-        disabled: !canManageTasks,
+        disabled: !canDrag,
     });
 
     const style = { transform: CSS.Transform.toString(transform), transition };
+
+    const priorityLabel = (p) =>
+        ({
+            LOW: t("tasks.priority.low"),
+            MEDIUM: t("tasks.priority.medium"),
+            HIGH: t("tasks.priority.high"),
+            URGENT: t("tasks.priority.urgent"),
+        }[p]);
 
     const dueDate = formatDate(task.dueDate);
     const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "DONE";
@@ -137,7 +158,7 @@ function TaskCard({ task, isDragging = false, projectId, canManageTasks = true }
             style={style}
             className={[
                 "group rounded-xl border bg-(--bg-elevated) p-3 shadow-sm transition-all",
-                isDragging ? "opacity-40 scale-95" : "border-(--border) hover:border-indigo-300 hover:shadow-md",
+                isDragging ? "opacity-40 scale-95" : "border-(--border) hover:border-brand-300 hover:shadow-md",
             ].join(" ")}
         >
             {/* Top row: title + drag handle */}
@@ -146,14 +167,14 @@ function TaskCard({ task, isDragging = false, projectId, canManageTasks = true }
                     href={`/projects/${projectId}/tasks/${task.id}`}
                     className="flex-1 min-w-0"
                 >
-                    <p className="text-sm font-medium text-(--text-primary) leading-snug line-clamp-2 hover:text-indigo-600 transition-colors">
+                    <p className="text-sm font-medium text-(--text-primary) leading-snug line-clamp-2 hover:text-brand-600 transition-colors">
                         {task.title}
                     </p>
                 </Link>
-                {canManageTasks && (
+                {canDrag && (
                     <button
                         type="button"
-                        aria-label={`Drag ${task.title}`}
+                        aria-label={t("tasks.dragTask", { title: task.title })}
                         className="mt-0.5 shrink-0 cursor-grab rounded-md p-0.5 text-(--text-muted) opacity-0 group-hover:opacity-100 hover:bg-(--bg-overlay) active:cursor-grabbing transition-opacity"
                         {...attributes}
                         {...listeners}
@@ -166,7 +187,7 @@ function TaskCard({ task, isDragging = false, projectId, canManageTasks = true }
             {/* Bottom row: priority + assignee + due date */}
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                 <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${PRIORITY_STYLE[task.priority]}`}>
-                    {task.priority}
+                    {priorityLabel(task.priority)}
                 </span>
 
                 {(() => {
@@ -179,7 +200,7 @@ function TaskCard({ task, isDragging = false, projectId, canManageTasks = true }
                                 <div
                                     key={u.id}
                                     title={u.name}
-                                    className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-(--bg-elevated) bg-indigo-100 text-[9px] font-bold text-indigo-700 shrink-0"
+                                    className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-(--bg-elevated) bg-brand-100 text-[9px] font-bold text-brand-700 shrink-0"
                                 >
                                     {u.name?.[0]?.toUpperCase()}
                                 </div>
@@ -208,30 +229,41 @@ function TaskCard({ task, isDragging = false, projectId, canManageTasks = true }
 function KanbanColumn({ column, tasks, children, projectId, members, token, onCreated }) {
     const { setNodeRef, isOver } = useDroppable({ id: column.id });
     const { canManageTasks } = useRole();
+    const { t } = useI18n();
     const [creating, setCreating] = useState(false);
+
+    const statusLabel = (status) =>
+        ({
+            TODO: t("tasks.status.todo"),
+            IN_PROGRESS: t("tasks.status.in_progress"),
+            IN_REVIEW: t("tasks.status.in_review"),
+            DONE: t("tasks.status.done"),
+        }[status]);
+
+    const columnTitle = statusLabel(column.id);
 
     return (
         <section
             ref={setNodeRef}
             className={[
                 "flex w-72 shrink-0 flex-col rounded-2xl border bg-(--bg-elevated) md:w-auto md:min-w-0",
-                isOver ? "border-indigo-400 bg-indigo-50/30" : "border-(--border)",
+                isOver ? "border-brand-400 bg-brand-50/30" : "border-(--border)",
             ].join(" ")}
         >
             {/* Column header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
                 <div className="flex items-center gap-2">
                     <span className={`h-2 w-2 rounded-full ${column.color}`} />
-                    <h2 className="text-sm font-semibold text-(--text-primary)">{column.title}</h2>
+                    <h2 className="text-sm font-semibold text-(--text-primary)">{columnTitle}</h2>
                     <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-(--bg-overlay) px-1 text-[11px] font-medium text-(--text-muted)">
                         {tasks.length}
                     </span>
                 </div>
                 {canManageTasks && (
                     <button
-                        aria-label={`Add task to ${column.title}`}
+                        aria-label={t("tasks.addTaskTo", { column: columnTitle })}
                         onClick={() => setCreating(true)}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-(--text-muted) hover:bg-(--bg-overlay) hover:text-indigo-600 transition-colors"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-(--text-muted) hover:bg-(--bg-overlay) hover:text-brand-600 transition-colors"
                     >
                         <Plus className="h-3.5 w-3.5" />
                     </button>
@@ -256,9 +288,9 @@ function KanbanColumn({ column, tasks, children, projectId, members, token, onCr
                 {tasks.length === 0 && !creating && canManageTasks && (
                     <button
                         onClick={() => setCreating(true)}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-(--border) py-6 text-xs text-(--text-muted) transition-colors hover:border-indigo-300 hover:text-indigo-500"
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-(--border) py-6 text-xs text-(--text-muted) transition-colors hover:border-brand-300 hover:text-brand-500"
                     >
-                        <Plus className="h-3.5 w-3.5" /> Add task
+                        <Plus className="h-3.5 w-3.5" /> {t("tasks.addTask")}
                     </button>
                 )}
             </div>
@@ -269,6 +301,8 @@ function KanbanColumn({ column, tasks, children, projectId, members, token, onCr
 // ── Board ─────────────────────────────────────────────────────────────────
 export function KanbanBoard({ projectId, initialTasks, token, members = [] }) {
     const { canManageTasks } = useRole();
+    const { user } = useApp();
+    const userId = user?.id;
     const [tasksByStatus, setTasksByStatus] = useState(() => groupByStatus(initialTasks));
     const [activeTask, setActiveTask] = useState(null);
 
@@ -305,26 +339,30 @@ export function KanbanBoard({ projectId, initialTasks, token, members = [] }) {
     }
 
     function handleDragStart({ active }) {
-        if (!canManageTasks) return;
-        setActiveTask(taskLookup[active.id] || null);
+        const task = taskLookup[active.id];
+        if (!task || !canChangeTaskStatus(userId, task, canManageTasks)) return;
+        setActiveTask(task);
     }
 
     function handleDragOver({ active, over }) {
-        if (!canManageTasks) return;
+        const task = taskLookup[active.id];
+        if (!task || !canChangeTaskStatus(userId, task, canManageTasks)) return;
         if (!over) return;
         const fromCol = findColumn(active.id);
         const toCol = findColumn(over.id);
         if (!fromCol || !toCol || fromCol === toCol) return;
+        if (!canSetTaskStatus(userId, task, toCol, canManageTasks)) return;
         setTasksByStatus((cur) => ({
             ...cur,
             [fromCol]: cur[fromCol].filter((i) => i.id !== active.id),
-            [toCol]: [{ ...taskLookup[active.id], status: toCol }, ...cur[toCol]],
+            [toCol]: [{ ...task, status: toCol }, ...cur[toCol]],
         }));
     }
 
     async function handleDragEnd({ active, over }) {
         setActiveTask(null);
-        if (!canManageTasks) return;
+        const task = taskLookup[active.id];
+        if (!task || !canChangeTaskStatus(userId, task, canManageTasks)) return;
         if (!over) return;
         const fromCol = findColumn(active.id);
         const toCol = findColumn(over.id);
@@ -340,6 +378,8 @@ export function KanbanBoard({ projectId, initialTasks, token, members = [] }) {
             });
             return;
         }
+
+        if (!canSetTaskStatus(userId, task, toCol, canManageTasks)) return;
 
         try {
             await updateTaskStatus({ projectId, taskId: active.id, status: toCol, token });
@@ -379,7 +419,7 @@ export function KanbanBoard({ projectId, initialTasks, token, members = [] }) {
                         >
                             <SortableContext items={colTasks.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                                 {colTasks.map((task) => (
-                                    <TaskCard key={task.id} task={task} projectId={projectId} canManageTasks={canManageTasks} />
+                                    <TaskCard key={task.id} task={task} projectId={projectId} canDrag={canChangeTaskStatus(userId, task, canManageTasks)} />
                                 ))}
                             </SortableContext>
                         </KanbanColumn>
@@ -388,7 +428,7 @@ export function KanbanBoard({ projectId, initialTasks, token, members = [] }) {
             </div>
 
             <DragOverlay>
-                {activeTask ? <TaskCard task={activeTask} projectId={projectId} isDragging canManageTasks={canManageTasks} /> : null}
+                {activeTask ? <TaskCard task={activeTask} projectId={projectId} isDragging canDrag={canChangeTaskStatus(userId, activeTask, canManageTasks)} /> : null}
             </DragOverlay>
         </DndContext>
     );

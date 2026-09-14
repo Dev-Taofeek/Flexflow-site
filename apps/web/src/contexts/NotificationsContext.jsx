@@ -33,7 +33,9 @@ export function NotificationsProvider({ children }) {
     }, [accessToken]);
 
     useEffect(() => {
-        refresh();
+        let cancelled = false;
+        (async () => { await refresh(); })();
+        return () => { cancelled = true; };
     }, [refresh]);
 
     // App-wide socket connection for real-time in-app notifications

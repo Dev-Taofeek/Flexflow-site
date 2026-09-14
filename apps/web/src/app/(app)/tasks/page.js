@@ -10,6 +10,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useRole } from "@/hooks/useRole";
 import { apiRequest } from "@/lib/api-client";
 import { fetchProjects } from "@/lib/projects-api";
+import { useI18n } from "@/i18n";
 
 const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -19,12 +20,6 @@ const STATUS_COLOR = {
     IN_PROGRESS: "bg-blue-500",
     IN_REVIEW: "bg-amber-500",
     DONE: "bg-emerald-500",
-};
-const STATUS_LABEL = {
-    TODO: "To Do",
-    IN_PROGRESS: "In Progress",
-    IN_REVIEW: "In Review",
-    DONE: "Done",
 };
 const PRIORITY_COLOR = {
     LOW: "text-zinc-500 bg-zinc-100",
@@ -39,6 +34,7 @@ function formatDate(d) {
 }
 
 function AssigneeAvatars({ task }) {
+    const { t } = useI18n();
     const people = (task.assignees || []).map((a) => a.user).filter(Boolean);
     if (people.length === 0 && task.assignee) people.push(task.assignee);
     if (people.length === 0) return null;
@@ -49,7 +45,7 @@ function AssigneeAvatars({ task }) {
                     <div
                         key={u.id}
                         title={u.name}
-                        className="flex h-4 w-4 items-center justify-center rounded-full border border-(--bg-elevated) bg-indigo-100 text-[9px] font-bold text-indigo-700"
+                        className="flex h-4 w-4 items-center justify-center rounded-full border border-(--bg-elevated) bg-brand-100 text-[9px] font-bold text-brand-700"
                     >
                         {u.name?.[0]?.toUpperCase()}
                     </div>
@@ -57,13 +53,14 @@ function AssigneeAvatars({ task }) {
             </div>
             {people.length === 1
                 ? <span className="truncate max-w-24">{people[0].name}</span>
-                : <span>{people.length} assignees</span>
+                : <span>{t("tasks.assigneeCount", { n: people.length })}</span>
             }
         </span>
     );
 }
 
 function MultiAssigneePicker({ members, selected, onChange }) {
+    const { t } = useI18n();
     const [open, setOpen] = useState(false);
 
     function toggle(id) {
@@ -71,10 +68,10 @@ function MultiAssigneePicker({ members, selected, onChange }) {
     }
 
     const label = selected.length === 0
-        ? "Unassigned"
+        ? t("tasks.unassigned")
         : selected.length === 1
-            ? (members.find((m) => m.user.id === selected[0])?.user.name ?? "1 assignee")
-            : `${selected.length} assignees`;
+            ? (members.find((m) => m.user.id === selected[0])?.user.name ?? t("tasks.oneAssignee"))
+            : t("tasks.assigneeCount", { n: selected.length });
 
     return (
         <div className="relative">
@@ -89,7 +86,7 @@ function MultiAssigneePicker({ members, selected, onChange }) {
             {open && (
                 <div className="absolute left-0 top-full z-50 mt-1 w-full rounded-xl border border-(--border) bg-(--bg-elevated) py-1 shadow-lg">
                     {members.length === 0 ? (
-                        <p className="px-3 py-2 text-xs text-(--text-muted)">No members</p>
+                        <p className="px-3 py-2 text-xs text-(--text-muted)">{t("tasks.noMembers")}</p>
                     ) : (
                         members.map((m) => {
                             const checked = selected.includes(m.user.id);
@@ -100,11 +97,11 @@ function MultiAssigneePicker({ members, selected, onChange }) {
                                     onClick={() => toggle(m.user.id)}
                                     className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-(--bg-overlay)"
                                 >
-                                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700 shrink-0">
+                                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-700 shrink-0">
                                         {m.user.name?.[0]?.toUpperCase()}
                                     </div>
                                     <span className="flex-1 text-left text-(--text-primary)">{m.user.name}</span>
-                                    {checked && <Check className="h-3.5 w-3.5 text-indigo-600" />}
+                                    {checked && <Check className="h-3.5 w-3.5 text-brand-600" />}
                                 </button>
                             );
                         })
@@ -118,6 +115,23 @@ function MultiAssigneePicker({ members, selected, onChange }) {
 export default function TasksPage() {
     const { currentWorkspace, currentWorkspaceId, currentOrg, accessToken, isReady } = useApp();
     const { canManageTasks } = useRole();
+    const { t } = useI18n();
+
+    const statusLabel = (status) =>
+        ({
+            TODO: t("tasks.status.todo"),
+            IN_PROGRESS: t("tasks.status.in_progress"),
+            IN_REVIEW: t("tasks.status.in_review"),
+            DONE: t("tasks.status.done"),
+        }[status]);
+
+    const priorityLabel = (priority) =>
+        ({
+            LOW: t("tasks.priority.low"),
+            MEDIUM: t("tasks.priority.medium"),
+            HIGH: t("tasks.priority.high"),
+            URGENT: t("tasks.priority.urgent"),
+        }[priority]);
 
     const [tasks, setTasks] = useState([]);
     const [projects, setProjects] = useState([]);
@@ -157,7 +171,11 @@ export default function TasksPage() {
         }
     }, [isReady, currentWorkspaceId, accessToken, statusFilter, priorityFilter, assigneeFilter]);
 
-    useEffect(() => { loadTasks(); }, [loadTasks]);
+    useEffect(() => {
+        let cancelled = false;
+        (async () => { await loadTasks(); })();
+        return () => { cancelled = true; };
+    }, [loadTasks]);
 
     useEffect(() => {
         if (!isReady || !currentWorkspaceId || !accessToken) return;
@@ -173,8 +191,8 @@ export default function TasksPage() {
 
     async function handleCreate(e) {
         e.preventDefault();
-        if (!form.title.trim()) { setFormError("Title is required"); return; }
-        if (!form.projectId) { setFormError("Select a project"); return; }
+        if (!form.title.trim()) { setFormError(t("tasks.titleRequired")); return; }
+        if (!form.projectId) { setFormError(t("tasks.selectProjectRequired")); return; }
         setFormError("");
         setCreating(true);
         try {
@@ -206,9 +224,9 @@ export default function TasksPage() {
             {/* Header */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold text-(--text-primary)">Tasks</h1>
+                    <h1 className="text-xl font-semibold text-(--text-primary)">{t("tasks.title")}</h1>
                     <p className="mt-0.5 text-sm text-(--text-muted)">
-                        {total} task{total !== 1 ? "s" : ""} in {currentWorkspace?.name}
+                        {t("tasks.countInWorkspace", { n: total, s: total !== 1 ? "s" : "", workspace: currentWorkspace?.name })}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -217,15 +235,15 @@ export default function TasksPage() {
                         className="flex h-9 items-center gap-1.5 rounded-lg border border-(--border) bg-(--bg-elevated) px-3 text-sm text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
                     >
                         <RefreshCw className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Refresh</span>
+                        <span className="hidden sm:inline">{t("tasks.refresh")}</span>
                     </button>
                     {canManageTasks && (
                         <button
                             onClick={() => setShowCreate((s) => !s)}
-                            className="flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+                            className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white transition-colors hover:bg-brand-700"
                         >
                             <Plus className="h-4 w-4" />
-                            <span>New Task</span>
+                            <span>{t("tasks.newTask")}</span>
                         </button>
                     )}
                 </div>
@@ -237,26 +255,26 @@ export default function TasksPage() {
                 <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="h-8 rounded-lg border border-(--border) bg-(--bg-elevated) px-2 text-xs text-(--text-secondary) focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="h-8 rounded-lg border border-(--border) bg-(--bg-elevated) px-2 text-xs text-(--text-secondary) focus:outline-none focus:ring-1 focus:ring-brand-500"
                 >
-                    <option value="">All statuses</option>
-                    {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                    <option value="">{t("tasks.filters.allStatuses")}</option>
+                    {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                 </select>
                 <select
                     value={priorityFilter}
                     onChange={(e) => setPriorityFilter(e.target.value)}
-                    className="h-8 rounded-lg border border-(--border) bg-(--bg-elevated) px-2 text-xs text-(--text-secondary) focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="h-8 rounded-lg border border-(--border) bg-(--bg-elevated) px-2 text-xs text-(--text-secondary) focus:outline-none focus:ring-1 focus:ring-brand-500"
                 >
-                    <option value="">All priorities</option>
-                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                    <option value="">{t("tasks.filters.allPriorities")}</option>
+                    {PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
                 </select>
                 <select
                     value={assigneeFilter}
                     onChange={(e) => setAssigneeFilter(e.target.value)}
-                    className="h-8 rounded-lg border border-(--border) bg-(--bg-elevated) px-2 text-xs text-(--text-secondary) focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="h-8 rounded-lg border border-(--border) bg-(--bg-elevated) px-2 text-xs text-(--text-secondary) focus:outline-none focus:ring-1 focus:ring-brand-500"
                 >
-                    <option value="">All assignees</option>
-                    <option value="me">Assigned to me</option>
+                    <option value="">{t("tasks.filters.allAssignees")}</option>
+                    <option value="me">{t("tasks.filters.assignedToMe")}</option>
                     {members.map((m) => (
                         <option key={m.user.id} value={m.user.id}>{m.user.name}</option>
                     ))}
@@ -266,7 +284,7 @@ export default function TasksPage() {
                         onClick={() => { setStatusFilter(""); setPriorityFilter(""); setAssigneeFilter(""); }}
                         className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs text-(--text-muted) hover:text-(--text-secondary)"
                     >
-                        <X className="h-3 w-3" /> Clear
+                        <X className="h-3 w-3" /> {t("tasks.filters.clear")}
                     </button>
                 )}
             </div>
@@ -274,24 +292,24 @@ export default function TasksPage() {
             {/* Create form */}
             {showCreate && canManageTasks && (
                 <form onSubmit={handleCreate} className="rounded-xl border border-(--border) bg-(--bg-elevated) p-5 space-y-4">
-                    <h3 className="text-sm font-semibold text-(--text-primary)">New task</h3>
+                    <h3 className="text-sm font-semibold text-(--text-primary)">{t("tasks.newTaskFormTitle")}</h3>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="sm:col-span-2">
                             <input
                                 type="text"
-                                placeholder="Task title *"
+                                placeholder={t("tasks.taskTitleRequired")}
                                 value={form.title}
                                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                                className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
+                                className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-brand-500 focus:outline-none"
                             />
                         </div>
                         <div className="sm:col-span-2">
                             <textarea
-                                placeholder="Description (optional)"
+                                placeholder={t("tasks.descriptionOptional")}
                                 rows={2}
                                 value={form.description}
                                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                                className="w-full resize-none rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
+                                className="w-full resize-none rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-brand-500 focus:outline-none"
                             />
                         </div>
                         <select
@@ -299,7 +317,7 @@ export default function TasksPage() {
                             onChange={(e) => setForm((f) => ({ ...f, projectId: e.target.value }))}
                             className="rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-secondary) focus:outline-none"
                         >
-                            <option value="">Select project *</option>
+                            <option value="">{t("tasks.selectProject")}</option>
                             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                         <select
@@ -307,14 +325,14 @@ export default function TasksPage() {
                             onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
                             className="rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-secondary) focus:outline-none"
                         >
-                            {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                            {PRIORITIES.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
                         </select>
                         <select
                             value={form.status}
                             onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
                             className="rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-secondary) focus:outline-none"
                         >
-                            {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                            {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
                         </select>
                         <input
                             type="date"
@@ -323,7 +341,7 @@ export default function TasksPage() {
                             className="rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-secondary) focus:outline-none"
                         />
                         <div className="sm:col-span-2">
-                            <p className="mb-1 text-xs text-(--text-muted)">Assignees</p>
+                            <p className="mb-1 text-xs text-(--text-muted)">{t("tasks.assignees")}</p>
                             <MultiAssigneePicker
                                 members={members}
                                 selected={assigneeIds}
@@ -335,14 +353,14 @@ export default function TasksPage() {
                         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{formError}</p>
                     )}
                     <div className="flex items-center justify-end gap-2">
-                        <button type="button" onClick={() => setShowCreate(false)} className="px-3 py-2 text-sm text-(--text-secondary) hover:text-(--text-primary)">Cancel</button>
+                        <button type="button" onClick={() => setShowCreate(false)} className="px-3 py-2 text-sm text-(--text-secondary) hover:text-(--text-primary)">{t("common.cancel")}</button>
                         <button
                             type="submit"
                             disabled={creating}
-                            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                            className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
                         >
                             {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                            Create task
+                            {t("tasks.createTask")}
                         </button>
                     </div>
                 </form>
@@ -363,9 +381,9 @@ export default function TasksPage() {
             ) : tasks.length === 0 ? (
                 <div className="rounded-xl border border-(--border) bg-(--bg-elevated) p-12 text-center">
                     <CircleDot className="mx-auto h-8 w-8 text-(--text-muted)" />
-                    <p className="mt-3 text-sm font-medium text-(--text-primary)">No tasks found</p>
+                    <p className="mt-3 text-sm font-medium text-(--text-primary)">{t("tasks.noTasksFound")}</p>
                     <p className="mt-1 text-xs text-(--text-muted)">
-                        {hasFilters ? "Try clearing your filters" : "Create your first task to get started"}
+                        {hasFilters ? t("tasks.emptyWithFilters") : t("tasks.emptyCreate")}
                     </p>
                 </div>
             ) : (
@@ -385,13 +403,13 @@ export default function TasksPage() {
                                 <div className="flex flex-wrap items-center gap-2">
                                     <p className="text-sm font-medium text-(--text-primary) leading-snug">{task.title}</p>
                                     <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_COLOR[task.priority]}`}>
-                                        {task.priority}
+                                        {priorityLabel(task.priority)}
                                     </span>
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-(--text-muted)">
                                     <span className="flex items-center gap-1">
                                         <span className={`h-1.5 w-1.5 rounded-full ${STATUS_COLOR[task.status]}`} />
-                                        {STATUS_LABEL[task.status]}
+                                        {statusLabel(task.status)}
                                     </span>
                                     <span className="text-(--text-muted)">·</span>
                                     <span>{task.project.name}</span>
@@ -418,7 +436,7 @@ export default function TasksPage() {
                                     {task._count?.comments > 0 && (
                                         <>
                                             <span className="text-(--text-muted)">·</span>
-                                            <span>{task._count.comments} comment{task._count.comments !== 1 ? "s" : ""}</span>
+                                            <span>{t("tasks.commentCount", { n: task._count.comments, s: task._count.comments !== 1 ? "s" : "" })}</span>
                                         </>
                                     )}
                                 </div>

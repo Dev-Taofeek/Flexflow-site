@@ -9,6 +9,7 @@ import { ArrowRight, Loader2, MailCheck, TriangleAlert } from "lucide-react";
 import { apiUrl } from "@/lib/api-url";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
+import { Button } from "@/components/ui/Button";
 
 export function JoinInviteClient() {
   const router = useRouter();
@@ -81,19 +82,17 @@ export function JoinInviteClient() {
         description="Sign in or create an account with the invited email address to accept this invitation."
       >
         <div className="mt-6 grid gap-3">
-          <Link
-            href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
-            className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
-          >
-            Sign in
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link
-            href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`}
-            className="flex items-center justify-center rounded-lg border border-neutral-200 px-4 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-          >
-            Create account
-          </Link>
+          <Button asChild className="w-full">
+            <Link href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}>
+              Sign in
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="secondary" className="w-full">
+            <Link href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`}>
+              Create account
+            </Link>
+          </Button>
         </div>
       </JoinCard>
     );
@@ -109,7 +108,7 @@ export function JoinInviteClient() {
         <button
           type="button"
           onClick={() => setState({ loading: false, error: "", joined: false })}
-          className="mt-6 w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+          className="mt-6 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500"
         >
           Try again
         </button>
@@ -128,13 +127,15 @@ export function JoinInviteClient() {
 
 function JoinCard({ icon, title, description, children }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
-        <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+    <main className="bg-background flex min-h-screen items-center justify-center px-4">
+      <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark w-full max-w-md rounded-3xl border p-8 shadow-md">
+        <div className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 mb-5 flex h-11 w-11 items-center justify-center rounded-xl">
           {icon}
         </div>
-        <h1 className="text-xl font-semibold text-neutral-900">{title}</h1>
-        <p className="mt-2 text-sm leading-6 text-neutral-500">{description}</p>
+        <h1 className="text-foreground dark:text-foreground-dark text-xl font-semibold">{title}</h1>
+        <p className="text-muted-foreground dark:text-muted-foreground-dark mt-2 text-sm leading-6">
+          {description}
+        </p>
         {children}
       </div>
     </main>

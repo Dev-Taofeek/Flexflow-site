@@ -1,4 +1,4 @@
-import { errorResponse } from "./utils/api-response.js";
+import { errorResponse } from "../utils/api-response.js";
 
 export function validate(schema) {
     return function validationMiddleware(req, res, next) {

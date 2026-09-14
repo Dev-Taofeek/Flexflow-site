@@ -2,12 +2,15 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { trackApiUsage } from "../middleware/usage.middleware.js";
 import { requireOrgRole, requireWorkspaceRole } from "../lib/permissions.js";
+import { getOrgEntitlements } from "../lib/entitlements.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
 router.use(authenticate);
+router.use(trackApiUsage);
 
 function slugify(str) {
     return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -20,16 +23,36 @@ router.post("/", requireOrgRole("OWNER"), async (req, res) => {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "organizationId and name are required"));
         }
 
-        const wsCount = await prisma.workspace.count({ where: { organizationId } });
-        if (wsCount >= 3) {
-            return res.status(403).json(errorResponse("WORKSPACE_LIMIT_REACHED", "Free plan allows 3 workspaces per organization. Upgrade to Premium for unlimited workspaces."));
-        }
-
         const baseSlug = slugify(name);
         let slug = baseSlug;
         let counter = 1;
         while (await prisma.workspace.findUnique({ where: { slug } })) {
             slug = `${baseSlug}-${counter++}`;
+        }
+
+        // ── Plan-based workspace-limit enforcement ──────────────────────────
+        const org = await prisma.organization.findUnique({
+            where: { id: organizationId },
+            include: { _count: { select: { workspaces: true } } },
+        });
+        if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
+
+        const entitlements = getOrgEntitlements(org);
+        if (Number.isFinite(entitlements.limits.workspaces) && org._count.workspaces >= entitlements.limits.workspaces) {
+            return res.status(403).json({
+                ...errorResponse(
+                    "LIMIT_REACHED",
+                    `You've reached the ${entitlements.limits.workspaces} workspace limit for your plan.`,
+                ),
+                data: {
+                    code: "LIMIT_REACHED",
+                    limitKey: "workspaces",
+                    limit: entitlements.limits.workspaces,
+                    current: org._count.workspaces,
+                    planId: entitlements.planId,
+                    upgradeAvailable: true,
+                },
+            });
         }
 
         const workspace = await prisma.workspace.create({

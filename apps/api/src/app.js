@@ -2,6 +2,7 @@ import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import pinoHttp from "pino-http";
+import { pino } from "pino";
 
 import { env } from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.middleware.js";
@@ -50,9 +51,17 @@ app.use((req, res, next) => {
     next();
 });
 
+async function buildLogger() {
+    if (env.NODE_ENV === "development") {
+        const { default: pretty } = await import("pino-pretty");
+        return pino({ level: "info" }, pretty({ sync: true, colorize: true }));
+    }
+    return pino({ level: "info" });
+}
+
 app.use(
     pinoHttp({
-        transport: env.NODE_ENV === "development" ? { target: "pino-pretty" } : undefined,
+        logger: await buildLogger(),
         autoLogging: false,
     }),
 );
@@ -63,6 +72,7 @@ if (env.NODE_ENV === "development") {
     app.use(morgan("dev"));
 }
 
+app.use('/api/billing/webhook', express.raw({ type: () => true, limit: '1mb' }));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 

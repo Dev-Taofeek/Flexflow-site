@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -15,11 +15,6 @@ export function usePushSubscription() {
     const [permission, setPermission] = useState(
         typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported"
     );
-
-    useEffect(() => {
-        if (typeof window === "undefined" || !("Notification" in window)) return;
-        setPermission(Notification.permission);
-    }, []);
 
     const subscribe = useCallback(async () => {
         if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator) || !VAPID_PUBLIC_KEY) {

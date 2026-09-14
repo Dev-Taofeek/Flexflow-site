@@ -1,21 +1,39 @@
-import { CalendarDays } from "lucide-react";
+"use client";
+
+import { CalendarDays, Clock3 } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
+import { useI18n } from "@/i18n";
 
 export function UpcomingDeadlines({ deadlines }) {
+  const { t } = useI18n();
   return (
     <section className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-2xl border p-6">
       <div>
         <h2 className="text-foreground dark:text-foreground-dark text-lg font-semibold">
-          Upcoming Deadlines
+          {t("dashboard.upcomingDeadlinesTitle")}
         </h2>
 
         <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-          Important milestones and delivery targets
+          {t("dashboard.upcomingDeadlinesSubtitle")}
         </p>
       </div>
 
       <div className="mt-6 space-y-4">
+        {deadlines.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background py-10 text-center dark:border-border-dark dark:bg-background-dark">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted dark:bg-muted-dark">
+              <Clock3 className="text-muted-foreground dark:text-muted-foreground-dark h-5 w-5" />
+            </div>
+            <p className="text-foreground dark:text-foreground-dark mt-3 text-sm font-medium">
+              {t("dashboard.noDeadlines")}
+            </p>
+            <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
+              {t("dashboard.noDeadlinesHint")}
+            </p>
+          </div>
+        ) : (
+          <>
         {deadlines.map((deadline) => (
           <div
             key={deadline.id}
@@ -36,7 +54,7 @@ export function UpcomingDeadlines({ deadlines }) {
                 </p>
                 {deadline.assignees?.length > 0 && (
                   <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                    {deadline.assignees.length} assignee{deadline.assignees.length === 1 ? "" : "s"}
+                    {t("dashboard.assigneeCount", { n: deadline.assignees.length })}
                   </p>
                 )}
               </div>
@@ -45,6 +63,8 @@ export function UpcomingDeadlines({ deadlines }) {
             <Badge variant="secondary">{deadline.dueDate}</Badge>
           </div>
         ))}
+          </>
+        )}
       </div>
     </section>
   );

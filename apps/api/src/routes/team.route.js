@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { trackApiUsage } from "../middleware/usage.middleware.js";
 import { requireWorkspaceRole } from "../lib/permissions.js";
 import { getEmailConfigStatus, isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
 import { notifyUser } from "../services/notification.service.js";
@@ -9,6 +10,7 @@ import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
 router.use(authenticate);
+router.use(trackApiUsage);
 
 function dedupeInvites(invites) {
     const byEmail = new Map();

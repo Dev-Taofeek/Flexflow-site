@@ -131,11 +131,20 @@ NEXTAUTH_SECRET="local-dev-nextauth-secret-at-least-32-chars"
 docker compose up -d
 ```
 
+**No Docker?** Use the embedded PostgreSQL in `tools/dev-db` (persists data in `tools/dev-db/data`, matches `apps/api/.env` on `:5433`):
+
+```bash
+cd tools/dev-db
+npm install        # first time only — pulls the Postgres 16 binaries
+npm start          # starts the DB (foreground, Ctrl+C to stop)
+npm stop           # stops it (or: npm run stop)
+```
+
 ### 4. Run database migrations and seed
 
 ```bash
 cd apps/api
-pnpm prisma migrate dev --name init
+pnpm prisma db push
 pnpm db:seed
 cd ../..
 ```

@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Bell, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { useI18n } from "@/i18n";
 
 const DISMISS_KEY = "flexflow:push-banner-dismissed";
 
 export function EnablePushBanner() {
+    const { t } = useI18n();
     const { permission, subscribe } = usePushSubscription();
-    const [dismissed, setDismissed] = useState(true);
+    const [dismissed, setDismissed] = useState(() => (
+        typeof window !== "undefined" && localStorage.getItem(DISMISS_KEY) === "1"
+    ));
     const [enabling, setEnabling] = useState(false);
-
-    useEffect(() => {
-        setDismissed(localStorage.getItem(DISMISS_KEY) === "1");
-    }, []);
 
     if (permission !== "default" || dismissed) return null;
 
@@ -35,19 +35,19 @@ export function EnablePushBanner() {
     }
 
     return (
-        <div className="flex items-center gap-3 border-b border-(--border) bg-indigo-50 px-4 py-2.5 text-sm dark:bg-indigo-950/40">
-            <Bell className="h-4 w-4 shrink-0 text-indigo-600" />
+        <div className="flex items-center gap-3 border-b border-(--border) bg-brand-50 px-4 py-2.5 text-sm dark:bg-brand-950/40">
+            <Bell className="h-4 w-4 shrink-0 text-brand-600" />
             <p className="min-w-0 flex-1 truncate text-(--text-primary)">
-                Turn on notifications to get updates instantly, even when FlexFlow is closed.
+                {t("shell.push.bannerText")}
             </p>
             <Button size="sm" isLoading={enabling} onClick={handleEnable}>
-                Enable
+                {t("shell.push.enable")}
             </Button>
             <button
                 type="button"
                 onClick={dismiss}
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-(--text-muted) transition-colors hover:bg-(--bg-overlay)"
-                aria-label="Dismiss"
+                aria-label={t("shell.action.dismiss")}
             >
                 <X className="h-4 w-4" />
             </button>

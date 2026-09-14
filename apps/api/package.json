@@ -19,6 +19,7 @@
         "seed": "node prisma/seed.js"
     },
     "dependencies": {
+        "@flexflow/plans": "workspace:*",
         "@prisma/client": "^5.22.0",
         "bcryptjs": "^2.4.3",
         "cors": "^2.8.5",

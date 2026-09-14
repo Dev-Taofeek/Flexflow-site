@@ -8,6 +8,8 @@ const variants = {
   success: "bg-success-100 text-success-700 dark:bg-success-500/10 dark:text-success-300",
   warning: "bg-warning-100 text-warning-700 dark:bg-warning-500/10 dark:text-warning-300",
   destructive: "bg-danger-100 text-danger-700 dark:bg-danger-500/10 dark:text-danger-300",
+  outline:
+    "border-border bg-background text-foreground border dark:border-border-dark dark:bg-background-dark dark:text-foreground-dark",
 };
 
 export function Badge({ className, variant = "primary", children, ...props }) {

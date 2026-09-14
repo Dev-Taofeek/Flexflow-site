@@ -1,10 +1,17 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { createRequire } from "module";
 import { Router } from "express";
+
+// otplib v13 ESM exports don't expose named exports in Node 20 — load via CJS
+const require = createRequire(import.meta.url);
+const { authenticator } = require("otplib");
 
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
+import { planInfoForOrg } from "../lib/entitlements.js";
+import { authRateLimiter } from "../middleware/rate-limit.middleware.js";
 import { sendTransactionalEmail } from "../services/email.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
@@ -43,8 +50,14 @@ function handleAuthError(res, label, error, fallbackMessage) {
 }
 
 // OAuth upsert — called by NextAuth after Google/GitHub sign-in
-router.post("/oauth", async (req, res) => {
+router.post("/oauth", authRateLimiter, async (req, res) => {
     try {
+        // Internal call from NextAuth only — reject OAuth upserts without the shared secret
+        const secret = req.headers["x-internal-secret"];
+        if (!secret || secret !== env.INTERNAL_SECRET) {
+            return res.status(401).json(errorResponse("UNAUTHORIZED", "Forbidden"));
+        }
+
         const { email, name, avatarUrl } = req.body;
         if (!email) return res.status(422).json(errorResponse("VALIDATION_ERROR", "email is required"));
 
@@ -94,6 +107,7 @@ router.post("/oauth", async (req, res) => {
             refreshToken,
             organizations: organizations.map((m) => ({
                 ...m.organization,
+                planInfo: planInfoForOrg(m.organization),
                 workspaces: m.organization.workspaces.map((workspace) => ({
                     ...workspace,
                     role: workspace.members?.[0]?.role || m.role,
@@ -108,7 +122,30 @@ router.post("/oauth", async (req, res) => {
     }
 });
 
-router.post("/register", async (req, res) => {
+// POST /auth/demo-credentials — returns the seeded demo account's credentials.
+// Env-gated: only reachable when DEMO_MODE=true. Never exposes real accounts;
+// it simply hands a visitor the well-known demo login so the marketing site
+// can offer a frictionless "Try the demo" without hardcoding secrets client-side.
+router.post("/demo-credentials", authRateLimiter, async (req, res) => {
+    if (!env.DEMO_MODE) {
+        return res.status(404).json(errorResponse("NOT_FOUND", "Demo is not enabled"));
+    }
+
+    const user = await prisma.user.findFirst({
+        where: { email: "demo@flexflow.app" },
+        select: { id: true, email: true },
+    });
+    if (!user) {
+        return res.status(404).json(errorResponse("NOT_FOUND", "Demo account not seeded — run prisma db seed"));
+    }
+
+    return res.status(200).json(successResponse({
+        email: user.email,
+        password: "Password123!",
+    }));
+});
+
+router.post("/register", authRateLimiter, async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
@@ -145,9 +182,9 @@ router.post("/register", async (req, res) => {
     }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", authRateLimiter, async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, code } = req.body;
 
         if (!email || !password) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Email and password are required"));
@@ -158,6 +195,7 @@ router.post("/login", async (req, res) => {
             select: {
                 id: true, name: true, email: true, avatarUrl: true,
                 passwordHash: true, onboarded: true, status: true,
+                twoFactorEnabled: true, twoFactorSecret: true,
             },
         });
 
@@ -174,7 +212,24 @@ router.post("/login", async (req, res) => {
             return res.status(401).json(errorResponse("INVALID_CREDENTIALS", "Invalid email or password"));
         }
 
-        const { passwordHash: _, ...safeUser } = user;
+        const safeUser = { ...user };
+        delete safeUser.passwordHash;
+        delete safeUser.twoFactorSecret;
+
+        // 2FA enforcement — a valid TOTP code is required before any tokens are issued
+        if (user.twoFactorEnabled) {
+            if (!code) {
+                return res.status(200).json(successResponse({
+                    requiresTwoFactor: true,
+                    user: safeUser,
+                }));
+            }
+
+            const codeValid = user.twoFactorSecret && authenticator.verify({ token: code, secret: user.twoFactorSecret });
+            if (!codeValid) {
+                return res.status(401).json(errorResponse("INVALID_CODE", "Invalid or expired code — try again"));
+            }
+        }
 
         const organizations = await prisma.organizationMember.findMany({
             where: { userId: user.id },
@@ -202,6 +257,7 @@ router.post("/login", async (req, res) => {
             user: safeUser,
             organizations: organizations.map((m) => ({
                 ...m.organization,
+                planInfo: planInfoForOrg(m.organization),
                 workspaces: m.organization.workspaces.map((workspace) => ({
                     ...workspace,
                     role: workspace.members?.[0]?.role || m.role,
@@ -257,10 +313,10 @@ router.post("/refresh", async (req, res) => {
         const decoded = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET);
         const user = await prisma.user.findUnique({
             where: { id: decoded.userId },
-            select: { id: true, status: true },
+            select: { id: true, status: true, refreshToken: true },
         });
 
-        if (!user || user.status === "SUSPENDED") {
+        if (!user || user.status === "SUSPENDED" || !user.refreshToken || user.refreshToken !== refreshToken) {
             return res.status(401).json(errorResponse("UNAUTHORIZED", "Invalid session"));
         }
 
@@ -310,6 +366,7 @@ router.get("/me", async (req, res) => {
 
         const organizations = memberships.map((m) => ({
             ...m.organization,
+            planInfo: planInfoForOrg(m.organization),
             workspaces: m.organization.workspaces.map((workspace) => ({
                 ...workspace,
                 role: workspace.members?.[0]?.role || m.role,
@@ -325,7 +382,7 @@ router.get("/me", async (req, res) => {
     }
 });
 
-router.post("/forgot-password", async (req, res) => {
+router.post("/forgot-password", authRateLimiter, async (req, res) => {
     try {
         const { email } = req.body;
         if (!email?.includes("@")) {
@@ -367,7 +424,7 @@ router.post("/forgot-password", async (req, res) => {
     }
 });
 
-router.post("/reset-password", async (req, res) => {
+router.post("/reset-password", authRateLimiter, async (req, res) => {
     try {
         const { token, password } = req.body;
         if (!token || !password) {
