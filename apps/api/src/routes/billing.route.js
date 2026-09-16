@@ -45,7 +45,8 @@ router.post("/webhook", async (req, res) => {
 router.use(authenticate);
 
 // GET /api/billing/current/:orgId — subscription + live usage for the UI.
-router.get("/current/:orgId", async (req, res) => {
+// Any org member may view their own org's billing screen (not cross-tenant).
+router.get("/current/:orgId", requireOrgRole("OWNER", "ADMIN", "MEMBER", "VIEWER"), async (req, res) => {
     try {
         const org = await prisma.organization.findUnique({ where: { id: req.params.orgId } });
         if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
@@ -139,9 +140,14 @@ router.post("/checkout", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
 });
 
 // POST /api/billing/confirm — mock-provider completion (Stripe goes through the
-// webhook below). Grants entitlements through the billing service only.
+// webhook below). Only reachable when the mock provider is active, so a real
+// payment provider can never grant entitlements through this self-service path.
 router.post("/confirm", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
     try {
+        if (getProvider() !== "mock") {
+            return res.status(403).json(errorResponse("FORBIDDEN", "Checkout confirmation is only available with the mock provider"));
+        }
+
         const { sessionId, plan = "PRO", billingCycle = "MONTHLY", addOns = [], organizationId } = req.body;
         const orgId = organizationId || req.params.orgId || req.body.orgId;
         if (!orgId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "organizationId is required"));
@@ -213,8 +219,13 @@ router.post("/cancel/:orgId", requireOrgRole("OWNER"), async (req, res) => {
 });
 
 // POST /api/billing/downgrade/:orgId — dev/testing helper: drop back to FREE.
+// Disabled in production so nobody can self-serve a plan downgrade to dodge bills.
 router.post("/downgrade/:orgId", requireOrgRole("OWNER"), async (req, res) => {
     try {
+        if (process.env.NODE_ENV === "production") {
+            return res.status(403).json(errorResponse("FORBIDDEN", "Manual downgrade is disabled in production"));
+        }
+
         const org = await downgradeToFree(req.params.orgId);
         await notifyUser(req.user.id, {
             title: "Plan downgraded",

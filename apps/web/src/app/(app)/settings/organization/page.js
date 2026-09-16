@@ -14,6 +14,7 @@ import {
   deleteOrganization,
   fetchOrgMembers,
   updateMemberRole,
+  updateMemberTag,
   removeMember,
   inviteToOrg,
   cancelOrgInvite,
@@ -66,6 +67,50 @@ function UsageBar({ label, used, limit, unit, t, locale }) {
         />
       </div>
     </div>
+  );
+}
+
+function MemberTag({ member, canEdit, onSave }) {
+  const { t } = useI18n();
+  const [value, setValue] = useState(member.tag || "");
+  const [saving, setSaving] = useState(false);
+
+  async function commit() {
+    const tag = value.trim();
+    if (tag === (member.tag || "")) return;
+    setSaving(true);
+    try {
+      await onSave(member, tag);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!canEdit) {
+    if (!member.tag) return null;
+    return (
+      <span className="shrink-0 rounded-full bg-(--bg-overlay) px-2 py-0.5 text-xs font-medium text-(--text-secondary)">
+        {member.tag}
+      </span>
+    );
+  }
+
+  return (
+    <input
+      value={value}
+      disabled={saving}
+      maxLength={40}
+      placeholder={t("settings.organization.memberTagPlaceholder")}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
+      }}
+      className="w-32 shrink-0 rounded-md border border-(--border) bg-(--bg) px-2 py-0.5 text-xs text-(--text-secondary) placeholder-(--text-muted) focus:border-brand-500 focus:outline-none"
+    />
   );
 }
 
@@ -148,6 +193,20 @@ export default function OrganizationSettingsPage() {
       await updateMemberRole(currentOrg.id, userId, role, accessToken);
       setMembers((prev) => prev.map((m) => (m.user?.id === userId ? { ...m, role } : m)));
       addToast(t("settings.organization.memberRoleUpdated"), "success");
+    } catch (err) {
+      setError(err.message);
+      addToast(err.message, "error");
+    }
+  }
+
+  async function handleTagSave(member, tag) {
+    try {
+      await updateMemberTag(currentOrg.id, member.user?.id, tag, accessToken);
+      setMembers((prev) => prev.map((m) => (m.user?.id === member.user?.id ? { ...m, tag: tag || null } : m)));
+      addToast(
+        tag ? t("settings.organization.memberTagUpdated") : t("settings.organization.memberTagRemoved"),
+        "success"
+      );
     } catch (err) {
       setError(err.message);
       addToast(err.message, "error");
@@ -474,7 +533,15 @@ export default function OrganizationSettingsPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-(--text-primary)">{m.user?.name}</p>
-                <p className="truncate text-xs text-(--text-muted)">{m.user?.email}</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-xs text-(--text-muted)">{m.user?.email}</p>
+                  <MemberTag
+                    key={`${m.id}:${m.tag || ""}`}
+                    member={m}
+                    canEdit={canManageMembers && canEditMember(m.role)}
+                    onSave={handleTagSave}
+                  />
+                </div>
               </div>
               <span
                 className={[

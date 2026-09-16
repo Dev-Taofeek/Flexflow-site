@@ -14,6 +14,7 @@ import { useRole } from "@/hooks/useRole";
 import { apiRequest } from "@/lib/api-client";
 import { UpgradePrompt } from "@/components/billing/UpgradePrompt";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 const SAMPLE_PROMPT_KEYS = [
     "intelligence.sample.launchStatus",
@@ -32,13 +33,14 @@ const SOURCE_META = {
 
 function StatusPill({ status }) {
     const { t } = useI18n();
+    const done = status === "COMPLETED" || status === "DONE";
     const tone =
-        status === "COMPLETED" ? "bg-success-500/15 text-success-600" :
+        done ? "bg-success-500/15 text-success-600" :
         status === "BLOCKED"   ? "bg-danger-500/15 text-danger-600" :
         status === "IN_PROGRESS" ? "bg-brand-500/15 text-brand-500" :
         "bg-(--bg-overlay) text-(--text-muted)";
     const label =
-        status === "COMPLETED" ? t("intelligence.status.completed") :
+        done ? t("intelligence.status.completed") :
         status === "BLOCKED" ? t("intelligence.status.blocked") :
         status === "IN_PROGRESS" ? t("intelligence.status.inProgress") :
         String(status).toLowerCase().replace(/_/g, " ");
@@ -64,6 +66,8 @@ export default function IntelligencePage() {
     const [running, setRunning] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState("");
+    const [history, setHistory] = useState([]);
+    const [snapshot, setSnapshot] = useState(null);
 
     const [entry, setEntry] = useState({ title: "", content: "", tags: "", workspaceId: "" });
     const [saving, setSaving] = useState(false);
@@ -101,13 +105,26 @@ export default function IntelligencePage() {
         }
     }, [currentOrg, token, t]);
 
+    const loadSnapshot = useCallback(async () => {
+        if (!currentOrg?.id || !currentWorkspace?.id || !token) return;
+        try {
+            const res = await fetch(apiUrl(`/intelligence/${currentOrg.id}/snapshot?workspaceId=${currentWorkspace.id}`), {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const json = await res.json();
+            if (res.ok && json.success) setSnapshot(json.data);
+        } catch {
+            // Snapshot is non-fatal; leave null.
+        }
+    }, [currentOrg, currentWorkspace, token]);
+
     useEffect(() => {
         if (isReady && currentOrg?.id) {
-            const timer = setTimeout(() => { loadStatus(); }, 0);
+            const timer = setTimeout(() => { loadStatus(); loadSnapshot(); }, 0);
             return () => clearTimeout(timer);
         }
         return undefined;
-    }, [isReady, currentOrg, loadStatus]);
+    }, [isReady, currentOrg, loadStatus, loadSnapshot]);
 
     const usagePct = useMemo(() => {
         if (status.fullAccess || !Number.isFinite(status.dailyLimit) || status.dailyLimit === 0) return 0;
@@ -128,6 +145,7 @@ export default function IntelligencePage() {
                     organizationId: currentOrg.id,
                     workspaceId: currentWorkspace?.id,
                     query,
+                    history: history.slice(-10),
                 }),
             });
             const json = await res.json();
@@ -144,6 +162,7 @@ export default function IntelligencePage() {
             }
             setStatus((s) => ({ ...s, queryCount: json.data.usage?.queryCount ?? s.queryCount, remaining: json.data.usage?.remaining ?? s.remaining }));
             setResult({ question: json.data.question, answer: json.data.answer, sources: json.data.sources || [] });
+            setHistory((h) => [...h, { role: "user", content: query }, { role: "assistant", content: json.data.answer }].slice(-10));
         } catch (err) {
             setError(err.message);
         } finally {
@@ -288,6 +307,102 @@ export default function IntelligencePage() {
                 )}
             </section>
 
+            {/* Team snapshot */}
+            {snapshot && (
+                <section className="rounded-3xl border border-(--border) bg-(--bg-elevated) p-5 sm:p-6">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                            <h2 className="text-sm font-semibold text-(--text-primary)">{t("intelligence.snapshot.title")}</h2>
+                            <p className="mt-1 text-xs text-(--text-secondary)">{t("intelligence.snapshot.subtitle")}</p>
+                        </div>
+                        <span className="text-xs text-(--text-tertiary)">
+                            {t("intelligence.snapshot.memorySince")} {new Date(snapshot.memoryStart).toLocaleDateString()}
+                        </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                        {[
+                            { key: "tasks", value: snapshot.counts.tasks },
+                            { key: "projects", value: snapshot.counts.projects },
+                            { key: "members", value: snapshot.counts.members },
+                            { key: "knowledge", value: snapshot.counts.knowledge },
+                            { key: "completed", value: snapshot.counts.completed },
+                            { key: "blocked", value: snapshot.counts.blocked, danger: true },
+                            { key: "overdue", value: snapshot.counts.overdue, danger: true },
+                        ].map((card) => (
+                            <div
+                                key={card.key}
+                                className={`rounded-2xl border p-4 ${card.danger ? "border-danger-500/30 bg-danger-500/5" : "border-(--border) bg-(--bg-sunken)"}`}
+                            >
+                                <p className="text-xs text-(--text-muted)">{t(`intelligence.snapshot.${card.key}`)}</p>
+                                <p className={`mt-1 text-2xl font-semibold ${card.danger ? "text-danger-500" : "text-(--text-primary)"}`}>{card.value}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs text-(--text-secondary)">
+                        <span className="rounded-full border border-(--border) px-3 py-1">
+                            {t("intelligence.snapshot.createdThisWeek")}: <strong className="text-(--text-primary)">{snapshot.createdThisWeek}</strong>
+                        </span>
+                        <span className="rounded-full border border-(--border) px-3 py-1">
+                            {t("intelligence.snapshot.completedThisWeek")}: <strong className="text-(--text-primary)">{snapshot.completedThisWeek}</strong>
+                        </span>
+                    </div>
+
+                    <div className="mt-6 grid gap-6 lg:grid-cols-3">
+                        {snapshot.workload?.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-semibold uppercase tracking-wide text-(--text-muted)">{t("intelligence.snapshot.workload")}</h3>
+                                <ul className="mt-3 space-y-2">
+                                    {snapshot.workload.map((w) => (
+                                        <li key={w.id} className="flex items-center justify-between gap-3 text-sm">
+                                            <span className="truncate text-(--text-secondary)">{w.name}</span>
+                                            <span className="flex items-center gap-2">
+                                                <span className="h-1.5 w-16 overflow-hidden rounded-full bg-(--bg-overlay)">
+                                                    <span className="block h-full rounded-full bg-brand-500" style={{ width: `${Math.min(100, w.count * 20)}%` }} />
+                                                </span>
+                                                <span className="text-xs font-medium text-(--text-primary)">{w.count}</span>
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {snapshot.projectHealth?.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-semibold uppercase tracking-wide text-(--text-muted)">{t("intelligence.snapshot.projectHealth")}</h3>
+                                <ul className="mt-3 space-y-2">
+                                    {snapshot.projectHealth.map((p) => (
+                                        <li key={p.projectId} className="flex items-center justify-between gap-3 text-sm">
+                                            <span className="truncate text-(--text-secondary)">{p.name}</span>
+                                            <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${p.riskScore >= 60 ? "bg-danger-500/15 text-danger-600" : "bg-amber-500/15 text-amber-600"}`}>
+                                                {p.riskScore}%
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {snapshot.recentActivity?.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-semibold uppercase tracking-wide text-(--text-muted)">{t("intelligence.snapshot.recentActivity")}</h3>
+                                <ul className="mt-3 space-y-2">
+                                    {snapshot.recentActivity.slice(0, 5).map((a, i) => (
+                                        <li key={i} className="text-sm text-(--text-secondary)">
+                                            <span className="font-medium text-(--text-primary)">{a.actor}</span>{" "}
+                                            {a.action}{" "}
+                                            <span className="text-xs text-(--text-tertiary)">{new Date(a.at).toLocaleString()}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                </section>
+            )}
+
             {error && (
                 <div className="flex items-start gap-2.5 rounded-xl border border-danger-500/30 bg-danger-500/10 p-4 text-sm text-danger-600">
                     <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
@@ -313,7 +428,7 @@ export default function IntelligencePage() {
                             </div>
                             <div className="min-w-0 flex-1">
                                 <p className="text-xs font-medium uppercase tracking-wide text-(--text-tertiary)">{t("intelligence.answer")}</p>
-                                <p className="mt-2 text-sm leading-relaxed text-(--text-primary)">{result.answer}</p>
+                                <p className="mt-2 text-sm leading-relaxed text-(--text-primary)"><Translated>{result.answer}</Translated></p>
                             </div>
                         </div>
                     </div>
@@ -340,8 +455,8 @@ export default function IntelligencePage() {
                                                 <span className="text-[11px] font-medium text-(--text-tertiary)">{t("intelligence.matchPercent", { n: source.relevance })}</span>
                                             </div>
                                             <div>
-                                                <p className="text-sm font-medium text-(--text-primary)">{source.title}</p>
-                                                <p className="mt-1 text-xs leading-relaxed text-(--text-secondary)">{source.snippet}</p>
+                                                <p className="text-sm font-medium text-(--text-primary)"><Translated>{source.title}</Translated></p>
+                                                <p className="mt-1 text-xs leading-relaxed text-(--text-secondary)"><Translated>{source.snippet}</Translated></p>
                                             </div>
                                             {(source.status || source.assignee || source.tags?.length > 0) && (
                                                 <div className="flex flex-wrap items-center gap-2">

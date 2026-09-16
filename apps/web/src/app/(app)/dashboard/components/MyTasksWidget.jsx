@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ListTodo } from "lucide-react";
 import Link from "next/link";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 const priorityVariantMap = {
   LOW: "secondary",
@@ -59,11 +60,11 @@ export function MyTasksWidget({ tasks }) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-foreground dark:text-foreground-dark text-sm font-medium">
-                  {task.title}
+                  <Translated>{task.title}</Translated>
                 </h3>
 
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                  {task.project}
+                  <Translated>{task.project}</Translated>
                 </p>
                 {task.assignees?.length > 1 && (
                   <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">

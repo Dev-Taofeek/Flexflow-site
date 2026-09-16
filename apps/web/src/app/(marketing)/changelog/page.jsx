@@ -1,3 +1,4 @@
+import { LiveText } from "@/components/LiveText";
 import { ContentPage, Prose, ProseH2 } from "@/components/marketing/ContentPage";
 
 const RELEASES = [
@@ -56,9 +57,11 @@ export const metadata = {
 export default function ChangelogPage() {
   return (
     <ContentPage
-      eyebrow="Changelog"
-      title="Product updates, release by release."
-      description="Every improvement to FlexFlow, documented. Track our roadmap on the roadmap page."
+      eyebrow={<LiveText>Changelog</LiveText>}
+      title={<LiveText>Product updates, release by release.</LiveText>}
+      description={
+        <LiveText>Every improvement to FlexFlow, documented. Track our roadmap on the roadmap page.</LiveText>
+      }
     >
       <Prose>
         {RELEASES.map((release) => (
@@ -67,14 +70,23 @@ export default function ChangelogPage() {
               <span className="font-mono text-sm font-semibold text-(--text-primary)">
                 {release.version}
               </span>
-              <span className="text-sm text-(--text-tertiary)">{release.date}</span>
+              <span className="text-sm text-(--text-tertiary)">
+                <LiveText>{release.date}</LiveText>
+              </span>
             </div>
-            <ProseH2>{release.heading}</ProseH2>
+            <ProseH2>
+              <LiveText>{release.heading}</LiveText>
+            </ProseH2>
             <ul className="list-disc space-y-2 pl-5 marker:text-(--text-tertiary)">
               {release.entries.map((entry) => (
-                <li key={entry}>{entry}</li>
+                <li key={entry}>
+                  <LiveText>{entry}</LiveText>
+                </li>
               ))}
             </ul>
+            <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-success-500">
+              <LiveText>{release.tag}</LiveText>
+            </p>
           </div>
         ))}
       </Prose>

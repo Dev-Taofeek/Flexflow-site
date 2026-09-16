@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { PLANS, FEATURES, getFeatureInfo } from "@flexflow/plans";
+import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 function createIcon(paths) {
   return function Icon({ className, strokeWidth = 2, ...rest }) {
@@ -266,7 +268,7 @@ function KanbanPreview() {
         >
           <div className="flex items-center gap-1.5 pb-2">
             <span className={`h-1.5 w-1.5 rounded-full ${col.tone}`} />
-            <span className="text-[11px] font-semibold text-(--text-secondary)">{col.name}</span>
+            <span className="text-[11px] font-semibold text-(--text-secondary)"><Translated>{col.name}</Translated></span>
           </div>
           <div className="space-y-1.5">
             {col.cards.map((card) => (
@@ -274,12 +276,12 @@ function KanbanPreview() {
                 key={card}
                 className="rounded-lg border border-(--border) bg-(--bg-elevated) px-2 py-1.5 text-[11px] font-medium text-(--text-secondary)"
               >
-                {card}
+                <Translated>{card}</Translated>
               </div>
             ))}
             {col.cards.length === 0 ? (
               <div className="flex h-8 items-center justify-center rounded-lg border border-dashed border-(--border)">
-                <span className="text-[10px] text-(--text-tertiary)">Empty</span>
+                <span className="text-[10px] text-(--text-tertiary)"><Translated>Empty</Translated></span>
               </div>
             ) : null}
           </div>
@@ -335,11 +337,11 @@ function PreviewProjects() {
           >
             <div className="flex items-center gap-2.5">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />
-              <span className="text-xs font-semibold text-(--text-primary)">{p.name}</span>
+              <span className="text-xs font-semibold text-(--text-primary)"><Translated>{p.name}</Translated></span>
               <span className="text-[11px] text-(--text-tertiary)">
-                {p.done}/{p.total} tasks
+                <Translated>{p.done}/{p.total} tasks</Translated>
               </span>
-              <span className="ml-auto text-[11px] text-(--text-tertiary)">{p.updated}</span>
+              <span className="ml-auto text-[11px] text-(--text-tertiary)"><Translated>{p.updated}</Translated></span>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-(--bg-overlay)">
               <motion.span
@@ -371,7 +373,7 @@ function PreviewTeam() {
           <Avatar initials={m.initials} />
           <span className="text-xs font-medium text-(--text-primary)">
             {m.name}
-            {m.you ? <span className="text-(--text-tertiary)"> (that&apos;s you)</span> : null}
+            {m.you ? <span className="text-(--text-tertiary)"><Translated>(that&apos;s you)</Translated></span> : null}
           </span>
           <span
             className={[
@@ -381,7 +383,7 @@ function PreviewTeam() {
                 : "bg-(--bg-overlay) text-(--text-tertiary)",
             ].join(" ")}
           >
-            {m.role}
+            <Translated>{m.role}</Translated>
           </span>
         </motion.div>
       ))}
@@ -402,15 +404,15 @@ function PreviewIntelligence() {
         >
           <p className="flex items-start gap-2 text-xs font-semibold text-(--text-primary)">
             <Search className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" strokeWidth={1.7} />
-            {item.question}
+            <Translated>{item.question}</Translated>
           </p>
           <p className="mt-2 flex items-start gap-2 rounded-lg bg-(--bg) p-2.5 text-[11px] leading-relaxed text-(--text-secondary)">
             <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" strokeWidth={1.7} />
-            {item.answer}
+            <Translated>{item.answer}</Translated>
           </p>
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-(--text-tertiary)">
             <BookOpen className="h-3 w-3" strokeWidth={1.7} />
-            {item.source}
+            <Translated>{item.source}</Translated>
           </p>
         </motion.div>
       ))}
@@ -423,11 +425,11 @@ function PreviewBoard() {
     <>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-(--text-primary)">Product · Sprint 12</p>
-          <p className="text-xs text-(--text-tertiary)">Drag tasks across columns, in real time</p>
+          <p className="text-sm font-semibold text-(--text-primary)"><Translated>Product · Sprint 12</Translated></p>
+          <p className="text-xs text-(--text-tertiary)"><Translated>Drag tasks across columns, in real time</Translated></p>
         </div>
         <span className="rounded-full bg-(--bg-overlay) px-2 py-0.5 text-[11px] font-medium text-(--text-tertiary)">
-          Live sync
+          <Translated>Live sync</Translated>
         </span>
       </div>
       <KanbanPreview />
@@ -439,8 +441,8 @@ function PreviewDashboard() {
   return (
     <>
       <div>
-        <p className="text-sm font-semibold text-(--text-primary)">Design System</p>
-        <p className="text-xs text-(--text-tertiary)">5 tasks pending review</p>
+        <p className="text-sm font-semibold text-(--text-primary)"><Translated>Design System</Translated></p>
+        <p className="text-xs text-(--text-tertiary)"><Translated>5 tasks pending review</Translated></p>
       </div>
       <KanbanPreview />
     </>
@@ -455,9 +457,9 @@ function AppPreview() {
       <div className="overflow-hidden rounded-xl border border-(--border)">
         <div className="flex items-center gap-2 border-b border-(--border) px-4 py-3">
           <LockKeyhole className="h-3.5 w-3.5 text-(--text-tertiary)" strokeWidth={1.7} />
-          <span className="text-xs font-medium text-(--text-tertiary)">Flexflow Design System</span>
+          <span className="text-xs font-medium text-(--text-tertiary)"><Translated>Flexflow Design System</Translated></span>
           <span className="ml-auto rounded-md bg-(--bg-overlay) px-2 py-0.5 text-[11px] font-medium text-(--text-tertiary)">
-            Live preview
+            <Translated>Live preview</Translated>
           </span>
         </div>
 
@@ -476,7 +478,7 @@ function AppPreview() {
                     : "text-(--text-tertiary) hover:text-(--text-secondary)",
                 ].join(" ")}
               >
-                {item.label}
+                <Translated>{item.label}</Translated>
               </button>
             ))}
           </aside>
@@ -500,7 +502,7 @@ function AppPreview() {
                       : "text-(--text-tertiary)",
                   ].join(" ")}
                 >
-                  {item.label}
+                  <Translated>{item.label}</Translated>
                 </button>
               ))}
             </div>
@@ -532,7 +534,7 @@ function AppPreview() {
         </div>
 
         <div className="border-t border-(--border) px-4 py-2.5 text-center text-[11px] text-(--text-tertiary)">
-          A look inside your dashboard — click a section to explore.
+          <Translated>A look inside your dashboard click a section to explore.</Translated>
         </div>
       </div>
     </div>
@@ -554,6 +556,7 @@ function SectionHeading({ eyebrow, title, align = "left", description }) {
 }
 
 export function LandingPageClient() {
+  const { t } = useI18n();
   const minimizeMotion = useReducedMotion();
   const [billing, setBilling] = useState("monthly");
   const [openFaq, setOpenFaq] = useState(faqs[0].question);
@@ -590,30 +593,28 @@ export function LandingPageClient() {
         <div className="mx-auto w-full max-w-7xl px-6 pt-18 pb-20 lg:px-8">
           <motion.div {...fadeUp} className="mx-auto max-w-3xl text-center">
             <h1 className="text-balance text-5xl font-semibold tracking-tight text-(--text-primary) md:text-7xl">
-              Plan, assign, track, and ship and remember why.
+              {t("landing.heroTitle")}
             </h1>
 
             <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-(--text-secondary) md:text-lg">
-              FlexFlow brings projects, tasks, permissions, review workflows, and Team
-              Intelligence into a single real-time workspace. Decisions stop living in your
-              head they become answers your whole team can ask for.
+              {t("landing.heroSubtitle")}
             </p>
 
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button asChild size="lg">
                 <Link href="/register">
-                  Start building free
+                  {t("landing.startBuildingFree")}
                   <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
                 </Link>
               </Button>
 
               <Button asChild variant="secondary" size="lg">
-                <Link href="/login">Sign in</Link>
+                <Link href="/login">{t("common.signIn")}</Link>
               </Button>
             </div>
 
             <p className="mt-4 text-sm text-(--text-tertiary)">
-              No credit card required · Free to start · Set up in minutes
+              {t("landing.noCreditCard")}
             </p>
           </motion.div>
 
@@ -632,9 +633,9 @@ export function LandingPageClient() {
           <div className="grid items-start gap-12 lg:grid-cols-2">
             <div className="lg:sticky lg:top-24">
               <SectionHeading
-                eyebrow="Team Intelligence"
-                title="Ask anything. Your team's history answers with receipts."
-                description="Team Intelligence turns tokens of work into organizational memory. Tasks, projects, comments, activity, and decisions become answerable in plain English scoped to what each person is allowed to see."
+                eyebrow={<Translated>Team Intelligence</Translated>}
+                title={<Translated>Ask anything. Your team&apos;s history answers with receipts.</Translated>}
+                description={<Translated>Team Intelligence turns tokens of work into organizational memory. Tasks, projects, comments, activity, and decisions become answerable in plain English scoped to what each person is allowed to see.</Translated>}
               />
               <ul className="mt-8 space-y-3">
                 {[
@@ -647,19 +648,19 @@ export function LandingPageClient() {
                     <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-500/15 text-success-600">
                       <Check className="h-3 w-3" strokeWidth={2.5} />
                     </span>
-                    {point}
+                    <Translated>{point}</Translated>
                   </li>
                 ))}
               </ul>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild>
                   <Link href="/register">
-                    Start with Team Intelligence
+                    <Translated>Start with Team Intelligence</Translated>
                     <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
                   </Link>
                 </Button>
                 <Button asChild variant="secondary">
-                  <Link href="/pricing">See plans</Link>
+                  <Link href="/pricing">{t("common.seePricing")}</Link>
                 </Button>
               </div>
             </div>
@@ -673,15 +674,15 @@ export function LandingPageClient() {
                 >
                   <p className="flex items-start gap-2.5 text-sm font-semibold text-(--text-primary)">
                     <Search className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" strokeWidth={1.7} />
-                    {item.question}
+                    <Translated>{item.question}</Translated>
                   </p>
                   <p className="mt-3 flex items-start gap-2.5 rounded-xl bg-(--bg-overlay) p-4 text-sm leading-relaxed text-(--text-secondary)">
                     <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" strokeWidth={1.7} />
-                    {item.answer}
+                    <Translated>{item.answer}</Translated>
                   </p>
                   <p className="mt-3 flex items-center gap-2 text-xs text-(--text-tertiary)">
                     <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    {item.source}
+                    <Translated>{item.source}</Translated>
                   </p>
                 </motion.div>
               ))}
@@ -693,9 +694,9 @@ export function LandingPageClient() {
       {/* ── Features ─────────────────────────────────────────────────── */}
       <section id="features" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 py-24 lg:px-8">
         <SectionHeading
-          eyebrow="Features"
-          title="Everything your team needs to move work forward."
-          description="One workspace for planning, permissions, execution, review, and delivery no duct-taped integrations."
+          eyebrow={<Translated>Features</Translated>}
+          title={<Translated>Everything your team needs to move work forward.</Translated>}
+          description={<Translated>One workspace for planning, permissions, execution, review, and delivery no duct-taped integrations.</Translated>}
         />
 
         <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -711,9 +712,9 @@ export function LandingPageClient() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-(--border) bg-(--bg-overlay) text-brand-500 transition-colors group-hover:border-brand-500/40">
                   <Icon className="h-5 w-5" strokeWidth={1.7} />
                 </div>
-                <h3 className="mt-5 text-lg font-semibold text-(--text-primary)">{feature.title}</h3>
+                <h3 className="mt-5 text-lg font-semibold text-(--text-primary)"><Translated>{feature.title}</Translated></h3>
                 <p className="mt-2.5 text-sm leading-relaxed text-(--text-secondary)">
-                  {feature.description}
+                  <Translated>{feature.description}</Translated>
                 </p>
               </motion.div>
             );
@@ -727,15 +728,15 @@ export function LandingPageClient() {
           <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
             <div className="max-w-xl">
               <h3 className="text-xl font-semibold tracking-tight text-white md:text-2xl">
-                From signup to shipping no migrations, no setup spreadsheets.
+                <Translated>From signup to shipping no migrations, no setup spreadsheets.</Translated>
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-white/70">
-                Invite your team, create your first project, and assign tasks the same day.
+                <Translated>Invite your team, create your first project, and assign tasks the same day.</Translated>
               </p>
             </div>
             <Button asChild size="lg" className="bg-white text-brand-700 shadow-md hover:bg-white/90">
               <Link href="/register">
-                Create workspace
+                <Translated>Create workspace</Translated>
                 <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
               </Link>
             </Button>
@@ -750,9 +751,9 @@ export function LandingPageClient() {
       >
         <div className="mx-auto w-full max-w-7xl px-6 lg:px-8">
           <SectionHeading
-            eyebrow="How it works"
-            title="A simple flow from setup to shipping."
-            description="Three steps. No tutorials required."
+            eyebrow={<Translated>How it works</Translated>}
+            title={<Translated>A simple flow from setup to shipping.</Translated>}
+            description={<Translated>Three steps. No tutorials required.</Translated>}
             align="center"
           />
 
@@ -767,9 +768,9 @@ export function LandingPageClient() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-(--border) bg-(--bg-overlay) text-sm font-semibold text-brand-500">
                   {index + 1}
                 </div>
-                <h3 className="mt-5 text-lg font-semibold text-(--text-primary)">{step.title}</h3>
+                <h3 className="mt-5 text-lg font-semibold text-(--text-primary)"><Translated>{step.title}</Translated></h3>
                 <p className="mt-2.5 text-sm leading-relaxed text-(--text-secondary)">
-                  {step.description}
+                  <Translated>{step.description}</Translated>
                 </p>
               </motion.div>
             ))}
@@ -780,9 +781,9 @@ export function LandingPageClient() {
       {/* ── Integrations ─────────────────────────────────────────────── */}
       <section id="integrations" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 py-24 lg:px-8">
         <SectionHeading
-          eyebrow="Integrations"
-          title="Work where your team already works."
-          description="Connect the tools you're running today, or build on top of the API."
+          eyebrow={<Translated>Integrations</Translated>}
+          title={<Translated>Work where your team already works.</Translated>}
+          description={<Translated>Connect the tools you&apos;re running today, or build on top of the API.</Translated>}
           align="center"
         />
 
@@ -799,10 +800,10 @@ export function LandingPageClient() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-(--border) bg-(--bg-overlay) text-brand-500">
                   <Icon className="h-5 w-5" strokeWidth={1.7} />
                 </div>
-                <h3 className="mt-5 text-base font-semibold text-(--text-primary)">{item.name}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">{item.detail}</p>
+                <h3 className="mt-5 text-base font-semibold text-(--text-primary)"><Translated>{item.name}</Translated></h3>
+                <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)"><Translated>{item.detail}</Translated></p>
                 <span className="mt-3 inline-block rounded-full border border-brand-500/30 bg-brand-500/10 px-2.5 py-0.5 text-[11px] font-medium text-brand-500">
-                  {item.name === "Slack" || item.name === "GitHub" ? "Pro plan" : "All plans"}
+                  <Translated>{item.name === "Slack" || item.name === "GitHub" ? "Pro plan" : "All plans"}</Translated>
                 </span>
               </motion.div>
             );
@@ -819,9 +820,9 @@ export function LandingPageClient() {
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
               <SectionHeading
-                eyebrow="Security"
-                title="Permissions aren't decoration they're enforced."
-                description="Every role, workspace, and plan boundary is checked on the server. UI gating is just the ergonomics; the API is where access is actually decided."
+                eyebrow={<Translated>Security</Translated>}
+                title={<Translated>Permissions aren&apos;t decoration they&apos;re enforced.</Translated>}
+                description={<Translated>Every role, workspace, and plan boundary is checked on the server. UI gating is just the ergonomics; the API is where access is actually decided.</Translated>}
               />
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -835,7 +836,7 @@ export function LandingPageClient() {
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-500/15 text-success-600">
                     <CheckCircle className="h-3.5 w-3.5" strokeWidth={2} />
                   </span>
-                  <span className="text-sm text-(--text-secondary)">{point}</span>
+                  <span className="text-sm text-(--text-secondary)"><Translated>{point}</Translated></span>
                 </motion.div>
               ))}
             </div>
@@ -847,9 +848,9 @@ export function LandingPageClient() {
       <section id="pricing" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 py-24 lg:px-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <SectionHeading
-            eyebrow="Pricing"
-            title="Start free, scale when your team grows."
-            description="Transparent plans with no hidden costs. Upgrade or cancel anytime."
+            eyebrow={<Translated>Pricing</Translated>}
+            title={<Translated>Start free, scale when your team grows.</Translated>}
+            description={<Translated>Transparent plans with no hidden costs. Upgrade or cancel anytime.</Translated>}
           />
 
           <div className="flex items-center gap-3">
@@ -867,12 +868,12 @@ export function LandingPageClient() {
                       : "text-(--text-secondary) hover:text-(--text-primary)",
                   ].join(" ")}
                 >
-                  {option}
+                  <Translated>{option}</Translated>
                 </button>
               ))}
             </div>
             <span className="rounded-full border border-success-500/40 bg-success-500/10 px-2.5 py-1 text-xs font-medium text-success-500">
-              Save 30%
+              <Translated>Save 30%</Translated>
             </span>
           </div>
         </div>
@@ -920,16 +921,16 @@ export function LandingPageClient() {
               ].join(" ")}
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-(--text-primary)">{plan.name}</h3>
+                <h3 className="text-lg font-semibold text-(--text-primary)"><Translated>{plan.name}</Translated></h3>
                 {plan.highlighted ? (
                   <span className="rounded-full border border-brand-500/40 bg-brand-500/10 px-2.5 py-1 text-xs font-medium text-brand-500">
-                    Most popular
+                    {t("landing.mostPopular")}
                   </span>
                 ) : null}
               </div>
 
               <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
-                {plan.description}
+                <Translated>{plan.description}</Translated>
               </p>
 
               <div className="mt-6 flex items-end gap-2">
@@ -945,7 +946,7 @@ export function LandingPageClient() {
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-500/15 text-success-600">
                       <Check className="h-3 w-3" strokeWidth={2.5} />
                     </span>
-                    <span className="text-sm text-(--text-secondary)">{feature}</span>
+                    <span className="text-sm text-(--text-secondary)"><Translated>{feature}</Translated></span>
                   </div>
                 ))}
               </div>
@@ -956,7 +957,7 @@ export function LandingPageClient() {
                 variant={plan.highlighted ? "primary" : "secondary"}
               >
                 <Link href={plan.key === "custom" ? "/pricing#custom" : "/register"}>
-                  {plan.cta}
+                  <Translated>{plan.cta}</Translated>
                 </Link>
               </Button>
             </motion.div>
@@ -964,23 +965,23 @@ export function LandingPageClient() {
         </div>
 
         <p className="mt-8 text-center text-sm text-(--text-tertiary)">
-          Need custom roles, audit logs, or SSO?{" "}
+          <Translated>Need custom roles, audit logs, or SSO?</Translated>{" "}
           <Link href="/pricing#custom" className="font-medium text-brand-500 hover:text-brand-400">
-            Build a custom plan
+            <Translated>Build a custom plan</Translated>
           </Link>{" "}
-          or{" "}
+          <Translated>or</Translated>{" "}
           <Link href="/contact" className="font-medium text-brand-500 hover:text-brand-400">
-            talk to sales
+            <Translated>talk to sales</Translated>
           </Link>
-          .
+          <Translated>.</Translated>
         </p>
       </section>
 
       {/* ── FAQ ──────────────────────────────────────────────────────── */}
       <section id="faq" className="mx-auto w-full max-w-4xl scroll-mt-20 px-6 pb-24 lg:px-8">
         <SectionHeading
-          eyebrow="FAQ"
-          title="Questions teams ask before switching."
+          eyebrow={<Translated>FAQ</Translated>}
+          title={<Translated>Questions teams ask before switching.</Translated>}
           align="center"
         />
 
@@ -1000,7 +1001,7 @@ export function LandingPageClient() {
                   aria-controls={`faq-panel-${index}`}
                 >
                   <span className="text-sm font-semibold text-(--text-primary)">
-                    {faq.question}
+                    <Translated>{faq.question}</Translated>
                   </span>
                   <ChevronDown
                     className={[
@@ -1022,7 +1023,7 @@ export function LandingPageClient() {
                 >
                   <div className="overflow-hidden">
                     <p className="px-5 pb-5 text-sm leading-relaxed text-(--text-secondary)">
-                      {faq.answer}
+                      <Translated>{faq.answer}</Translated>
                     </p>
                   </div>
                 </div>
@@ -1041,27 +1042,28 @@ export function LandingPageClient() {
           <div className="grid items-start gap-12 lg:grid-cols-2">
             <div>
               <SectionHeading
-                eyebrow="Contact"
-                title="Talk to a human."
-                description="Sales, support, partnerships, or feedback all the same inbox. We usually reply within one business day."
+                eyebrow={<Translated>Contact</Translated>}
+                title={<Translated>Talk to a human.</Translated>}
+                description={<Translated>Sales, support, partnerships, or feedback all the same inbox. We usually reply within one business day.</Translated>}
               />
               <div className="mt-8 space-y-4 text-sm text-(--text-secondary)">
                 <p>
-                  <strong className="text-(--text-primary)">Sales</strong>{" "}
+                  <strong className="text-(--text-primary)"><Translated>Sales</Translated></strong>{" "}
                   <Link href="/pricing" className="font-medium text-brand-500 hover:text-brand-400">
-                    see pricing
+                    <Translated>see pricing</Translated>
                   </Link>{" "}
-                  or email{" "}
+                  <Translated>or email</Translated>{" "}
                   <a href="mailto:sales@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
                     sales@flexflow.app
                   </a>
                 </p>
                 <p>
-                  <strong className="text-(--text-primary)">Support</strong> find answers in the{" "}
+                  <strong className="text-(--text-primary)"><Translated>Support</Translated></strong>{" "}
+                  <Translated>find answers in the</Translated>{" "}
                   <Link href="/help" className="font-medium text-brand-500 hover:text-brand-400">
-                    help center
+                    <Translated>help center</Translated>
                   </Link>{" "}
-                  or email{" "}
+                  <Translated>or email</Translated>{" "}
                   <a href="mailto:support@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
                     support@flexflow.app
                   </a>
@@ -1080,18 +1082,17 @@ export function LandingPageClient() {
         <div className="relative overflow-hidden rounded-2xl border border-brand-500/40 bg-brand-600 px-6 py-16 text-center lg:px-12 lg:py-20">
           <div className="relative">
             <h2 className="mx-auto max-w-2xl text-balance text-3xl font-semibold tracking-tight text-white md:text-4xl">
-              Give your team a workspace that remembers.
+              <Translated>Give your team a workspace that remembers.</Translated>
             </h2>
 
             <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-white/70 md:text-base">
-              Start with a polished workspace and scale into full role-based access control,
-              review workflows, analytics, and Team Intelligence when you&apos;re ready.
+              <Translated>Start with a polished workspace and scale into full role-based access control, review workflows, analytics, and Team Intelligence when you&apos;re ready.</Translated>
             </p>
 
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-white text-brand-700 shadow-md hover:bg-white/90">
                 <Link href="/register">
-                  Create workspace
+                  <Translated>Create workspace</Translated>
                   <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
                 </Link>
               </Button>
@@ -1102,7 +1103,7 @@ export function LandingPageClient() {
                 size="lg"
                 className="text-white hover:bg-white/10 hover:text-white"
               >
-                <Link href="/login">Sign in</Link>
+                <Link href="/login">{t("common.signIn")}</Link>
               </Button>
             </div>
           </div>

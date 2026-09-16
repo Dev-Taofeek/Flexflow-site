@@ -3,6 +3,7 @@
 import { FolderKanban } from "lucide-react";
 import Link from "next/link";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 export function ProjectProgressWidget({ projects }) {
   const { t } = useI18n();
@@ -44,7 +45,7 @@ export function ProjectProgressWidget({ projects }) {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-foreground dark:text-foreground-dark text-sm font-medium">
-                  {project.name}
+                  <Translated>{project.name}</Translated>
                 </h3>
 
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">

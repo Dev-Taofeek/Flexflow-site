@@ -1,14 +1,16 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 
 const ToastContext = createContext(null);
 
 export function ToastProvider({ children }) {
     const [toasts, setToasts] = useState([]);
+    const nextId = useRef(0);
 
     const addToast = useCallback((message, type = "info") => {
-        const id = Date.now();
+        const id = nextId.current + 1;
+        nextId.current = id;
         setToasts((t) => {
             if (t.some((toast) => toast.message === message && toast.type === type)) {
                 return t;

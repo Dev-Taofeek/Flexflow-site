@@ -1,10 +1,17 @@
 import { prisma } from "../lib/prisma.js";
-import { recordApiUsage } from "../lib/usage.js";
+import { recordApiUsage, isApiLimitExceeded } from "../lib/usage.js";
+import { getOrgEntitlementsById } from "../lib/entitlements.js";
+import { errorResponse } from "../utils/api-response.js";
+
+// Mutating methods consume the tier's request allowance; read-only traffic is
+// never blocked so users can still view data and reach their billing screen.
+const MUTATING_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
 /**
- * Best-effort per-organization API usage tracking. Resolves the organization id
- * from whichever shape the request uses (params / query / body), then records a
- * request in the current month's ApiUsage counter. Never blocks or throws.
+ * Per-organization API usage tracking + plan enforcement. Resolves the
+ * organization id from whichever shape the request uses (params / query /
+ * body), records a request in the current month's ApiUsage counter, and short-
+ * circuits mutating calls once the plan's monthly allowance is exhausted.
  */
 export async function trackApiUsage(req, res, next) {
     try {
@@ -22,9 +29,23 @@ export async function trackApiUsage(req, res, next) {
             organizationId = ws?.organizationId || null;
         }
 
-        if (organizationId) {
-            await recordApiUsage(organizationId);
+        if (!organizationId) return next();
+
+        if (MUTATING_METHODS.has(req.method) && (await isApiLimitExceeded(organizationId))) {
+            const entitlements = await getOrgEntitlementsById(organizationId).catch(() => null);
+            if (res.headersSent) return next();
+            return res.status(429).json({
+                ...errorResponse("USAGE_LIMIT_REACHED", "You have reached your monthly API request limit for your plan."),
+                data: {
+                    code: "USAGE_LIMIT_REACHED",
+                    resource: "apiRequests",
+                    planId: entitlements?.planId || null,
+                    upgradeAvailable: true,
+                },
+            });
         }
+
+        await recordApiUsage(organizationId);
     } catch (error) {
         console.error("[usage] middleware error:", error.message);
     }

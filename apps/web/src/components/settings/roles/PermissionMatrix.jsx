@@ -156,11 +156,9 @@ export function PermissionMatrix({ workspaceId, token, roles, resources, initial
                             isLocked ? "cursor-not-allowed opacity-80" : "",
                           ].join(" ")}
                           aria-label={t("settings.roles.toggleAria", {
-                          verb: isEnabled ? t("settings.roles.disable") : t("settings.roles.enable"),
-                          role,
-                          action,
-                          resource: resource.label,
-                        })}
+                            permission: isEnabled ? t("settings.roles.disable") : t("settings.roles.enable"),
+                            role,
+                          })}
                         >
                           {isEnabled ? (
                             <Check className="h-4 w-4" strokeWidth={1.8} />

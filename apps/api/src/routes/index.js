@@ -5,6 +5,9 @@ import { auditRouter } from "./audit.route.js";
 import { authRouter } from "./auth.route.js";
 import { billingRouter } from "./billing.route.js";
 import { intelligenceRouter } from "./intelligence.route.js";
+import { integrationsRouter } from "./integrations.route.js";
+import { integrationsWebhooksRouter } from "./integrations-webhooks.route.js";
+import { automationsRouter } from "./automations.route.js";
 import { tasksRouter } from "./tasks.route.js";
 import { dashboardRouter } from "./dashboard.route.js";
 import { healthRouter } from "./health.route.js";
@@ -35,5 +38,8 @@ router.use("/analytics", analyticsRouter);
 router.use("/audit", auditRouter);
 router.use("/billing", billingRouter);
 router.use("/intelligence", intelligenceRouter);
+router.use("/integrations/webhooks", integrationsWebhooksRouter);
+router.use("/integrations", automationsRouter);
+router.use("/integrations", integrationsRouter);
 
 export { router };

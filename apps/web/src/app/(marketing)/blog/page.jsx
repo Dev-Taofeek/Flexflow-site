@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveText } from "@/components/LiveText";
 import { ContentPage } from "@/components/marketing/ContentPage";
 
 const POSTS = [
@@ -6,7 +7,7 @@ const POSTS = [
     slug: "role-based-access-control-explained",
     title: "Role-based access control, explained without the jargon",
     excerpt:
-      "Owner, Admin, Member, Viewer — what those roles actually allow, and why enforcement has to happen server-side, not just in the UI.",
+      "Owner, Admin, Member, Viewer what those roles actually allow, and why enforcement has to happen server-side, not just in the UI.",
     date: "August 20, 2026",
     category: "Guides",
   },
@@ -36,9 +37,9 @@ export const metadata = {
 export default function BlogIndexPage() {
   return (
     <ContentPage
-      eyebrow="Blog"
-      title="Notes on building and shipping as a team."
-      description="Guides and product stories from the FlexFlow team."
+      eyebrow={<LiveText>Blog</LiveText>}
+      title={<LiveText>Notes on building and shipping as a team.</LiveText>}
+      description={<LiveText>Guides and product stories from the FlexFlow team.</LiveText>}
     >
       <div className="space-y-4">
         {POSTS.map((post) => (
@@ -49,14 +50,18 @@ export default function BlogIndexPage() {
           >
             <div className="flex items-center gap-3 text-xs text-(--text-tertiary)">
               <span className="rounded-full border border-(--border) px-2.5 py-0.5 font-medium text-(--text-secondary)">
-                {post.category}
+                <LiveText>{post.category}</LiveText>
               </span>
-              <span>{post.date}</span>
+              <span>
+                <LiveText>{post.date}</LiveText>
+              </span>
             </div>
             <h3 className="mt-3 text-lg font-semibold text-(--text-primary) transition-colors group-hover:text-brand-500">
-              {post.title}
+              <LiveText>{post.title}</LiveText>
             </h3>
-            <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">{post.excerpt}</p>
+            <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
+              <LiveText>{post.excerpt}</LiveText>
+            </p>
           </Link>
         ))}
       </div>

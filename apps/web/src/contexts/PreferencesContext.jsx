@@ -128,19 +128,50 @@ function readStoredPreferences() {
 }
 
 export function PreferencesProvider({ children }) {
-  const [preferences, setPreferences] = useState(() => readStoredPreferences());
-  const [systemDark, setSystemDark] = useState(systemPrefersDark);
+  // Both server render and the client's first (hydration) render use DEFAULTS
+  // so SSR'd text always matches. Stored preferences are loaded after mount —
+  // otherwise a saved language/theme would mismatch the server HTML.
+  const [preferences, setPreferences] = useState(DEFAULTS);
+  const [systemDark, setSystemDark] = useState(true);
   const previous = useRef(null);
+  const isInitialMount = useRef(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setPreferences(readStoredPreferences()), 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // When following "system", react to OS theme changes live.
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const timer = setTimeout(() => setSystemDark(systemPrefersDark()), 0);
+    const onChange = (e) => setSystemDark(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => {
+      clearTimeout(timer);
+      mq.removeEventListener("change", onChange);
+    };
+  }, []);
 
   // Sync the document with preferences and persist them for next visit.
+  // Skip the first render: setPreferences(readStoredPreferences()) fires in a
+  // separate effect declared above.  On mount the read effect and this persist
+  // effect both run in the same commit — but the read schedules a re-render
+  // while this persist runs with DEFAULTS.  If we wrote to localStorage here,
+  // a subsequent read (e.g. after a hydration-error tree regeneration) would
+  // pick up DEFAULTS instead of the user's saved language/theme.
   useEffect(() => {
     applyPreferences(preferences, systemDark, previous.current);
     previous.current = { ...preferences, dark: isDarkTheme(preferences.theme, systemDark) };
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-    } catch {
-      /* storage unavailable — still applies for this session */
+    if (!isInitialMount.current) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+      } catch {
+        /* storage unavailable — still applies for this session */
+      }
     }
+    isInitialMount.current = false;
   }, [preferences, systemDark]);
 
   // When following "system", react to OS theme changes live.

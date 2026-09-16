@@ -64,9 +64,12 @@ router.get("/", async (req, res) => {
         ]);
 
         const memberUserIds = new Set(members.map((m) => m.userId));
-        const availableMembers = orgMembers
-            .filter((om) => !memberUserIds.has(om.userId))
-            .map((om) => ({ ...om.user, orgRole: om.role }));
+        const canManage = self.role === "OWNER" || self.role === "ADMIN";
+        const availableMembers = canManage
+            ? orgMembers
+                  .filter((om) => !memberUserIds.has(om.userId))
+                  .map((om) => ({ ...om.user, orgRole: om.role }))
+            : [];
 
         return res.status(200).json(successResponse({
             members: members.map((m) => ({ ...m.user, role: m.role, memberId: m.id, joinedAt: m.createdAt })),
@@ -86,6 +89,12 @@ router.post("/invite", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) 
         const { workspaceId, email, role = "MEMBER" } = req.body;
         if (!workspaceId || !email?.includes("@")) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId and valid email are required"));
+        }
+        if (!VALID_ROLES.includes(role) || role === "OWNER") {
+            return res.status(422).json(errorResponse("VALIDATION_ERROR", "Invalid role"));
+        }
+        if (!canManageWorkspaceRole(req.workspaceMember.role, "ADMIN", role)) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot invite a member with this role"));
         }
 
         const workspace = await prisma.workspace.findUnique({
@@ -221,7 +230,9 @@ router.patch("/members/:memberId/role", requireWorkspaceRole("OWNER", "ADMIN"), 
 
         if (!VALID_ROLES.includes(role)) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Invalid role"));
 
-        const target = await prisma.workspaceMember.findUnique({ where: { id: req.params.memberId } });
+        const target = await prisma.workspaceMember.findFirst({
+            where: { id: req.params.memberId, workspaceId },
+        });
         if (!target) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
         if (!canManageWorkspaceRole(req.workspaceMember.role, target.role, role)) {
             return res.status(403).json(errorResponse("FORBIDDEN", "You cannot change this member's role"));
@@ -258,7 +269,9 @@ router.delete("/members/:memberId", requireWorkspaceRole("OWNER", "ADMIN"), asyn
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId is required"));
 
-        const target = await prisma.workspaceMember.findUnique({ where: { id: req.params.memberId } });
+        const target = await prisma.workspaceMember.findFirst({
+            where: { id: req.params.memberId, workspaceId },
+        });
         if (!target) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
 
         if (target.userId === req.user.id) {

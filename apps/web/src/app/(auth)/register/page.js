@@ -8,6 +8,7 @@ import { signIn } from "next-auth/react";
 
 import { AuthShell } from "@/components/auth/AuthShell";
 import { FormField } from "@/components/auth/FormField";
+import { OAuthButtons } from "@/components/auth/OAuthButtons";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiUrl } from "@/lib/api-url";
@@ -77,7 +78,21 @@ function RegisterForm() {
       title={t("auth.createAccount")}
       description={t("auth.createAccountDescription")}
     >
-      <form onSubmit={onSubmit} className="space-y-5">
+      <div className="space-y-5">
+        <OAuthButtons callbackUrl={callbackUrl} />
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="border-border dark:border-border-dark w-full border-t" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-surface text-muted-foreground px-3 text-xs tracking-[0.2em] uppercase dark:bg-surface-dark dark:text-muted-foreground-dark">
+              {t("auth.orContinueWithEmail")}
+            </span>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-5">
         <FormField
           id="name"
           label={t("auth.fullName")}
@@ -154,6 +169,7 @@ function RegisterForm() {
           </Link>
         </p>
       </form>
+      </div>
     </AuthShell>
   );
 }

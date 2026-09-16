@@ -1,3 +1,4 @@
+import { LiveText } from "@/components/LiveText";
 import { ContentPage } from "@/components/marketing/ContentPage";
 
 const ROADMAP = [
@@ -38,22 +39,28 @@ const ROADMAP = [
 export const metadata = {
   title: "Roadmap",
   description:
-    "What FlexFlow is building next — shipped, in progress, and planned. Feedback shapes the roadmap.",
+    "What FlexFlow is building next shipped, in progress, and planned. Feedback shapes the roadmap.",
 };
 
 export default function RoadmapPage() {
   return (
     <ContentPage
-      eyebrow="Roadmap"
-      title="What we're building next."
-      description="A public view of what's shipped, what's in progress, and what's planned. Have an idea or a vote to cast? Contact us — customer feedback drives the roadmap."
+      eyebrow={<LiveText>Roadmap</LiveText>}
+      title={<LiveText>What we&apos;re building next.</LiveText>}
+      description={
+        <LiveText>
+          {`A public view of what's shipped, what's in progress, and what's planned. Have an idea or a vote to cast? Contact us customer feedback drives the roadmap.`}
+        </LiveText>
+      }
     >
       <div className="grid gap-5 md:grid-cols-3">
         {ROADMAP.map((column) => (
           <div key={column.title} className="rounded-2xl border border-(--border) p-6">
             <div className="flex items-center gap-2.5">
               <span className={`h-2 w-2 rounded-full ${column.tone}`} aria-hidden="true" />
-              <h3 className="text-base font-semibold text-(--text-primary)">{column.title}</h3>
+              <h3 className="text-base font-semibold text-(--text-primary)">
+                <LiveText>{column.title}</LiveText>
+              </h3>
             </div>
             <ul className="mt-5 space-y-3">
               {column.items.map((item) => (
@@ -62,7 +69,9 @@ export default function RoadmapPage() {
                     className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-(--text-tertiary)"
                     aria-hidden="true"
                   />
-                  <span className="text-sm leading-relaxed text-(--text-secondary)">{item}</span>
+                  <span className="text-sm leading-relaxed text-(--text-secondary)">
+                    <LiveText>{item}</LiveText>
+                  </span>
                 </li>
               ))}
             </ul>

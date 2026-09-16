@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -12,9 +12,18 @@ const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 export function usePushSubscription() {
     const { accessToken } = useApp();
     const { addToast } = useToast();
-    const [permission, setPermission] = useState(
-        typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported"
-    );
+    // SSR and the first (hydration) render both see "unsupported" so the server
+    // markup matches. Reading Notification.permission here would render the push
+    // banner on the client but not the server — a hydration mismatch that
+    // regenerates the whole app tree. The real value is read after mount.
+    const [permission, setPermission] = useState("unsupported");
+
+    useEffect(() => {
+        if (typeof window !== "undefined" && "Notification" in window) {
+            const timer = setTimeout(() => setPermission(Notification.permission), 0);
+            return () => clearTimeout(timer);
+        }
+    }, []);
 
     const subscribe = useCallback(async () => {
         if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator) || !VAPID_PUBLIC_KEY) {

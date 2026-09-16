@@ -57,6 +57,7 @@ enum TaskPriority {
 enum TaskStatus {
   TODO
   IN_PROGRESS
+  BLOCKED
   IN_REVIEW
   DONE
 }
@@ -67,6 +68,7 @@ enum NotificationType {
   TASK_ASSIGNED
   COMMENT
   SYSTEM
+  CONNECTOR
 }
 
 model User {
@@ -103,6 +105,7 @@ model User {
   integrationConnections IntegrationConnection[]
   auditEvents     AuditEvent[]
   knowledgeEntries KnowledgeEntry[]
+  automationRules AutomationRule[]
 }
 
 model Organization {
@@ -122,6 +125,8 @@ model Organization {
   subscriptionStartAt DateTime?
   subscriptionEndAt   DateTime?
   customAddOns        String[]            @default([])
+  providerCustomerId      String?
+  providerSubscriptionId  String?
 
   workspaces     Workspace[]
   members        OrganizationMember[]
@@ -130,8 +135,13 @@ model Organization {
   apiUsage       ApiUsage[]
   auditEvents    AuditEvent[]
   knowledge      KnowledgeEntry[]
+  connectorMappings ConnectorMapping[]
+  connectorEvents   ConnectorEvent[]
+  automationRules   AutomationRule[]
   billingEvents  BillingEvent[]
   intelligenceUsage IntelligenceUsage[]
+
+  @@index([subscriptionStatus, subscriptionEndAt])
 }
 
 model IntegrationConnection {
@@ -196,6 +206,7 @@ model KnowledgeEntry {
   createdBy      User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt])
+  @@index([organizationId, workspaceId])
 }
 
 model BillingEvent {
@@ -208,8 +219,9 @@ model BillingEvent {
   raw              Json?
   createdAt        DateTime            @default(now())
 
-  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  @@unique([provider, providerEventId])
   @@index([organizationId, createdAt])
 }
 
@@ -229,12 +241,14 @@ model OrganizationMember {
   organizationId  String
   userId          String
   role            OrgRole       @default(MEMBER)
+  tag             String?
   createdAt       DateTime      @default(now())
 
   organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
+  @@index([userId])
 }
 
 model Invite {
@@ -254,6 +268,7 @@ model Invite {
   invitedBy      User         @relation("InviteSender", fields: [invitedById], references: [id], onDelete: Cascade)
 
   @@index([organizationId, workspaceId])
+  @@index([workspaceId])
   @@index([email])
 }
 
@@ -274,6 +289,13 @@ model Workspace {
   members          WorkspaceMember[]
   roles            Role[]
   knowledgeEntries KnowledgeEntry[]
+
+  connectorMappings ConnectorMapping[]
+  connectorEvents   ConnectorEvent[]
+  automationRules   AutomationRule[]
+  activities        ActivityLog[]
+
+  @@index([organizationId])
 }
 
 model WorkspaceMember {
@@ -287,6 +309,7 @@ model WorkspaceMember {
   user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
+  @@index([userId])
 }
 
 model Project {
@@ -304,18 +327,25 @@ model Project {
   createdBy       User               @relation("CreatedProjects", fields: [createdById], references: [id])
   tasks           Task[]
   activities      ActivityLog[]
+  connectorMappings ConnectorMapping[]
+
+  @@index([workspaceId])
+  @@index([createdById])
 }
 
 model Task {
   id              String          @id @default(cuid())
   projectId       String
+  workspaceId     String?
   createdById     String
   assigneeId      String?
+  key             String?
   title           String
   description     String?
   priority        TaskPriority    @default(MEDIUM)
   status          TaskStatus      @default(TODO)
   dueDate         DateTime?
+  completedAt     DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -327,6 +357,13 @@ model Task {
   labels          TaskLabel[]
   activities      ActivityLog[]
   assignees       TaskAssignee[]
+  connectorMappings ConnectorMapping[]
+
+  @@unique([workspaceId, key])
+  @@index([projectId, status])
+  @@index([workspaceId, status, dueDate])
+  @@index([assigneeId, status])
+  @@index([createdAt])
 }
 
 model TaskAssignee {
@@ -338,18 +375,21 @@ model TaskAssignee {
   user       User @relation("TaskAssignees", fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([taskId, userId])
+  @@index([userId])
 }
 
 model Comment {
   id          String      @id @default(cuid())
   taskId      String      // back to required
-  authorId    String
+  authorId    String?
   content     String
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author       User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
 }
 
 model Label {
@@ -416,6 +456,7 @@ model ActivityLog {
   userId       String
   projectId    String?
   taskId       String?
+  workspaceId  String?
   action       String
   entityType   String
   entityId     String
@@ -425,6 +466,12 @@ model ActivityLog {
   user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   project      Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task         Task?       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  workspace    Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([taskId, createdAt])
 }
 
 model Notification {
@@ -434,9 +481,13 @@ model Notification {
   message      String
   type         NotificationType    @default(INFO)
   isRead       Boolean             @default(false)
+  dedupeKey    String?
   createdAt    DateTime            @default(now())
 
   user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, isRead])
 }
 
 model PushSubscription {
@@ -449,4 +500,78 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum ConnectorEventStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model ConnectorMapping {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  workspaceId          String
+  provider             String
+  externalResourceType String
+  externalResourceId   String
+  projectId            String?
+  taskId               String?
+  config               Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project      Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  task         Task?       @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalResourceType, externalResourceId])
+  @@index([organizationId, workspaceId])
+}
+
+model ConnectorEvent {
+  id                 String              @id @default(cuid())
+  organizationId     String
+  workspaceId        String?
+  provider           String
+  externalEventId    String
+  eventType          String
+  externalResourceId String?
+  externalUserId     String?
+  payload            Json?
+  occurredAt         DateTime            @default(now())
+  processedAt        DateTime?
+  status             ConnectorEventStatus @default(PENDING)
+  error              String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalEventId])
+  @@index([organizationId, workspaceId, occurredAt])
+}
+
+model AutomationRule {
+  id            String   @id @default(cuid())
+  organizationId String
+  workspaceId   String
+  provider      String
+  trigger       String
+  condition     Json?
+  action        String
+  actionConfig  Json?
+  enabled       Boolean  @default(true)
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User        @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider, trigger])
+  @@index([organizationId, workspaceId, enabled])
 }

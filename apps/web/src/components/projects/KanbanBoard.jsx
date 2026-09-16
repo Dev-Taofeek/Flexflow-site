@@ -20,11 +20,13 @@ import { useRole } from "@/hooks/useRole";
 import { useApp } from "@/contexts/AppContext";
 import { canChangeTaskStatus, canSetTaskStatus } from "@/lib/task-permissions";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 const COLUMNS = [
     { id: "TODO",        color: "bg-zinc-400" },
     { id: "IN_PROGRESS", color: "bg-blue-500" },
     { id: "IN_REVIEW",   color: "bg-amber-500" },
+    { id: "BLOCKED",     color: "bg-rose-500" },
     { id: "DONE",        color: "bg-emerald-500" },
 ];
 
@@ -168,7 +170,7 @@ function TaskCard({ task, isDragging = false, projectId, canDrag = true }) {
                     className="flex-1 min-w-0"
                 >
                     <p className="text-sm font-medium text-(--text-primary) leading-snug line-clamp-2 hover:text-brand-600 transition-colors">
-                        {task.title}
+                        <Translated>{task.title}</Translated>
                     </p>
                 </Link>
                 {canDrag && (
@@ -237,6 +239,7 @@ function KanbanColumn({ column, tasks, children, projectId, members, token, onCr
             TODO: t("tasks.status.todo"),
             IN_PROGRESS: t("tasks.status.in_progress"),
             IN_REVIEW: t("tasks.status.in_review"),
+            BLOCKED: t("tasks.status.blocked"),
             DONE: t("tasks.status.done"),
         }[status]);
 
@@ -403,8 +406,8 @@ export function KanbanBoard({ projectId, initialTasks, token, members = [] }) {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
         >
-            {/* Horizontal scroll on mobile, 4-col grid on xl */}
-            <div className="flex gap-4 overflow-x-auto pb-4 md:grid md:grid-cols-2 xl:grid-cols-4">
+            {/* Horizontal scroll on mobile, 5-col grid on xl */}
+            <div className="flex gap-4 overflow-x-auto pb-4 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {COLUMNS.map((col) => {
                     const colTasks = tasksByStatus[col.id] || [];
                     return (

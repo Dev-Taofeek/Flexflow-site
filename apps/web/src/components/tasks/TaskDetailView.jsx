@@ -22,8 +22,9 @@ import { useRole } from "@/hooks/useRole";
 import { useApp } from "@/contexts/AppContext";
 import { canChangeTaskStatus, isTaskAssignee, isTaskCreator, WORK_STATES } from "@/lib/task-permissions";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
-const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
+const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED", "DONE"];
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
 function getInitials(name) {
@@ -219,6 +220,7 @@ export function TaskDetailView({
             TODO: t("tasks.status.todo"),
             IN_PROGRESS: t("tasks.status.in_progress"),
             IN_REVIEW: t("tasks.status.in_review"),
+            BLOCKED: t("tasks.status.blocked"),
             DONE: t("tasks.status.done"),
         }[status]);
 
@@ -247,7 +249,7 @@ export function TaskDetailView({
         await handleStatusChange("IN_REVIEW");
     }
 
-    // Label helpers — API returns [{ label: { id, name, color } }]
+    // Label helpers API returns [{ label: { id, name, color } }]
     const activeLabels = task?.labels?.map((l) => l.label?.name ?? l) ?? [];
 
     if (!task) return null;
@@ -260,7 +262,7 @@ export function TaskDetailView({
                 <section className="rounded-xl border border-(--border) bg-(--bg-elevated) p-6">
                     <div className="flex flex-wrap items-center gap-2 mb-4">
                         <span className="rounded-full border border-(--border) bg-(--bg-sunken) px-2.5 py-1 text-xs font-medium text-(--text-secondary)">
-                            {project?.name}
+                            {project?.name ? <Translated>{project.name}</Translated> : null}
                         </span>
                         <span className="rounded-full border border-(--border) bg-(--bg-sunken) px-2.5 py-1 text-xs font-medium text-(--text-secondary)">
                             {statusLabel(task.status)}
@@ -317,7 +319,9 @@ export function TaskDetailView({
                                         </span>
                                     </div>
                                     <p className="text-sm text-(--text-secondary) leading-relaxed whitespace-pre-wrap">
-                                        {comment.content ?? comment.body}
+                                        {(comment.content ?? comment.body)
+                                            ? <Translated>{comment.content ?? comment.body}</Translated>
+                                            : null}
                                     </p>
                                 </div>
                             </article>
@@ -397,7 +401,7 @@ export function TaskDetailView({
                             </select>
                         </div>
 
-                        {/* Assignees — multi-select */}
+                        {/* Assignees multi-select */}
                         <AssigneePicker
                             task={task}
                             people={people}

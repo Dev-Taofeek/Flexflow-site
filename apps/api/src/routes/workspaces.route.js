@@ -273,7 +273,12 @@ router.post("/:workspaceId/labels", requireWorkspaceRole("OWNER", "ADMIN"), asyn
 // DELETE /api/workspaces/:workspaceId/labels/:labelId
 router.delete("/:workspaceId/labels/:labelId", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) => {
     try {
-        const label = await prisma.label.delete({ where: { id: req.params.labelId } });
+        const label = await prisma.label.findFirst({
+            where: { id: req.params.labelId, workspaceId: req.params.workspaceId },
+        });
+        if (!label) return res.status(404).json(errorResponse("NOT_FOUND", "Label not found"));
+
+        await prisma.label.delete({ where: { id: label.id } });
         await notifyUser(req.user.id, {
             title: "Label deleted",
             message: `${label.name} label was deleted.`,

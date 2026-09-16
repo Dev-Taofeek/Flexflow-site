@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { useTranslatedText } from "@/lib/translate";
 
 export const Dialog = DialogPrimitive.Root;
 
@@ -29,11 +30,13 @@ export const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => 
 
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
-export const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
+export const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => {
+  const closeLabel = useTranslatedText("Close dialog");
+  return (
+    <DialogPortal>
+      <DialogOverlay />
 
-    <DialogPrimitive.Content
+      <DialogPrimitive.Content
       ref={ref}
       className={cn(
         "fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2",
@@ -59,11 +62,12 @@ export const DialogContent = React.forwardRef(({ className, children, ...props }
         )}
       >
         <X className="h-4 w-4" />
-        <span className="sr-only">Close dialog</span>
+        <span className="sr-only">{closeLabel}</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
-  </DialogPortal>
-));
+    </DialogPortal>
+  );
+});
 
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 

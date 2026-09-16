@@ -6,6 +6,7 @@ import { FileText, FolderKanban, Search, User2, X } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { searchAll } from "@/lib/search-api";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 export function SearchModal({ open, onClose }) {
     const { t } = useI18n();
@@ -98,7 +99,7 @@ export function SearchModal({ open, onClose }) {
                                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md" style={{ backgroundColor: p.color || "#6366f1" }}>
                                         <FolderKanban className="h-3.5 w-3.5 text-white" />
                                     </div>
-                                    <span className="text-(--text-primary)">{p.name}</span>
+                                    <span className="text-(--text-primary)"><Translated>{p.name}</Translated></span>
                                 </button>
                             ))}
                         </div>
@@ -115,8 +116,8 @@ export function SearchModal({ open, onClose }) {
                                 >
                                     <FileText className="h-4 w-4 shrink-0 text-(--text-muted)" />
                                     <div className="min-w-0">
-                                        <p className="truncate text-(--text-primary)">{i.title}</p>
-                                        <p className="text-xs text-(--text-muted)">{i.project.name} · {t(`shell.status.${i.status.toLowerCase()}`)}</p>
+                                        <p className="truncate text-(--text-primary)"><Translated>{i.title}</Translated></p>
+                                        <p className="text-xs text-(--text-muted)"><Translated>{i.project.name}</Translated> · {t(`shell.status.${i.status.toLowerCase()}`)}</p>
                                     </div>
                                 </button>
                             ))}

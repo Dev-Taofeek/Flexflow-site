@@ -1,5 +1,7 @@
 "use client";
 
+import { createPortal } from "react-dom";
+import { useEffect, useRef } from "react";
 import {
   Check,
   Languages,
@@ -127,11 +129,65 @@ export function SettingsDrawer({ open, onOpenChange }) {
     setTextSpacing,
   } = usePreferences();
   const { t } = useI18n();
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const dialogEl = dialogRef.current;
+    const focusables = () =>
+      dialogEl
+        ? Array.from(
+            dialogEl.querySelectorAll(
+              'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((el) => el.offsetParent !== null)
+        : [];
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onOpenChange(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const els = focusables();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    const prevActive = document.activeElement;
+    dialogEl?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      if (prevActive && typeof prevActive.focus === "function") prevActive.focus();
+    };
+  }, [open, onOpenChange]);
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={t("settingsAppearance.title")}>
+  const dialog = (
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("settingsAppearance.title")}
+    >
       <button
         type="button"
         aria-label={t("common.close")}
@@ -244,4 +300,6 @@ export function SettingsDrawer({ open, onOpenChange }) {
       </aside>
     </div>
   );
+
+  return createPortal(dialog, document.body);
 }

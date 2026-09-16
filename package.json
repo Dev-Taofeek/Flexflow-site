@@ -16,5 +16,37 @@
     "node": ">=20",
     "pnpm": ">=8"
   },
-  "packageManager": "pnpm@8.15.0"
+  "packageManager": "pnpm@8.15.0",
+  "version": "1.0.0",
+  "description": "A full-stack project management SaaS — track issues, manage workspaces, and collaborate with your team in real time.",
+  "main": "index.js",
+  "dependencies": {
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.6",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-node": "^0.3.10",
+    "eslint-import-resolver-typescript": "^3.10.1",
+    "eslint-module-utils": "^2.12.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-only-warn": "^1.2.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-turbo": "^2.9.14",
+    "eslint-scope": "^8.4.0",
+    "eslint-visitor-keys": "^4.2.1",
+    "typescript-eslint": "^8.59.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dev-Taofeek/Flexflow-site.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Dev-Taofeek/Flexflow-site/issues"
+  },
+  "homepage": "https://github.com/Dev-Taofeek/Flexflow-site#readme"
 }

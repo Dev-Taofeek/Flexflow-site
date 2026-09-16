@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ContentPage } from "@/components/marketing/ContentPage";
+import { LiveText } from "@/components/LiveText";
 
 const HELP_ITEMS = [
   {
@@ -40,26 +41,38 @@ export const metadata = {
 export default function HelpPage() {
   return (
     <ContentPage
-      eyebrow="Help center"
-      title="How can we help?"
-      description="Quick answers to the questions we hear most."
+      eyebrow={<LiveText>Help center</LiveText>}
+      title={<LiveText>How can we help?</LiveText>}
+      description={<LiveText>Quick answers to the questions we hear most.</LiveText>}
       narrow={true}
     >
       <div className="space-y-3">
         {HELP_ITEMS.slice(0, -1).map((item) => (
           <div key={item.title} className="rounded-2xl border border-(--border) p-6">
-            <h3 className="text-base font-semibold text-(--text-primary)">{item.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">{item.body}</p>
+            <h3 className="text-base font-semibold text-(--text-primary)">
+              <LiveText>{item.title}</LiveText>
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
+              <LiveText>{item.body}</LiveText>
+            </p>
           </div>
         ))}
       </div>
 
       <div className="mt-8 rounded-2xl border border-dashed border-(--border) p-6">
-        <h3 className="text-base font-semibold text-(--text-primary)">Still stuck?</h3>
+        <h3 className="text-base font-semibold text-(--text-primary)">
+          <LiveText>Still stuck?</LiveText>
+        </h3>
         <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
-          Read the <Link href="/docs" className="font-medium text-brand-500 hover:text-brand-400">documentation</Link>, or{" "}
-          <Link href="/contact" className="font-medium text-brand-500 hover:text-brand-400">contact support</Link>{" "}
-          and we&apos;ll help you out.
+          <LiveText>Read the</LiveText>{" "}
+          <Link href="/docs" className="font-medium text-brand-500 hover:text-brand-400">
+            <LiveText>documentation</LiveText>
+          </Link>
+          <LiveText>, or</LiveText>{" "}
+          <Link href="/contact" className="font-medium text-brand-500 hover:text-brand-400">
+            <LiveText>contact support</LiveText>
+          </Link>{" "}
+          <LiveText>and we&apos;ll help you out.</LiveText>
         </p>
       </div>
     </ContentPage>

@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { useTranslatedText } from "@/lib/translate";
 
 export function Modal({ open, onOpenChange, children }) {
   return (
@@ -40,6 +41,7 @@ export const ModalOverlay = React.forwardRef(({ className, ...props }, ref) => {
 ModalOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 export const ModalContent = React.forwardRef(({ className, children, ...props }, ref) => {
+  const closeLabel = useTranslatedText("Close modal");
   return (
     <DialogPrimitive.Portal>
       <ModalOverlay />
@@ -71,7 +73,7 @@ export const ModalContent = React.forwardRef(({ className, children, ...props },
         >
           <X className="h-4 w-4" />
 
-          <span className="sr-only">Close modal</span>
+          <span className="sr-only">{closeLabel}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

@@ -43,7 +43,7 @@ function fmtPrice(value, cycle, t) {
 /** Monthly price of an org's current plan (Custom includes purchased add-ons). */
 function planPrice(planInfo) {
     if (planInfo?.plan === "custom") {
-        const addonTotal = (planInfo.customAddOns || []).reduce(
+        const addonTotal = (planInfo.addOns || []).reduce(
             (sum, id) => sum + (CUSTOM_ADDONS[id]?.priceMonthly || 0),
             0,
         );

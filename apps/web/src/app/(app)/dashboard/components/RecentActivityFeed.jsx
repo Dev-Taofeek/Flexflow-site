@@ -3,6 +3,7 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { Activity } from "lucide-react";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 export function RecentActivityFeed({ activities }) {
   const { t } = useI18n();
@@ -50,8 +51,8 @@ export function RecentActivityFeed({ activities }) {
 
             <div className="flex-1 pb-4">
               <p className="text-foreground dark:text-foreground-dark text-sm leading-relaxed">
-                <span className="font-medium">{activity.actor}</span> {activity.action}{" "}
-                <span className="font-medium">{activity.target}</span>
+                <span className="font-medium">{activity.actor}</span>{" "}
+                <Translated>{activity.action} {activity.target}</Translated>
               </p>
 
               <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">

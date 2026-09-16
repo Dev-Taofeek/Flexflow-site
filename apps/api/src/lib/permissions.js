@@ -197,7 +197,8 @@ export function requireOrgRole(...roles) {
         try {
             const userId = req.user?.id;
             const organizationId =
-                req.params.organizationId || req.params.orgId || req.body?.organizationId || req.query?.organizationId;
+                req.params.organizationId || req.params.orgId || req.body?.organizationId ||
+                req.body?.orgId || req.query?.organizationId || req.query?.orgId;
 
             if (!userId || !organizationId) {
                 return res.status(400).json(errorResponse("ORGANIZATION_REQUIRED", "organizationId is required"));

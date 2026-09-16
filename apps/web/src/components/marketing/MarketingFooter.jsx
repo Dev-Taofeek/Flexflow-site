@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/marketing/MarketingHeader";
+import { LiveText } from "@/components/LiveText";
+import { FooterLinkColumn } from "@/components/marketing/FooterLinkColumn";
 
 const CONTACT_EMAIL = "flexflow@gmail.com";
 
@@ -48,13 +50,13 @@ export function MarketingFooter() {
     <footer className="border-t border-(--border) bg-(--bg-elevated)">
       <div className="mx-auto w-full max-w-7xl px-6 py-14 lg:px-8">
         <div className="grid gap-10 lg:grid-cols-[1.25fr_2fr]">
-          <div lang="en">
+          <div>
             <Wordmark />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-(--text-tertiary)">
-              A project management workspace for teams that plan, assign, track, and ship together.
+              <LiveText>A project management workspace for teams that plan, assign, track, and ship together.</LiveText>
             </p>
             <p className="mt-4 text-sm text-(--text-tertiary)">
-              Reach us at{" "}
+              <LiveText>Reach us at</LiveText>{" "}
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
                 className="font-medium text-brand-500 transition-colors hover:text-brand-400"
@@ -90,75 +92,24 @@ export function MarketingFooter() {
 
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
             {FOOTER_COLUMN_KEYS.map((column) => (
-              <FooterLinkGroup key={column.headingKey} column={column} />
+              <FooterLinkColumn key={column.headingKey} column={column} />
             ))}
           </div>
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-(--border) pt-8 sm:flex-row">
           <p className="text-sm text-(--text-tertiary)">
-            © {new Date().getFullYear()} FlexFlow. All rights reserved.
+            © {new Date().getFullYear()} FlexFlow. <LiveText>All rights reserved.</LiveText>
           </p>
           <Link
             href="/status"
             className="inline-flex items-center gap-2 text-xs font-medium text-(--text-tertiary) transition-colors hover:text-(--text-primary)"
           >
             <span className="flex h-2 w-2 rounded-full bg-success-500" aria-hidden="true" />
-            All systems operational
+            <LiveText>All systems operational</LiveText>
           </Link>
         </div>
       </div>
     </footer>
   );
 }
-
-function FooterLinkGroup({ column }) {
-  const heading = FOOTER_HEADING_KEYS[column.headingKey] || column.headingKey;
-  return (
-    <div lang="en">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-(--text-secondary)">
-        {heading}
-      </h3>
-      <ul className="mt-4 space-y-2.5">
-        {column.links.map((link) => (
-          <li key={link.href}>
-            <Link
-              href={link.href}
-              className="text-sm text-(--text-tertiary) transition-colors hover:text-(--text-primary)"
-            >
-              {FOOTER_LINK_KEYS[link.labelKey] || link.labelKey}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-// English fallbacks (footer is intentionally plain-language for all locales).
-const FOOTER_HEADING_KEYS = {
-  "nav.product": "Product",
-  "nav.company": "Company",
-  "nav.resources": "Resources",
-  "nav.legal": "Legal",
-};
-
-const FOOTER_LINK_KEYS = {
-  "nav.features": "Features",
-  "nav.intelligence": "Intelligence",
-  "nav.pricing": "Pricing",
-  "nav.changelog": "Changelog",
-  "nav.roadmap": "Roadmap",
-  "nav.status": "Status",
-  "nav.about": "About",
-  "nav.blog": "Blog",
-  "nav.careers": "Careers",
-  "nav.contact": "Contact",
-  "nav.documentation": "Documentation",
-  "nav.helpCenter": "Help center",
-  "nav.security": "Security",
-  "nav.privacy": "Privacy",
-  "nav.terms": "Terms",
-  "nav.cookies": "Cookies",
-  "nav.dpa": "DPA",
-};

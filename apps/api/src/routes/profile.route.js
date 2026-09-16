@@ -3,9 +3,10 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import QRCode from "qrcode";
 
-// otplib v13 ESM exports don't expose named exports in Node 20 — load via CJS
+// otplib v13 exposes a functional API (generateSecret, generateURI, verifySync).
+// Load via CJS for stable interop across runtimes.
 const require = createRequire(import.meta.url);
-const { authenticator } = require("otplib");
+const { generateSecret, generateURI, verifySync } = require("otplib");
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
@@ -100,8 +101,8 @@ router.post("/2fa/setup", async (req, res) => {
             return res.status(400).json(errorResponse("ALREADY_ENABLED", "2FA is already enabled"));
         }
 
-        const secret = authenticator.generateSecret();
-        const otpauth = authenticator.keyuri(user.email, "FlexFlow", secret);
+        const secret = generateSecret();
+        const otpauth = generateURI({ issuer: "FlexFlow", label: user.email, secret });
         const qrCode = await QRCode.toDataURL(otpauth);
 
         // Store the pending secret so verify can use it
@@ -132,8 +133,8 @@ router.post("/2fa/verify", async (req, res) => {
             return res.status(400).json(errorResponse("NOT_SETUP", "Run /2fa/setup first"));
         }
 
-        const valid = authenticator.verify({ token: code, secret: user.twoFactorSecret });
-        if (!valid) {
+        const valid = verifySync({ token: code, secret: user.twoFactorSecret });
+        if (!valid?.valid) {
             return res.status(401).json(errorResponse("INVALID_CODE", "Invalid or expired code — try again"));
         }
 
@@ -162,8 +163,8 @@ router.delete("/2fa", async (req, res) => {
             return res.status(400).json(errorResponse("NOT_ENABLED", "2FA is not currently enabled"));
         }
 
-        const valid = authenticator.verify({ token: code, secret: user.twoFactorSecret });
-        if (!valid) {
+        const valid = verifySync({ token: code, secret: user.twoFactorSecret });
+        if (!valid?.valid) {
             return res.status(401).json(errorResponse("INVALID_CODE", "Invalid code"));
         }
 

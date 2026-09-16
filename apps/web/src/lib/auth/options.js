@@ -41,6 +41,42 @@ function SlackProvider(options) {
   };
 }
 
+// Figma OAuth (custom provider — no built-in in NextAuth v4).
+function FigmaProvider(options) {
+  return {
+    id: "figma",
+    name: "Figma",
+    type: "oauth",
+    authorization: {
+      url: "https://www.figma.com/oauth",
+      params: { scope: "files:read" },
+    },
+    token: "https://www.figma.com/api/oauth/token",
+    userinfo: {
+      url: "https://api.figma.com/v1/me",
+      async request(context) {
+        const res = await fetch(context.url, {
+          headers: { Authorization: `Bearer ${context.tokens.access_token}` },
+        });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error || "Figma user info request failed");
+        return { ...json, id: json.id, email: json.email, name: json.handle || json.email, image: json.img_url || null };
+      },
+    },
+    profile(profile) {
+      return {
+        id: profile.id,
+        name: profile.name || profile.handle || profile.email,
+        email: profile.email,
+        image: profile.image || null,
+      };
+    },
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    allowDangerousEmailAccountLinking: true,
+  };
+}
+
 // Access token lifetime: 23h so refresh happens once a day max
 const ACCESS_TOKEN_TTL_MS = 23 * 60 * 60 * 1000;
 
@@ -170,6 +206,10 @@ export const authOptions = {
             clientId: process.env.AUTH_SLACK_ID,
             clientSecret: process.env.AUTH_SLACK_SECRET,
         }),
+        FigmaProvider({
+            clientId: process.env.AUTH_FIGMA_ID,
+            clientSecret: process.env.AUTH_FIGMA_SECRET,
+        }),
         Credentials({
             name: "Credentials",
             credentials: {
@@ -198,7 +238,7 @@ export const authOptions = {
             }
 
             // ── OAuth login ────────────────────────────────────────────────
-            if (account && ["google", "github", "slack"].includes(account.provider)) {
+            if (account && ["google", "github", "slack", "figma"].includes(account.provider)) {
                 const data = await oauthLogin({ email: user.email, name: user.name, image: user.image });
                 if (data) {
                     return compactToken({

@@ -4,25 +4,61 @@ import jwt from "jsonwebtoken";
 import { createRequire } from "module";
 import { Router } from "express";
 
-// otplib v13 ESM exports don't expose named exports in Node 20 — load via CJS
+// otplib v13 exposes a functional API (generateSecret, generateURI, verifySync).
+// Load via CJS for stable interop across runtimes.
 const require = createRequire(import.meta.url);
-const { authenticator } = require("otplib");
+const { verifySync } = require("otplib");
 
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { planInfoForOrg } from "../lib/entitlements.js";
+import { secureEqual } from "../lib/secure-compare.js";
 import { authRateLimiter } from "../middleware/rate-limit.middleware.js";
 import { sendTransactionalEmail } from "../services/email.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
 
+// Precomputed bcrypt hash used to equalize login timing when the email does
+// not exist (avoids using a timing side-channel to enumerate accounts).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(`dummy-${env.JWT_ACCESS_SECRET.slice(0, 8)}`, 12);
+
 function signAccessToken(userId) {
-    return jwt.sign({ userId }, env.JWT_ACCESS_SECRET, { expiresIn: "24h" });
+    return jwt.sign({ userId }, env.JWT_ACCESS_SECRET, { algorithm: "HS256", expiresIn: "24h" });
 }
 
 function signRefreshToken(userId) {
-    return jwt.sign({ userId }, env.JWT_REFRESH_SECRET, { expiresIn: "30d" });
+    return jwt.sign({ userId }, env.JWT_REFRESH_SECRET, {
+        algorithm: "HS256",
+        expiresIn: "30d",
+        jwtid: crypto.randomBytes(16).toString("hex"),
+    });
+}
+
+// Roles with org-level visibility across every workspace in the org.
+const ORG_WIDE_ROLES = new Set(["OWNER", "ADMIN"]);
+
+function filterWorkspacesForRole(workspaces, orgRole) {
+    if (ORG_WIDE_ROLES.has(orgRole)) return workspaces;
+    return (workspaces || []).filter((workspace) => (workspace.members?.length ?? 0) > 0);
+}
+
+function shapeOrganizations(orgMembers) {
+    return orgMembers.map((m) => {
+        const workspaces = filterWorkspacesForRole(m.organization.workspaces, m.role).map((workspace) => ({
+            ...workspace,
+            role: workspace.members?.[0]?.role || m.role,
+            members: undefined,
+        }));
+
+        return {
+            ...m.organization,
+            planInfo: planInfoForOrg(m.organization),
+            workspaces,
+            role: m.role,
+            memberId: m.id,
+        };
+    });
 }
 
 function handleAuthError(res, label, error, fallbackMessage) {
@@ -54,7 +90,7 @@ router.post("/oauth", authRateLimiter, async (req, res) => {
     try {
         // Internal call from NextAuth only — reject OAuth upserts without the shared secret
         const secret = req.headers["x-internal-secret"];
-        if (!secret || secret !== env.INTERNAL_SECRET) {
+        if (!secret || !secureEqual(secret, env.INTERNAL_SECRET)) {
             return res.status(401).json(errorResponse("UNAUTHORIZED", "Forbidden"));
         }
 
@@ -105,17 +141,7 @@ router.post("/oauth", authRateLimiter, async (req, res) => {
             user,
             accessToken,
             refreshToken,
-            organizations: organizations.map((m) => ({
-                ...m.organization,
-                planInfo: planInfoForOrg(m.organization),
-                workspaces: m.organization.workspaces.map((workspace) => ({
-                    ...workspace,
-                    role: workspace.members?.[0]?.role || m.role,
-                    members: undefined,
-                })),
-                role: m.role,
-                memberId: m.id,
-            })),
+            organizations: shapeOrganizations(organizations),
         }));
     } catch (error) {
         return handleAuthError(res, "OAuth", error, "OAuth sign-in failed");
@@ -200,6 +226,9 @@ router.post("/login", authRateLimiter, async (req, res) => {
         });
 
         if (!user || !user.passwordHash) {
+            // Equalize timing with real accounts so missing emails can't be
+            // enumerated via response latency.
+            await bcrypt.compare(password, DUMMY_PASSWORD_HASH).catch(() => {});
             return res.status(401).json(errorResponse("INVALID_CREDENTIALS", "Invalid email or password"));
         }
 
@@ -225,7 +254,7 @@ router.post("/login", authRateLimiter, async (req, res) => {
                 }));
             }
 
-            const codeValid = user.twoFactorSecret && authenticator.verify({ token: code, secret: user.twoFactorSecret });
+            const codeValid = user.twoFactorSecret && verifySync({ token: code, secret: user.twoFactorSecret }).valid;
             if (!codeValid) {
                 return res.status(401).json(errorResponse("INVALID_CODE", "Invalid or expired code — try again"));
             }
@@ -255,17 +284,7 @@ router.post("/login", authRateLimiter, async (req, res) => {
 
         return res.status(200).json(successResponse({
             user: safeUser,
-            organizations: organizations.map((m) => ({
-                ...m.organization,
-                planInfo: planInfoForOrg(m.organization),
-                workspaces: m.organization.workspaces.map((workspace) => ({
-                    ...workspace,
-                    role: workspace.members?.[0]?.role || m.role,
-                    members: undefined,
-                })),
-                role: m.role,
-                memberId: m.id,
-            })),
+            organizations: shapeOrganizations(organizations),
             accessToken,
             refreshToken,
         }));
@@ -274,14 +293,14 @@ router.post("/login", authRateLimiter, async (req, res) => {
     }
 });
 
-router.post("/refresh", async (req, res) => {
+router.post("/refresh", authRateLimiter, async (req, res) => {
     try {
         const { userId } = req.body;
 
         // Internal call from NextAuth — authenticate with shared secret
         if (userId) {
             const secret = req.headers["x-internal-secret"];
-            if (!secret || secret !== env.INTERNAL_SECRET) {
+            if (!secret || !secureEqual(secret, env.INTERNAL_SECRET)) {
                 return res.status(401).json(errorResponse("UNAUTHORIZED", "Forbidden"));
             }
 
@@ -321,7 +340,12 @@ router.post("/refresh", async (req, res) => {
         }
 
         const accessToken = signAccessToken(user.id);
-        return res.status(200).json(successResponse({ accessToken }));
+
+        // Rotate the refresh token so an absorbed token cannot be replayed.
+        const newRefreshToken = signRefreshToken(user.id);
+        await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefreshToken } }).catch(() => {});
+
+        return res.status(200).json(successResponse({ accessToken, refreshToken: newRefreshToken }));
     } catch {
         return res.status(401).json(errorResponse("UNAUTHORIZED", "Invalid or expired refresh token"));
     }
@@ -342,11 +366,16 @@ router.get("/me", async (req, res) => {
             select: {
                 id: true, name: true, email: true, avatarUrl: true,
                 bio: true, timezone: true, onboarded: true, createdAt: true,
+                status: true,
             },
         });
 
         if (!user) {
             return res.status(401).json(errorResponse("UNAUTHORIZED", "User not found"));
+        }
+
+        if (user.status === "SUSPENDED") {
+            return res.status(403).json(errorResponse("ACCOUNT_SUSPENDED", "Your account has been suspended"));
         }
 
         const memberships = await prisma.organizationMember.findMany({
@@ -364,17 +393,7 @@ router.get("/me", async (req, res) => {
             orderBy: { createdAt: "asc" },
         });
 
-        const organizations = memberships.map((m) => ({
-            ...m.organization,
-            planInfo: planInfoForOrg(m.organization),
-            workspaces: m.organization.workspaces.map((workspace) => ({
-                ...workspace,
-                role: workspace.members?.[0]?.role || m.role,
-                members: undefined,
-            })),
-            role: m.role,
-            memberId: m.id,
-        }));
+        const organizations = shapeOrganizations(memberships);
 
         return res.status(200).json(successResponse({ user, organizations }));
     } catch {
