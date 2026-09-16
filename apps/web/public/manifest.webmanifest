@@ -1,8 +1,10 @@
 {
+    "id": "/",
     "name": "FlexFlow",
     "short_name": "FlexFlow",
-    "description": "Manage projects, track issues, and collaborate with your team.",
+    "description": "Plan, assign, track, and ship faster with FlexFlow — projects, tasks, RBAC, analytics, and real-time collaboration in one workspace.",
     "start_url": "/",
+    "scope": "/",
     "display": "standalone",
     "background_color": "#0b0b0f",
     "theme_color": "#6366f1",
