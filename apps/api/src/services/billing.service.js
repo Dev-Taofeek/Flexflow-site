@@ -1,7 +1,13 @@
 import { computeCustomConfig, PLANS, getPlanLimits } from "@flexflow/plans";
 import { prisma } from "../lib/prisma.js";
 import { env } from "../config/env.js";
+import { secureEqual } from "../lib/secure-compare.js";
 import { createHmac } from "node:crypto";
+import {
+    expiryWarningDedupeKey,
+    requiredLifecycleTransition,
+} from "../lib/billing-policy.js";
+import { notifyUser } from "./notification.service.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Billing service — provider abstraction.
@@ -201,24 +207,43 @@ export async function createCheckout({
  * For Stripe this is the authoritative webhook path (`subscribed`/`invoice.paid`).
  * Returns `{ organization, entitlements }`.
  */
-export async function finalizeSubscription({ organizationId, planId, billingCycle = "MONTHLY", addOns = [] }) {
-    const planDef = PLANS[planId];
+export async function finalizeSubscription({ organizationId, planId, billingCycle = "MONTHLY", addOns = [], providerRefs = {} }) {
+    const normalizedPlanId = toPlanId(planId);
+    if (!PLANS[normalizedPlanId] || normalizedPlanId === "free") {
+        throw new Error("Unknown plan for subscription");
+    }
+
     const now = new Date();
+
+    // Renewals extend from the current paid-through date instead of resetting
+    // the clock, so a duplicate/mid-cycle webhook never shortens coverage.
+    const current = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { subscriptionEndAt: true, subscriptionStatus: true, subscriptionStartAt: true },
+    });
+    const base =
+        current?.subscriptionStatus === "ACTIVE" &&
+        current?.subscriptionEndAt &&
+        new Date(current.subscriptionEndAt) > now
+            ? new Date(current.subscriptionEndAt)
+            : now;
 
     const endAt =
         billingCycle === "ANNUAL"
-            ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
-            : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            ? new Date(base.getTime() + 365 * 24 * 60 * 60 * 1000)
+            : new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     const org = await prisma.organization.update({
         where: { id: organizationId },
         data: {
-            plan: planId === "pro" ? "PRO" : "CUSTOM",
+            plan: normalizedPlanId === "pro" ? "PRO" : "CUSTOM",
             billingCycle,
             subscriptionStatus: "ACTIVE",
-            subscriptionStartAt: now,
+            subscriptionStartAt: current?.subscriptionStartAt || now,
             subscriptionEndAt: endAt,
-            customAddOns: planId === "custom" ? addOns : [],
+            customAddOns: normalizedPlanId === "custom" ? addOns : [],
+            ...(providerRefs.providerCustomerId ? { providerCustomerId: providerRefs.providerCustomerId } : {}),
+            ...(providerRefs.providerSubscriptionId ? { providerSubscriptionId: providerRefs.providerSubscriptionId } : {}),
         },
     });
 
@@ -228,7 +253,7 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
             provider: getProvider(),
             eventType: "checkout.completed",
             status: "ACTIVE",
-            raw: { planId, billingCycle, addOns, amountMonthly: planDef.priceMonthly },
+            raw: { planId: normalizedPlanId, billingCycle, addOns, amountMonthly: PLANS[normalizedPlanId].priceMonthly },
         },
     });
 
@@ -278,7 +303,7 @@ export async function cancelSubscription(organizationId) {
 
 /** Downgrade back to FREE immediately (used by admin/dev flows, never by users). */
 export async function downgradeToFree(organizationId) {
-    return prisma.organization.update({
+    const org = await prisma.organization.update({
         where: { id: organizationId },
         data: {
             plan: "FREE",
@@ -289,6 +314,18 @@ export async function downgradeToFree(organizationId) {
             customAddOns: [],
         },
     });
+
+    await prisma.billingEvent.create({
+        data: {
+            organizationId,
+            provider: getProvider(),
+            eventType: "subscription.expired",
+            status: "EXPIRED",
+            raw: { movedToFreeAt: new Date().toISOString() },
+        },
+    });
+
+    return org;
 }
 
 /** Billing portal URL. Mock returns the billing settings page in the app. */
@@ -302,12 +339,43 @@ export async function getBillingPortalUrl(organizationId) {
     return `${env.CLIENT_ORIGIN}/settings/billing?orgId=${organizationId}&from=portal`;
 }
 
+/** Idempotency guard — returns true when this provider event already exists. */
+async function eventAlreadyProcessed(provider, providerEventId) {
+    if (!providerEventId) return false;
+    const existing = await prisma.billingEvent.findUnique({
+        where: { provider_providerEventId: { provider, providerEventId } },
+        select: { id: true },
+    });
+    return Boolean(existing);
+}
+
+/** Persists a billing event, tolerating a concurrent duplicate insert. */
+async function persistBillingEvent({ organizationId, provider, providerEventId, eventType, status, raw }) {
+    if (await eventAlreadyProcessed(provider, providerEventId)) return null;
+    try {
+        return await prisma.billingEvent.create({
+            data: {
+                organizationId: organizationId || null,
+                provider,
+                providerEventId: providerEventId || null,
+                eventType,
+                status: status || null,
+                raw: raw || null,
+            },
+        });
+    } catch (error) {
+        if (error?.code === "P2002") return null; // concurrent duplicate — safe
+        throw error;
+    }
+}
+
 /**
  * Handles an incoming billing webhook payload. Delivery is verified by
  * signature for both real providers:
  *  - Stripe: HMAC-SHA256 via the `stripe-signature` header / webhook secret.
  *  - Paystack: HMAC-SHA512 of the exact raw body via `x-paystack-signature`,
  *    then only state-changing events are processed.
+ * Every event is persisted exactly once (idempotency via provider event id).
  * Returns the event type processed (or null when unhandled).
  */
 export async function handleProviderWebhook(req, rawBody) {
@@ -323,26 +391,31 @@ export async function handleProviderWebhook(req, rawBody) {
         const event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
         const metadata = event.data?.object?.metadata || {};
         const organizationId = metadata.organizationId || event.data?.object?.client_reference_id;
-
         if (!organizationId) return null;
 
-        const planId = metadata.planId || "pro";
-        const billingCycle = metadata.billingCycle || "MONTHLY";
-        const addOns = JSON.parse(metadata.addOns || "[]");
-
-        await prisma.billingEvent.create({
-            data: {
-                organizationId,
-                provider: "stripe",
-                providerEventId: event.id,
-                eventType: event.type,
-                status: event.data?.object?.status,
-                raw: event.data?.object,
-            },
+        await persistBillingEvent({
+            organizationId,
+            provider: "stripe",
+            providerEventId: event.id,
+            eventType: event.type,
+            status: event.data?.object?.status,
+            raw: event.data?.object,
         });
 
-        if (event.type === "checkout.session.completed") {
-            await finalizeSubscription({ organizationId, planId, billingCycle, addOns });
+        if (event.type === "checkout.session.completed" && !(await eventAlreadyProcessed("stripe", event.id))) {
+            const planId = metadata.planId || "pro";
+            const billingCycle = metadata.billingCycle || "MONTHLY";
+            const addOns = JSON.parse(metadata.addOns || "[]");
+            await finalizeSubscription({
+                organizationId,
+                planId,
+                billingCycle,
+                addOns,
+                providerRefs: {
+                    providerSubscriptionId: event.data?.object?.subscription || null,
+                    providerCustomerId: event.data?.object?.customer || null,
+                },
+            });
         }
 
         return event.type;
@@ -357,7 +430,7 @@ export async function handleProviderWebhook(req, rawBody) {
 
         const expected = createHmac("sha512", secret).update(rawBody).digest("hex");
         const actual = Array.isArray(signature) ? signature.join("") : signature;
-        if (expected !== actual) {
+        if (!secureEqual(expected, actual)) {
             throw new Error("Invalid Paystack webhook signature");
         }
 
@@ -370,26 +443,34 @@ export async function handleProviderWebhook(req, rawBody) {
 
         const metadata = event.data?.metadata || {};
         const organizationId = metadata.organizationId;
+        const providerEventId = event.data?.reference || event.id || null;
+
+        await persistBillingEvent({
+            organizationId,
+            provider: "paystack",
+            providerEventId,
+            eventType: event.event,
+            status: event.data?.status || null,
+            raw: event.data || null,
+        });
 
         // Events we accept as authoritative proof of payment.
         const paymentEvents = new Set(["charge.success", "subscription.create"]);
 
-        await prisma.billingEvent.create({
-            data: {
-                organizationId: organizationId || null,
-                provider: "paystack",
-                providerEventId: event.data?.reference || event.id || null,
-                eventType: event.event,
-                status: event.data?.status || null,
-                raw: event.data || null,
-            },
-        });
-
-        if (organizationId && paymentEvents.has(event.event)) {
+        if (organizationId && paymentEvents.has(event.event) && !(await eventAlreadyProcessed("paystack", providerEventId))) {
             const planId = metadata.planId || "pro";
             const billingCycle = metadata.billingCycle || "MONTHLY";
             const addOns = JSON.parse(metadata.addOns || "[]");
-            await finalizeSubscription({ organizationId, planId, billingCycle, addOns });
+            await finalizeSubscription({
+                organizationId,
+                planId,
+                billingCycle,
+                addOns,
+                providerRefs: {
+                    providerSubscriptionId: event.data?.subscription_code || event.data?.id || null,
+                    providerCustomerId: event.data?.customer?.id || null,
+                },
+            });
         }
 
         return event.event;
@@ -399,15 +480,110 @@ export async function handleProviderWebhook(req, rawBody) {
     const organizationId = req.body?.organizationId;
     if (!organizationId) return null;
 
-    await prisma.billingEvent.create({
-        data: {
-            organizationId,
-            provider: "mock",
-            eventType: req.body?.eventType || "webhook",
-            status: req.body?.status || null,
-            raw: req.body || null,
-        },
+    await persistBillingEvent({
+        organizationId,
+        provider: "mock",
+        providerEventId: req.body?.id || null,
+        eventType: req.body?.eventType || "webhook",
+        status: req.body?.status || null,
+        raw: req.body || null,
     });
 
     return req.body?.eventType || "webhook";
+}
+
+/**
+ * Periodic subscription sweep. Walks every paid org and applies the lifecycle
+ * policy decided by billing-policy.js:
+ *  - warns OWNER/ADMIN 7 days before the paid window ends (idempotent, deduped),
+ *  - marks the subscription PAST_DUE while inside the grace period,
+ *  - silently downgrades to FREE once the grace period has elapsed.
+ * Safe to run on every boot and on a repeating interval — transitions are
+ * irreversible-by-construction and the notifications are de-duplicated.
+ */
+export async function processExpiringSubscriptions(now = new Date()) {
+    const orgs = await prisma.organization.findMany({
+        where: {
+            plan: { in: ["PRO", "CUSTOM"] },
+            subscriptionEndAt: { not: null },
+        },
+        select: {
+            id: true,
+            name: true,
+            plan: true,
+            billingCycle: true,
+            subscriptionStatus: true,
+            subscriptionEndAt: true,
+            members: {
+                where: { role: { in: ["ADMIN", "OWNER"] } },
+                select: { id: true, userId: true },
+            },
+        },
+    });
+
+    const summary = { warned: 0, pastDue: 0, downgraded: 0 };
+
+    for (const org of orgs) {
+        const transition = requiredLifecycleTransition(org, now);
+        if (!transition) continue;
+
+        const adminIds = org.members.map((m) => m.userId);
+
+        if (transition === "warn") {
+            const dedupeKey = expiryWarningDedupeKey(org);
+            await Promise.all(
+                adminIds.map((userId) =>
+                    notifyUser(userId, {
+                        title: "Subscription expiring soon",
+                        message: `Your ${org.plan.toLowerCase()} subscription for ${org.name} ends on ${new Date(org.subscriptionEndAt).toISOString().slice(0, 10)}. Renew to keep paid features.`,
+                        type: "BILLING",
+                        dedupeKey,
+                    }),
+                ),
+            );
+            summary.warned += 1;
+            continue;
+        }
+
+        if (transition === "grace") {
+            await prisma.organization.update({
+                where: { id: org.id },
+                data: { subscriptionStatus: "PAST_DUE" },
+            });
+            await persistBillingEvent({
+                organizationId: org.id,
+                provider: getProvider(),
+                eventType: "subscription.past_due",
+                status: "PAST_DUE",
+                raw: { enteredGraceAt: new Date().toISOString() },
+            });
+            await Promise.all(
+                adminIds.map((userId) =>
+                    notifyUser(userId, {
+                        title: "Subscription past due",
+                        message: `Your subscription for ${org.name} is in its grace period. Renew within the grace window to continue using paid features.`,
+                        type: "BILLING",
+                    }),
+                ),
+            );
+            summary.pastDue += 1;
+            continue;
+        }
+
+        if (transition === "downgrade" && org.subscriptionStatus !== "EXPIRED") {
+            await downgradeToFree(org.id);
+            await Promise.all(
+                adminIds.map((userId) =>
+                    notifyUser(userId, {
+                        title: "Subscription expired",
+                        message: `${org.name} has been moved to the Free plan because the paid subscription expired.`,
+                        type: "BILLING",
+                    }),
+                ),
+            );
+            summary.downgraded += 1;
+        }
+    }
+
+    return summary;
 }

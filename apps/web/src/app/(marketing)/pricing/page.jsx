@@ -3,7 +3,7 @@ import { PricingContent } from "@/components/marketing/PricingContent";
 export const metadata = {
   title: "Pricing",
   description:
-    "Transparent pricing for FlexFlow. Start free and upgrade when your team grows — cancel anytime, no hidden costs.",
+    "Transparent pricing for FlexFlow. Start free and upgrade when your team grows cancel anytime, no hidden costs.",
 };
 
 export default function PricingPage() {
@@ -17,7 +17,7 @@ export default function PricingPage() {
           </h1>
           <p className="mt-4 text-base leading-relaxed text-(--text-secondary)">
             Every plan includes unlimited projects, members, and real-time collaboration. Upgrade or
-            cancel anytime — no hidden costs.
+            cancel anytime no hidden costs.
           </p>
         </div>
         <PricingContent />

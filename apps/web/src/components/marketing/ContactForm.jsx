@@ -1,9 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { Translated, useTranslatedText } from "@/lib/translate";
 
 export function ContactForm() {
   const [sent, setSent] = useState(false);
+  const [optGeneral, optSales, optSupport, optPartnerships, optCareers] = [
+    useTranslatedText("General question"),
+    useTranslatedText("Sales / enterprise"),
+    useTranslatedText("Support"),
+    useTranslatedText("Partnerships"),
+    useTranslatedText("Careers"),
+  ];
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -24,13 +32,15 @@ export function ContactForm() {
   if (sent) {
     return (
       <div className="rounded-2xl border border-success-500/40 bg-success-500/10 p-6 text-sm leading-relaxed text-(--text-secondary)">
-        <p className="font-semibold text-success-500">Thanks — your email app should be opening.</p>
+        <p className="font-semibold text-success-500">
+          <Translated>Thanks your email app should be opening.</Translated>
+        </p>
         <p className="mt-1">
-          If it didn&apos;t, email us directly at{" "}
+          <Translated>If it didn&apos;t, email us directly at </Translated>
           <a href="mailto:hello@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
             hello@flexflow.app
           </a>
-          . We usually reply within one business day.
+          <Translated>. We usually reply within one business day.</Translated>
         </p>
       </div>
     );
@@ -44,31 +54,31 @@ export function ContactForm() {
     <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
       <div>
         <label htmlFor="contact-name" className={labelClass}>
-          Name
+          <Translated>Name</Translated>
         </label>
         <input id="contact-name" name="name" required className={inputClass} placeholder="Ada Lovelace" />
       </div>
       <div>
         <label htmlFor="contact-email" className={labelClass}>
-          Email
+          <Translated>Email</Translated>
         </label>
         <input id="contact-email" name="email" type="email" required className={inputClass} placeholder="ada@team.com" />
       </div>
       <div className="sm:col-span-2">
         <label htmlFor="contact-subject" className={labelClass}>
-          Subject
+          <Translated>Subject</Translated>
         </label>
         <select id="contact-subject" name="subject" className={inputClass} defaultValue="General question">
-          <option>General question</option>
-          <option>Sales / enterprise</option>
-          <option>Support</option>
-          <option>Partnerships</option>
-          <option>Careers</option>
+          <option value="General question">{optGeneral}</option>
+          <option value="Sales / enterprise">{optSales}</option>
+          <option value="Support">{optSupport}</option>
+          <option value="Partnerships">{optPartnerships}</option>
+          <option value="Careers">{optCareers}</option>
         </select>
       </div>
       <div className="sm:col-span-2">
         <label htmlFor="contact-message" className={labelClass}>
-          Message
+          <Translated>Message</Translated>
         </label>
         <textarea
           id="contact-message"
@@ -84,11 +94,14 @@ export function ContactForm() {
           type="submit"
           className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500"
         >
-          Send message
+          <Translated>Send message</Translated>
         </button>
         <p className="mt-3 text-xs leading-relaxed text-(--text-tertiary)">
-          Submitting opens your email app with the message pre-filled. Prefer live support? Check
-          the <a href="/help" className="font-medium text-brand-500 hover:text-brand-400">help center</a> first.
+          <Translated>Submitting opens your email app with the message pre-filled. Prefer live support? Check the </Translated>
+          <a href="/help" className="font-medium text-brand-500 hover:text-brand-400">
+            <Translated>help center</Translated>
+          </a>
+          <Translated> first.</Translated>
         </p>
       </div>
     </form>

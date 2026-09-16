@@ -20,6 +20,10 @@ export async function updateMemberRole(orgId, userId, role, token) {
     return apiRequest(`/organizations/${orgId}/members/${userId}/role`, { token, method: "PATCH", body: { role } });
 }
 
+export async function updateMemberTag(orgId, userId, tag, token) {
+    return apiRequest(`/organizations/${orgId}/members/${userId}/tag`, { token, method: "PATCH", body: { tag } });
+}
+
 export async function removeMember(orgId, userId, token) {
     return apiRequest(`/organizations/${orgId}/members/${userId}`, { token, method: "DELETE" });
 }

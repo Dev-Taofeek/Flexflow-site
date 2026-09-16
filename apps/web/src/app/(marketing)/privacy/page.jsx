@@ -1,4 +1,5 @@
 import { ContentPage, Prose, ProseH2 } from "@/components/marketing/ContentPage";
+import { LiveText } from "@/components/LiveText";
 
 export const metadata = {
   title: "Privacy Policy",
@@ -8,61 +9,72 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <ContentPage
-      eyebrow="Privacy"
-      title="Privacy Policy"
-      description="Last updated: June 2026. This policy explains what we collect, why we collect it, and the control you have over your data."
+      eyebrow={<LiveText>Privacy</LiveText>}
+      title={<LiveText>Privacy Policy</LiveText>}
+      description={
+        <LiveText>Last updated: June 2026. This policy explains what we collect, why we collect it, and the control you have over your data.</LiveText>
+      }
     >
       <Prose>
-        <ProseH2>What we collect</ProseH2>
+        <ProseH2><LiveText>What we collect</LiveText></ProseH2>
         <ul className="list-disc space-y-2 pl-5 marker:text-(--text-tertiary)">
           <li>
-            <strong className="text-(--text-primary)">Account data</strong> — name, email, and
-            password (hashed) you provide when registering.
+            <strong className="text-(--text-primary)">
+              <LiveText>Account data</LiveText>
+            </strong>{" "}
+            <LiveText>name, email, and
+            password (hashed) you provide when registering.</LiveText>
           </li>
           <li>
-            <strong className="text-(--text-primary)">Workspace data</strong> — the organizations,
-            workspaces, projects, tasks, labels, invitations, and comments you create.
+            <strong className="text-(--text-primary)">
+              <LiveText>Workspace data</LiveText>
+            </strong>{" "}
+            <LiveText>the organizations,
+            workspaces, projects, tasks, labels, invitations, and comments you create.</LiveText>
           </li>
           <li>
-            <strong className="text-(--text-primary)">Usage data</strong> — anonymous technical
-            data like browser type and performance metrics that helps us keep the service reliable.
+            <strong className="text-(--text-primary)">
+              <LiveText>Usage data</LiveText>
+            </strong>{" "}
+            <LiveText>anonymous technical
+            data like browser type and performance metrics that helps us keep the service reliable.</LiveText>
           </li>
         </ul>
 
-        <ProseH2>How we use it</ProseH2>
+        <ProseH2><LiveText>How we use it</LiveText></ProseH2>
         <p>
-          We use your data to provide the service (auth, collaboration, permissions, notifications),
+          <LiveText>We use your data to provide the service (auth, collaboration, permissions, notifications),
           to keep it secure, and to improve it. We do not sell personal data, and we don&apos;t use
-          your workspace content for advertising.
+          your workspace content for advertising.</LiveText>
         </p>
 
-        <ProseH2>How long we keep it</ProseH2>
+        <ProseH2><LiveText>How long we keep it</LiveText></ProseH2>
         <p>
-          Your workspace stays available while your account is active. You can delete tasks,
+          <LiveText>Your workspace stays available while your account is active. You can delete tasks,
           projects, and workspaces yourself from within the app. Account data is retained only as
-          long as needed for the service and our legal obligations.
+          long as needed for the service and our legal obligations.</LiveText>
         </p>
 
-        <ProseH2>Your rights</ProseH2>
+        <ProseH2><LiveText>Your rights</LiveText></ProseH2>
         <p>
-          Subject to applicable law, you can request access to, correction of, or deletion of your
-          personal data, and you can object to or restrict certain processing. Contact us at{" "}
+          <LiveText>Subject to applicable law, you can request access to, correction of, or deletion of your
+          personal data, and you can object to or restrict certain processing. Contact us at</LiveText>{" "}
           <a href="mailto:privacy@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
             privacy@flexflow.app
           </a>{" "}
-          to exercise these rights.
+          <LiveText>to exercise these rights.</LiveText>
         </p>
 
-        <ProseH2>Cookies and local storage</ProseH2>
+        <ProseH2><LiveText>Cookies and local storage</LiveText></ProseH2>
         <p>
-          We use cookies and local storage only for authentication and security (session tokens,
-          preferences). We don&apos;t use third-party advertising cookies.
+          <LiveText>We use cookies and local storage only for authentication and security (session tokens,
+          preferences). We don&apos;t use third-party advertising cookies.</LiveText>
         </p>
 
-        <ProseH2>Changes to this policy</ProseH2>
+        <ProseH2><LiveText>Changes to this policy</LiveText></ProseH2>
         <p>
-          If we change this policy materially, we&apos;ll update the date above and notify you by
-          email or in-product where required.
+          <LiveText>If we change this policy materially, we&apos;ll update the date above and notify you by
+          email or in-product where required.</LiveText>
         </p>
       </Prose>
     </ContentPage>

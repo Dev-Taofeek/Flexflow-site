@@ -1,7 +1,7 @@
 // Work states an assignee may move a task through; DONE is reserved for
 // the assigner (task creator) and users with task-management rights.
 // Mirrors the API's resolveTaskStatusAccess rules.
-export const WORK_STATES = ["TODO", "IN_PROGRESS", "IN_REVIEW"];
+export const WORK_STATES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED"];
 
 export function isTaskAssignee(userId, task) {
     if (!userId || !task) return false;

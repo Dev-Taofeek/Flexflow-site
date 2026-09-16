@@ -28,6 +28,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import Image from "next/image";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 function LogoBadge({ logoUrl, label, fallback, size = "md", icon: Icon }) {
   const { t } = useI18n();
@@ -79,7 +80,7 @@ function OrgSwitcher({ collapsed }) {
           <>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-(--text-primary)">
-                {currentOrg.name}
+                <Translated>{currentOrg.name}</Translated>
               </p>
             </div>
             <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-(--text-muted)" />
@@ -104,7 +105,7 @@ function OrgSwitcher({ collapsed }) {
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-(--bg-overlay)"
             >
               <LogoBadge logoUrl={org.logoUrl} label={org.name} fallback={org.name.slice(0, 2).toUpperCase()} size="sm" />
-              <span className="flex-1 truncate text-(--text-primary)">{org.name}</span>
+              <span className="flex-1 truncate text-(--text-primary)"><Translated>{org.name}</Translated></span>
               {org.id === currentOrg.id && <Check className="h-3.5 w-3.5 text-brand-500" />}
             </button>
           ))}
@@ -188,7 +189,7 @@ function WorkspaceSwitcher({ collapsed }) {
           <>
             <LogoBadge logoUrl={currentWorkspace?.logoUrl} label={currentWorkspace?.name || t("shell.workspace.label")} fallback={null} size="xs" icon={LayoutGrid} />
             <span className="flex-1 truncate text-xs font-medium text-(--text-secondary)">
-              {currentWorkspace?.name || t("shell.workspace.select")}
+              {currentWorkspace?.name ? <Translated>{currentWorkspace.name}</Translated> : t("shell.workspace.select")}
             </span>
             <ChevronDown className="h-3 w-3 shrink-0 text-(--text-muted)" />
           </>
@@ -211,7 +212,7 @@ function WorkspaceSwitcher({ collapsed }) {
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-(--bg-overlay)"
             >
               <LogoBadge logoUrl={ws.logoUrl} label={ws.name} fallback={null} size="xs" icon={LayoutGrid} />
-              <span className="flex-1 truncate text-(--text-primary)">{ws.name}</span>
+              <span className="flex-1 truncate text-(--text-primary)"><Translated>{ws.name}</Translated></span>
               {currentWorkspace?.id === ws.id && <Check className="h-3.5 w-3.5 text-brand-500" />}
             </button>
           ))}

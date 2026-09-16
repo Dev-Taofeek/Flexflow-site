@@ -21,10 +21,25 @@ const envSchema = z.object({
     VAPID_SUBJECT: z.string().optional(),
     // When "true", enables POST /auth/demo-credentials for the marketing site.
     DEMO_MODE: z.string().optional(),
+    // ── Team Intelligence LLM synthesis (optional — deterministic fallback) ───
+    // When set, Groq may only REPHRASE deterministic backend answers. Numbers,
+    // percentages, and citations stay backend-computed; without the key the
+    // service answers deterministically (never fabricated AI).
+    GROQ_API_KEY: z.string().optional(),
+    GROQ_MODEL: z.string().optional(),
+    GROQ_API_BASE: z.string().url().optional(),
+
     // ── Paystack ──────────────────────────────────────────────────────────────
     PAYSTACK_SECRET_KEY: z.string().optional(),
     PAYSTACK_PUBLIC_KEY: z.string().optional(),
     PAYSTACK_WEBHOOK_SECRET: z.string().optional(),
+
+    // ── Integrations (optional) ───────────────────────────────────────────────
+    // Connector secrets are stored per-connection in the DB; these optionally
+    // seed defaults for outbound API calls made server-side.
+    GH_APP_WEBHOOK_SECRET: z.string().optional(),
+    SLACK_SIGNING_SECRET: z.string().optional(),
+    FIGMA_WEBHOOK_PASSCODE: z.string().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

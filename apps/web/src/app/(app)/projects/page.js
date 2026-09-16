@@ -6,10 +6,13 @@ import { useApp } from "@/contexts/AppContext";
 import { useRole } from "@/hooks/useRole";
 import { fetchProjects, createProject } from "@/lib/projects-api";
 import { ProjectsClient } from "@/components/projects/ProjectsClient";
+import { Translated, useTranslatedText } from "@/lib/translate";
 
 export default function ProjectsPage() {
   const { currentWorkspace, accessToken, isReady } = useApp();
   const { canManageProjects } = useRole();
+  const optPrivate = useTranslatedText("Private");
+  const optPublic = useTranslatedText("Public");
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -64,10 +67,12 @@ export default function ProjectsPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-(--text-primary)">Projects</h1>
+          <h1 className="text-xl font-semibold text-(--text-primary)"><Translated>Projects</Translated></h1>
           <p className="mt-0.5 text-sm text-(--text-muted)">
-            {projects.length} project{projects.length !== 1 ? "s" : ""} in{" "}
-            {currentWorkspace?.name || "this workspace"}
+            {projects.length}{" "}
+            <Translated>{projects.length === 1 ? "project" : "projects"}</Translated>{" "}
+            <Translated>in</Translated>{" "}
+            {currentWorkspace?.name || <Translated>this workspace</Translated>}
           </p>
         </div>
         {canManageProjects && (
@@ -75,7 +80,7 @@ export default function ProjectsPage() {
             onClick={() => setShowForm((s) => !s)}
             className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
           >
-            <Plus className="h-4 w-4" /> New Project
+            <Plus className="h-4 w-4" /> <Translated>New Project</Translated>
           </button>
         )}
       </div>
@@ -86,11 +91,11 @@ export default function ProjectsPage() {
           onSubmit={handleCreate}
           className="space-y-4 rounded-xl border border-(--border) bg-(--bg-elevated) p-5"
         >
-          <h3 className="text-sm font-semibold text-(--text-primary)">New project</h3>
+          <h3 className="text-sm font-semibold text-(--text-primary)"><Translated>New project</Translated></h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-(--text-secondary)">
-                Name *
+                <Translated>Name</Translated> *
               </label>
               <input
                 type="text"
@@ -102,21 +107,21 @@ export default function ProjectsPage() {
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-(--text-secondary)">
-                Visibility
+                <Translated>Visibility</Translated>
               </label>
               <select
                 value={form.visibility}
                 onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value }))}
                 className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none"
               >
-                <option value="PRIVATE">Private</option>
-                <option value="PUBLIC">Public</option>
+                <option value="PRIVATE">{optPrivate}</option>
+                <option value="PUBLIC">{optPublic}</option>
               </select>
             </div>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-(--text-secondary)">
-              Description
+              <Translated>Description</Translated>
             </label>
             <textarea
               placeholder="What is this project about?"
@@ -132,14 +137,14 @@ export default function ProjectsPage() {
               onClick={() => setShowForm(false)}
               className="px-3 py-2 text-sm text-(--text-secondary) transition-colors hover:text-(--text-primary)"
             >
-              Cancel
+              <Translated>Cancel</Translated>
             </button>
             <button
               type="submit"
               disabled={creating}
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
             >
-              {creating ? "Creating..." : "Create project"}
+              {creating ? <Translated>Creating...</Translated> : <Translated>Create project</Translated>}
             </button>
           </div>
         </form>
@@ -159,9 +164,11 @@ export default function ProjectsPage() {
       ) : projects.length === 0 ? (
         <div className="rounded-xl border border-(--border) bg-(--bg-elevated) p-12 text-center">
           <FolderKanban className="mx-auto h-8 w-8 text-(--text-muted)" />
-          <p className="mt-3 text-sm font-medium text-(--text-primary)">No projects yet</p>
+          <p className="mt-3 text-sm font-medium text-(--text-primary)"><Translated>No projects yet</Translated></p>
           <p className="mt-1 text-sm text-(--text-muted)">
-            {canManageProjects ? "Create your first project to get started." : "You have read-only access in this workspace."}
+            <Translated>
+              {canManageProjects ? "Create your first project to get started." : "You have read-only access in this workspace."}
+            </Translated>
           </p>
         </div>
       ) : (

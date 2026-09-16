@@ -5,6 +5,7 @@ import { Bell, Check, Info, MessageSquare, Shield, UserPlus } from "lucide-react
 import { useNotifications } from "@/contexts/NotificationsContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 const TYPE_ICON = {
   INVITE: UserPlus,
@@ -131,9 +132,9 @@ export function NotificationsPanel({ open, onClose }) {
                       !n.isRead ? "font-medium text-(--text-primary)" : "text-(--text-secondary)",
                     ].join(" ")}
                   >
-                    {n.title}
+                    {n.title ? <Translated>{n.title}</Translated> : null}
                   </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-(--text-muted)">{n.message}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-(--text-muted)">{n.message ? <Translated>{n.message}</Translated> : null}</p>
                   <p className="mt-1 text-[10px] text-(--text-muted)">{timeAgo(n.createdAt, t)}</p>
                 </div>
                 {!n.isRead && <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-brand-500" />}

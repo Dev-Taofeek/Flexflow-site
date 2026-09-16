@@ -236,6 +236,14 @@ export const FEATURES = {
     minPlan: "pro",
     category: "Integrations",
   },
+  figma_integration: {
+    id: "figma_integration",
+    name: "Figma integration",
+    summary: "Connect design files and link comments on files to tasks.",
+    value: "Keep design feedback attached to the work it belongs to.",
+    minPlan: "pro",
+    category: "Integrations",
+  },
   organization_2fa: {
     id: "organization_2fa",
     name: "Organization 2FA",
@@ -473,6 +481,7 @@ export const PLANS = {
       "realtime_collaboration",
       "github_integration",
       "slack_integration",
+      "figma_integration",
       "organization_2fa",
       "automation",
       "advanced_collaboration",
@@ -599,6 +608,7 @@ export const ONBOARDING_BREAKDOWN = {
   pro: [
     "github_integration",
     "slack_integration",
+    "figma_integration",
     "advanced_analytics",
     "organization_2fa",
     "priority_support",

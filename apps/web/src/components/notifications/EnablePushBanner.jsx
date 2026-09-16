@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -12,10 +12,17 @@ const DISMISS_KEY = "flexflow:push-banner-dismissed";
 export function EnablePushBanner() {
     const { t } = useI18n();
     const { permission, subscribe } = usePushSubscription();
-    const [dismissed, setDismissed] = useState(() => (
-        typeof window !== "undefined" && localStorage.getItem(DISMISS_KEY) === "1"
-    ));
+    // Read after mount — initializing from localStorage during render would give
+    // the client a different tree than SSR (hydration mismatch).
+    const [dismissed, setDismissed] = useState(false);
     const [enabling, setEnabling] = useState(false);
+
+    useEffect(() => {
+        if (typeof window !== "undefined" && localStorage.getItem(DISMISS_KEY) === "1") {
+            const timer = setTimeout(() => setDismissed(true), 0);
+            return () => clearTimeout(timer);
+        }
+    }, []);
 
     if (permission !== "default" || dismissed) return null;
 

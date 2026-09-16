@@ -11,14 +11,16 @@ import { useRole } from "@/hooks/useRole";
 import { apiRequest } from "@/lib/api-client";
 import { fetchProjects } from "@/lib/projects-api";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
-const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
+const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED", "DONE"];
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
 const STATUS_COLOR = {
     TODO: "bg-zinc-400",
     IN_PROGRESS: "bg-blue-500",
     IN_REVIEW: "bg-amber-500",
+    BLOCKED: "bg-rose-500",
     DONE: "bg-emerald-500",
 };
 const PRIORITY_COLOR = {
@@ -122,6 +124,7 @@ export default function TasksPage() {
             TODO: t("tasks.status.todo"),
             IN_PROGRESS: t("tasks.status.in_progress"),
             IN_REVIEW: t("tasks.status.in_review"),
+            BLOCKED: t("tasks.status.blocked"),
             DONE: t("tasks.status.done"),
         }[status]);
 
@@ -401,7 +404,7 @@ export default function TasksPage() {
 
                             <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <p className="text-sm font-medium text-(--text-primary) leading-snug">{task.title}</p>
+                                    <p className="text-sm font-medium text-(--text-primary) leading-snug"><Translated>{task.title}</Translated></p>
                                     <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_COLOR[task.priority]}`}>
                                         {priorityLabel(task.priority)}
                                     </span>
@@ -412,7 +415,7 @@ export default function TasksPage() {
                                         {statusLabel(task.status)}
                                     </span>
                                     <span className="text-(--text-muted)">·</span>
-                                    <span>{task.project.name}</span>
+                                    <span><Translated>{task.project.name}</Translated></span>
                                     {(() => {
                                         const people = (task.assignees || []).map((a) => a.user).filter(Boolean);
                                         if (people.length === 0 && task.assignee) people.push(task.assignee);

@@ -31,6 +31,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/TextArea";
+import { Translated, useTranslatedText } from "@/lib/translate";
 
 const CREATE_STEPS = ["welcome", "create", "plan", "done"];
 
@@ -150,10 +151,10 @@ function Eyebrow({ index, total, text }) {
         <div className="mb-4 flex items-center gap-3">
             <StepDots current={index} total={total} />
             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                Step {index + 1} of {total}
+                <Translated>Step</Translated> {index + 1} <Translated>of</Translated> {total}
             </p>
             {text ? (
-                <p className="text-muted-foreground hidden text-xs sm:block">— {text}</p>
+                <p className="text-muted-foreground hidden text-xs sm:block">— <Translated>{text}</Translated></p>
             ) : null}
         </div>
     );
@@ -195,6 +196,7 @@ export default function OnboardingPage() {
 
     const token = session?.user?.accessToken;
     const firstName = session?.user?.name?.split(" ")[0] || "there";
+    const heroText = useTranslatedText("Make work feel light again.");
 
     const stepIndex = CREATE_STEPS.indexOf(step);
 
@@ -315,11 +317,11 @@ export default function OnboardingPage() {
                         }}
                         className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm transition-colors"
                     >
-                        <ArrowLeft className="h-4 w-4" /> Back
+                        <ArrowLeft className="h-4 w-4" /> <Translated>Back</Translated>
                     </button>
                 ) : (
                     <span className="text-muted-foreground text-sm">
-                        ~2 minute setup
+                        <Translated>~2 minute setup</Translated>
                     </span>
                 )}
             </header>
@@ -341,19 +343,19 @@ export default function OnboardingPage() {
                                 <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium shadow-sm">
                                     <Rocket className="text-brand-500 h-3.5 w-3.5" />
                                     <span className="text-muted-foreground">
-                                        You&apos;re moments from your first workspace
+                                        <Translated>You&apos;re moments from your first workspace</Translated>
                                     </span>
                                 </div>
 
                                 <h1 className="text-foreground mx-auto max-w-lg text-4xl leading-[1.1] font-bold tracking-tight sm:text-5xl">
-                                    {wordy("Make work feel light again.")}
+                                    {wordy(heroText)}
                                 </h1>
 
                                 <p className="text-muted-foreground mx-auto mt-4 max-w-md text-base leading-relaxed">
-                                    FlexFlow is where projects take shape, decisions stick, and
+                                    <Translated>FlexFlow is where projects take shape, decisions stick, and</Translated>
                                     {` `}
                                     <span className="text-foreground font-medium">
-                                        your team actually knows what&apos;s next.
+                                        <Translated>your team actually knows what&apos;s next.</Translated>
                                     </span>
                                 </p>
 
@@ -364,7 +366,7 @@ export default function OnboardingPage() {
                                         onClick={() => go("create")}
                                     >
                                         <Building2 className="h-4 w-4" />
-                                        Create my organization
+                                        <Translated>Create my organization</Translated>
                                         <ArrowRight className="h-4 w-4" />
                                     </Button>
                                     <Button
@@ -374,7 +376,7 @@ export default function OnboardingPage() {
                                         onClick={() => go("join")}
                                     >
                                         <KeyRound className="h-4 w-4" />
-                                        I have an invite
+                                        <Translated>I have an invite</Translated>
                                     </Button>
                                 </div>
 
@@ -397,7 +399,7 @@ export default function OnboardingPage() {
                                                 <span className="bg-success-500/10 text-success-600 flex h-5 w-5 items-center justify-center rounded-full">
                                                     <Check className="h-3 w-3" />
                                                 </span>
-                                                <span className="text-muted-foreground text-sm">{label}</span>
+                                                <span className="text-muted-foreground text-sm"><Translated>{label}</Translated></span>
                                             </motion.li>
                                         ))}
                                     </motion.ul>
@@ -420,18 +422,17 @@ export default function OnboardingPage() {
                                         <Building2 className="h-5 w-5" />
                                     </div>
                                     <h2 className="text-foreground mt-4 text-2xl font-bold tracking-tight">
-                                        Let&apos;s stand up your organization
+                                        <Translated>Let&apos;s stand up your organization</Translated>
                                     </h2>
                                     <p className="text-muted-foreground mt-1.5 text-sm">
-                                        A few details now — you can always rename things later in
-                                        settings. Everything below is changeable.
+                                        <Translated>A few details now — you can always rename things later in settings. Everything below is changeable.</Translated>
                                     </p>
                                 </div>
 
                                 <form onSubmit={handleCreate} className="space-y-5">
                                     <div>
                                         <label className={labelClass}>
-                                            Organization name <span className="text-danger-500">*</span>
+                                            <Translated>Organization name</Translated> <span className="text-danger-500">*</span>
                                         </label>
                                         <Input
                                             type="text"
@@ -445,7 +446,7 @@ export default function OnboardingPage() {
                                     </div>
 
                                     <div>
-                                        <label className={labelClass}>What does your team do?</label>
+                                        <label className={labelClass}><Translated>What does your team do?</Translated></label>
                                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                                             {TEAM_VIBES.map(({ label, workspace, icon: Icon, blurb }) => {
                                                 const active = createForm.workspaceName === workspace;
@@ -473,17 +474,17 @@ export default function OnboardingPage() {
                                                             }
                                                         />
                                                         <span className="text-foreground text-xs font-medium">
-                                                            {label}
-                                                        </span>
+                                                            <Translated>{label}</Translated>
+                                                            </span>
                                                         <span className="text-muted-foreground text-[11px] leading-tight">
-                                                            {blurb}
+                                                            <Translated>{blurb}</Translated>
                                                         </span>
                                                     </button>
                                                 );
                                             })}
                                         </div>
                                         <div className="mt-3">
-                                            <label className={labelClass}>First workspace name</label>
+                                            <label className={labelClass}><Translated>First workspace name</Translated></label>
                                             <Input
                                                 type="text"
                                                 placeholder="General"
@@ -496,17 +497,16 @@ export default function OnboardingPage() {
                                                 }
                                             />
                                             <p className={hintClass}>
-                                                Workspaces group projects and people — you can add
-                                                more anytime.
+                                                <Translated>Workspaces group projects and people — you can add more anytime.</Translated>
                                             </p>
                                         </div>
                                     </div>
 
                                     <div>
                                         <label className={labelClass}>
-                                            Description{" "}
+                                            <Translated>Description</Translated>{" "}
                                             <span className="text-muted-foreground font-normal">
-                                                (optional)
+                                                (<Translated>optional</Translated>)
                                             </span>
                                         </label>
                                         <Textarea
@@ -522,11 +522,11 @@ export default function OnboardingPage() {
                                         />
                                     </div>
 
-                                    {error && <p className="text-danger-500 text-sm">{error}</p>}
+                                    {error && <p className="text-danger-500 text-sm"><Translated>{error}</Translated></p>}
 
                                     <Button type="submit" className="w-full" size="lg" isLoading={loading}>
                                         <PartyPopper className="h-4 w-4" />
-                                        Create {createForm.name.trim() || "my organization"}
+                                        <Translated>Create</Translated> {createForm.name.trim() || <Translated>my organization</Translated>}
                                     </Button>
                                 </form>
                             </motion.div>
@@ -548,11 +548,10 @@ export default function OnboardingPage() {
                                     </div>
                                     <div>
                                         <h2 className="text-foreground text-2xl font-bold tracking-tight">
-                                            {created?.name || "Your organization"} is live.
+                                            {created?.name || <Translated>Your organization</Translated>} <Translated>is live.</Translated>
                                         </h2>
                                         <p className="text-muted-foreground mt-1.5 text-sm">
-                                            You picked the <span className="text-foreground font-medium">Free plan</span> — everything
-                                            below is included, with room to grow when your team does.
+                                            <Translated>You picked the</Translated> <span className="text-foreground font-medium"><Translated>Free plan</Translated></span> <Translated>— everything below is included, with room to grow when your team does.</Translated>
                                         </p>
                                     </div>
                                 </div>
@@ -561,10 +560,10 @@ export default function OnboardingPage() {
                                     <div className="border-border bg-surface rounded-2xl border p-5 shadow-sm">
                                         <div className="flex items-center justify-between">
                                             <p className="text-foreground text-sm font-semibold">
-                                                Included with Free
+                                                <Translated>Included with Free</Translated>
                                             </p>
                                             <span className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 rounded-full px-2.5 py-0.5 text-[11px] font-medium">
-                                                $0 forever
+                                                <Translated>$0 forever</Translated>
                                             </span>
                                         </div>
                                         <ul className="mt-3 space-y-2">
@@ -581,7 +580,7 @@ export default function OnboardingPage() {
                                                         <span className="bg-success-500/10 text-success-600 flex h-5 w-5 shrink-0 items-center justify-center rounded-full">
                                                             <Check className="h-3 w-3" />
                                                         </span>
-                                                        {info?.name || id}
+                                                        <Translated>{info?.name || id}</Translated>
                                                     </li>
                                                 );
                                             })}
@@ -594,7 +593,7 @@ export default function OnboardingPage() {
                                                         <span className="bg-success-500/10 text-success-600 flex h-5 w-5 shrink-0 items-center justify-center rounded-full">
                                                             <Check className="h-3 w-3" />
                                                         </span>
-                                                        {name}
+                                                        <Translated>{name}</Translated>
                                                     </li>
                                                 )
                                             )}
@@ -603,7 +602,7 @@ export default function OnboardingPage() {
 
                                     <div className="border-border bg-surface rounded-2xl border p-5 shadow-sm">
                                         <p className="text-foreground text-sm font-semibold">
-                                            Unlock more as you grow
+                                            <Translated>Unlock more as you grow</Translated>
                                         </p>
                                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                                             {["pro", "custom"].map((tier) => (
@@ -618,7 +617,7 @@ export default function OnboardingPage() {
                                                             <Sparkles className="text-brand-500 h-3.5 w-3.5" />
                                                         )}
                                                         <span className="text-foreground">
-                                                            {tier === "pro" ? "Pro" : "Custom"}
+                                                            {tier === "pro" ? <Translated>Pro</Translated> : <Translated>Custom</Translated>}
                                                         </span>
                                                     </div>
                                                     <ul className="mt-2 space-y-1.5">
@@ -628,7 +627,7 @@ export default function OnboardingPage() {
                                                                 className="text-muted-foreground flex items-center gap-2 text-xs"
                                                             >
                                                                 <span className="text-brand-500 h-3.5 w-3.5 shrink-0">•</span>
-                                                                {getFeatureInfo(id)?.name || id}
+                                                                <Translated>{getFeatureInfo(id)?.name || id}</Translated>
                                                             </li>
                                                         ))}
                                                     </ul>
@@ -636,8 +635,7 @@ export default function OnboardingPage() {
                                             ))}
                                         </div>
                                         <p className="text-muted-foreground mt-3 text-xs">
-                                            Upgrade anytime from Billing &amp; Plans in your settings.
-                                            Entitlements activate immediately after checkout.
+                                            <Translated>Upgrade anytime from Billing &amp; Plans in your settings. Entitlements activate immediately after checkout.</Translated>
                                         </p>
                                     </div>
                                 </div>
@@ -651,14 +649,14 @@ export default function OnboardingPage() {
                                             go("done");
                                         }}
                                     >
-                                        Everything looks right
+                                        <Translated>Everything looks right</Translated>
                                         <CheckCircle2 className="h-4 w-4" />
                                     </Button>
                                     <Link
                                         href="/pricing"
                                         className="text-brand-600 dark:text-brand-400 hover:text-brand-500 dark:hover:text-brand-300 inline-flex items-center justify-center gap-1 text-sm font-medium transition-colors"
                                     >
-                                        Compare all plans <ChevronRight className="h-4 w-4" />
+                                        <Translated>Compare all plans</Translated> <ChevronRight className="h-4 w-4" />
                                     </Link>
                                 </div>
                             </motion.div>
@@ -683,11 +681,11 @@ export default function OnboardingPage() {
                                 </motion.div>
 
                                 <h2 className="text-foreground mt-6 text-3xl font-bold tracking-tight">
-                                    You&apos;re all set, {firstName}.
+                                    <Translated>You&apos;re all set,</Translated> {firstName}.
                                 </h2>
                                 <p className="text-muted-foreground mx-auto mt-3 max-w-sm text-sm leading-relaxed">
-                                    {created?.name || "Your organization"} is ready. Here&apos;s a quick
-                                    peek at what waiting for you:
+                                    {created?.name || <Translated>Your organization</Translated>}{" "}
+                                    <Translated>is ready. Here&apos;s a quick peek at what waiting for you:</Translated>
                                 </p>
 
                                 <div className="mx-auto mt-6 grid max-w-sm gap-2.5 text-left">
@@ -706,7 +704,7 @@ export default function OnboardingPage() {
                                             <span className="bg-brand-600/10 text-brand-600 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
                                                 <Icon className="h-4 w-4" />
                                             </span>
-                                            <span className="text-foreground text-sm">{label}</span>
+                                            <span className="text-foreground text-sm"><Translated>{label}</Translated></span>
                                         </motion.div>
                                     ))}
                                 </div>
@@ -718,7 +716,7 @@ export default function OnboardingPage() {
                                         onClick={() => router.push("/dashboard")}
                                     >
                                         <Rocket className="h-4 w-4" />
-                                        Enter {created?.name || "your organization"}
+                                        <Translated>Enter</Translated> {created?.name || <Translated>your organization</Translated>}
                                         <ArrowRight className="h-4 w-4" />
                                     </Button>
                                 </div>
@@ -740,7 +738,7 @@ export default function OnboardingPage() {
                                     }}
                                     className="text-muted-foreground hover:text-foreground mb-6 flex items-center gap-1.5 text-sm transition-colors"
                                 >
-                                    <ArrowLeft className="h-4 w-4" /> Back
+                                    <ArrowLeft className="h-4 w-4" /> <Translated>Back</Translated>
                                 </button>
 
                                 <div className="mb-6">
@@ -748,18 +746,17 @@ export default function OnboardingPage() {
                                         <KeyRound className="h-5 w-5" />
                                     </div>
                                     <h2 className="text-foreground mt-4 text-2xl font-bold tracking-tight">
-                                        Join your team
+                                        <Translated>Join your team</Translated>
                                     </h2>
                                     <p className="text-muted-foreground mt-1.5 text-sm">
-                                        Paste the invite code your admin shared, or the full invite
-                                        link token — both work.
+                                        <Translated>Paste the invite code your admin shared, or the full invite link token — both work.</Translated>
                                     </p>
                                 </div>
 
                                 <form onSubmit={handleJoin} className="space-y-5">
                                     <div>
                                         <label className={labelClass}>
-                                            Invite code or token{" "}
+                                            <Translated>Invite code or token</Translated>{" "}
                                             <span className="text-danger-500">*</span>
                                         </label>
                                         <Input
@@ -773,11 +770,11 @@ export default function OnboardingPage() {
                                             }
                                         />
                                         <p className={hintClass}>
-                                            Ask your organization admin for the invite code.
+                                            <Translated>Ask your organization admin for the invite code.</Translated>
                                         </p>
                                     </div>
 
-                                    {error && <p className="text-danger-500 text-sm">{error}</p>}
+                                    {error && <p className="text-danger-500 text-sm"><Translated>{error}</Translated></p>}
 
                                     <Button
                                         type="submit"
@@ -786,7 +783,7 @@ export default function OnboardingPage() {
                                         isLoading={loading}
                                     >
                                         <ArrowRight className="h-4 w-4" />
-                                        Join organization
+                                        <Translated>Join organization</Translated>
                                     </Button>
                                 </form>
                             </motion.div>

@@ -4,6 +4,7 @@ import { CalendarDays, Clock3 } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 export function UpcomingDeadlines({ deadlines }) {
   const { t } = useI18n();
@@ -46,11 +47,11 @@ export function UpcomingDeadlines({ deadlines }) {
 
               <div>
                 <h3 className="text-foreground dark:text-foreground-dark text-sm font-medium">
-                  {deadline.title}
+                  <Translated>{deadline.title}</Translated>
                 </h3>
 
                 <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                  {deadline.project}
+                  <Translated>{deadline.project}</Translated>
                 </p>
                 {deadline.assignees?.length > 0 && (
                   <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">

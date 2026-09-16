@@ -14,6 +14,7 @@ import { SettingsDrawer } from "@/components/settings/SettingsDrawer";
 import { SearchModal } from "@/components/search/SearchModal";
 import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
 import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
 
 const PAGE_LABELS = {
     "/dashboard": "nav.dashboard",
@@ -128,7 +129,7 @@ function MobileOrgSheet({ open, onClose }) {
                                         {org.name[0]?.toUpperCase()}
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-medium text-(--text-primary)">{org.name}</p>
+                                        <p className="truncate text-sm font-medium text-(--text-primary)"><Translated>{org.name}</Translated></p>
                                         <p className="text-xs text-(--text-muted)">
                                             {t(org.workspaces?.length === 1 ? "shell.org.workspaceCountOne" : "shell.org.workspaceCountMany", { count: org.workspaces?.length || 0 })}
                                         </p>
@@ -173,7 +174,7 @@ function MobileOrgSheet({ open, onClose }) {
                                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-(--bg-overlay)">
                                         <LayoutGrid className="h-3.5 w-3.5 text-(--text-muted)" />
                                     </div>
-                                    <span className="flex-1 truncate text-sm text-(--text-primary)">{ws.name}</span>
+                                    <span className="flex-1 truncate text-sm text-(--text-primary)"><Translated>{ws.name}</Translated></span>
                                     {currentWorkspace?.id === ws.id && <Check className="h-4 w-4 shrink-0 text-brand-600" />}
                                 </button>
                             ))}
@@ -226,7 +227,7 @@ function MobileOrgSheet({ open, onClose }) {
                             <button type="button" onClick={() => setTab("workspaces")} className="flex items-center gap-1.5 text-xs text-(--text-muted) hover:text-(--text-primary) mb-1">
                                 <ChevronDown className="h-3 w-3 rotate-90" /> {t("shell.action.back")}
                             </button>
-                            <p className="text-xs text-(--text-muted)">{t("shell.workspace.addingTo")} <strong>{currentOrg?.name}</strong></p>
+                            <p className="text-xs text-(--text-muted)">{t("shell.workspace.addingTo")} <strong>{currentOrg?.name ? <Translated>{currentOrg.name}</Translated> : null}</strong></p>
                             <input
                                 autoFocus
                                 placeholder={t("shell.workspace.namePlaceholder")}
@@ -380,7 +381,7 @@ export function TopBar({ onMenuClick }) {
                     <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-brand-100 text-[10px] font-bold text-brand-700">
                         {currentOrg?.name?.[0]?.toUpperCase() || "?"}
                     </div>
-                    <span className="max-w-20 truncate text-xs font-medium">{currentOrg?.name || t("shell.org.none")}</span>
+                    <span className="max-w-20 truncate text-xs font-medium">{currentOrg?.name ? <Translated>{currentOrg.name}</Translated> : t("shell.org.none")}</span>
                     <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
 
@@ -390,7 +391,7 @@ export function TopBar({ onMenuClick }) {
                     {currentWorkspace && (
                         <>
                             <span className="text-(--text-muted) text-sm">/</span>
-                            <span className="text-sm text-(--text-muted) truncate max-w-32">{currentWorkspace.name}</span>
+                            <span className="text-sm text-(--text-muted) truncate max-w-32"><Translated>{currentWorkspace.name}</Translated></span>
                         </>
                     )}
                     <NewWorkspacePopover />

@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { ChevronDown, Clock } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { apiRequest } from "@/lib/api-client";
+import { Translated } from "@/lib/translate";
+import { useI18n } from "@/i18n";
 import { fetchProject } from "@/lib/projects-api";
 import dynamic from "next/dynamic";
 
@@ -33,6 +35,7 @@ function labelActivities(list) {
 }
 
 function ActivityFeed({ projectId, token }) {
+    const { t } = useI18n();
     const [activities, setActivities] = useState([]);
     const [total, setTotal] = useState(0);
     const [expanded, setExpanded] = useState(false);
@@ -78,7 +81,7 @@ function ActivityFeed({ projectId, token }) {
     }
 
     if (activities.length === 0) {
-        return <p className="text-sm text-(--text-muted)">No activity yet.</p>;
+        return <p className="text-sm text-(--text-muted)">{t("tasks.noActivityYet")}</p>;;
     }
 
     return (
@@ -91,9 +94,9 @@ function ActivityFeed({ projectId, token }) {
                     <div className="min-w-0 flex-1">
                         <p className="text-sm text-(--text-primary)">
                             <span className="font-medium">{a.user?.name}</span>
-                            {" "}<span className="text-(--text-muted)">{a.action}</span>
+                            {" "}<span className="text-(--text-muted)"><Translated>{a.action}</Translated></span>
                             {a.task?.title && (
-                                <> <span className="text-(--text-secondary) font-medium">&ldquo;{a.task.title}&rdquo;</span></>
+                                <> <span className="text-(--text-secondary) font-medium">&ldquo;<Translated>{a.task.title}</Translated>&rdquo;</span></>
                             )}
                         </p>
                     </div>
@@ -112,7 +115,7 @@ function ActivityFeed({ projectId, token }) {
                     ) : (
                         <ChevronDown className="h-3.5 w-3.5" />
                     )}
-                    Load all activity ({total - INITIAL_ACTIVITY_LIMIT} more)
+                    {t("tasks.loadMoreActivity", { n: total - INITIAL_ACTIVITY_LIMIT })}
                 </button>
             )}
         </div>
@@ -121,6 +124,7 @@ function ActivityFeed({ projectId, token }) {
 
 export default function ProjectDetailPage() {
     const { projectId } = useParams();
+    const { t } = useI18n();
     const { accessToken, isReady, currentOrg } = useApp();
     const [project, setProject] = useState(null);
     const [tasks, setTasks] = useState([]);
@@ -164,7 +168,7 @@ export default function ProjectDetailPage() {
     if (error || !project) {
         return (
             <div className="rounded-xl border border-(--border) bg-(--bg-elevated) p-8 text-center">
-                <p className="text-sm text-(--text-muted)">{error || "Project not found"}</p>
+                <p className="text-sm text-(--text-muted)">{error || t("tasks.projectNotFound")}</p>
             </div>
         );
     }
@@ -180,19 +184,19 @@ export default function ProjectDetailPage() {
                 <div className="flex items-start gap-3 min-w-0">
                     <div className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: project.color || "#6366f1" }} />
                     <div className="min-w-0">
-                        <h1 className="text-base font-semibold text-(--text-primary) sm:text-lg">{project.name}</h1>
+                        <h1 className="text-base font-semibold text-(--text-primary) sm:text-lg"><Translated>{project.name}</Translated></h1>
                         {project.description && (
-                            <p className="mt-1 text-sm text-(--text-secondary) line-clamp-2">{project.description}</p>
+                            <p className="mt-1 text-sm text-(--text-secondary) line-clamp-2"><Translated>{project.description}</Translated></p>
                         )}
                     </div>
                 </div>
                 <div className="flex items-center gap-4 shrink-0">
                     <div className="text-center">
-                        <p className="text-xs text-(--text-muted)">Progress</p>
+                        <p className="text-xs text-(--text-muted)">{t("tasks.progress")}</p>
                         <p className="text-xl font-semibold text-(--text-primary)">{progress}%</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-xs text-(--text-muted)">Tasks</p>
+                        <p className="text-xs text-(--text-muted)">{t("tasks.title")}</p>
                         <p className="text-xl font-semibold text-(--text-primary)">{total}</p>
                     </div>
                 </div>

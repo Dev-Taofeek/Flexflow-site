@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Check, ChevronDown, Minus, Sparkles } from "lucide-react";
+import { Translated } from "@/lib/translate";
 
 import {
   PLANS,
@@ -35,7 +36,7 @@ const FAQS = [
   {
     question: "What does each plan include?",
     answer:
-      "Free covers 1 organization, 2 workspaces, 3 projects, and 50 tasks a month — with kanban boards, basic roles, and real-time collaboration for up to 10 members. Pro adds multiple organizations, advanced RBAC, analytics, GitHub and Slack integrations, and 50 Team Intelligence queries a day. Custom adds SSO, audit logs, custom roles, and other enterprise add-ons.",
+      "Free covers 1 organization, 2 workspaces, 3 projects, and 50 tasks a month  with kanban boards, basic roles, and real-time collaboration for up to 10 members. Pro adds multiple organizations, advanced RBAC, analytics, GitHub and Slack integrations, and 50 Team Intelligence queries a day. Custom adds SSO, audit logs, custom roles, and other enterprise add-ons.",
   },
   {
     question: "Can I switch plans after I sign up?",
@@ -50,16 +51,16 @@ const FAQS = [
   {
     question: "What is Team Intelligence?",
     answer:
-      "It turns your team's work — tasks, projects, comments, activity, and decision memory — into a knowledge base you can ask questions against. Answers cite their sources and respect what each person is allowed to see.",
+      "It turns your team's work  tasks, projects, comments, activity, and decision memory  into a knowledge base you can ask questions against. Answers cite their sources and respect what each person is allowed to see.",
   },
   {
     question: "What is the Custom plan?",
     answer:
-      "Custom is the Pro foundation plus enterprise add-ons you configure yourself — SSO, advanced audit logs, custom roles, advanced security, and more. Prices update live as you select add-ons.",
+      "Custom is the Pro foundation plus enterprise add-ons you configure yourself  SSO, advanced audit logs, custom roles, advanced security, and more. Prices update live as you select add-ons.",
   },
   {
     question: "Do you offer discounts for annual billing?",
-    answer: "Yes — annual billing saves 30% on every paid configuration.",
+    answer: "Yes  annual billing saves 30% on every paid configuration.",
   },
 ];
 
@@ -73,7 +74,7 @@ function Included({ value, locked = false }) {
   return (
     <span
       className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-(--bg-overlay) text-(--text-tertiary)"
-      aria-label={locked ? "Available on Custom" : "Not included"}
+      aria-label={locked ? <Translated>Available on Custom</Translated> : <Translated>Not included</Translated>}
     >
       <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
     </span>
@@ -160,12 +161,12 @@ export function PricingContent() {
                       : "text-(--text-secondary) hover:text-(--text-primary)",
                   ].join(" ")}
                 >
-                  {option === "MONTHLY" ? "Monthly" : "Annual"}
+                  {option === "MONTHLY" ? <Translated>Monthly</Translated> : <Translated>Annual</Translated>}
                 </button>
               ))}
             </div>
             <span className="rounded-full border border-success-500/40 bg-success-500/10 px-2.5 py-1 text-xs font-medium text-success-500">
-              Save 30% annually
+              <Translated>Save 30% annually</Translated>
             </span>
           </div>
         </div>
@@ -192,16 +193,16 @@ export function PricingContent() {
                 ].join(" ")}
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-(--text-primary)">{plan.name}</h3>
+                  <h3 className="text-lg font-semibold text-(--text-primary)"><Translated>{plan.name}</Translated></h3>
                   {plan.highlight ? (
                     <span className="rounded-full border border-brand-500/40 bg-brand-500/10 px-2.5 py-1 text-xs font-medium text-brand-500">
-                      Most popular
+                      <Translated>Most popular</Translated>
                     </span>
                   ) : null}
                 </div>
 
                 <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
-                  {custom ? "Pro foundation plus enterprise add-ons, configured your way." : plan.tagline}
+                  <Translated>{custom ? "Pro foundation plus enterprise add-ons, configured your way." : plan.tagline}</Translated>
                 </p>
 
                 <div className="mt-6 flex items-end gap-2">
@@ -213,7 +214,7 @@ export function PricingContent() {
 
                 {plan.limits.members !== Infinity && (
                   <p className="mt-1 text-xs text-(--text-tertiary)">
-                    Up to {plan.limits.members.toLocaleString()} members · {plan.limits.workspaces === Infinity ? "unlimited" : plan.limits.workspaces} workspaces
+                    <Translated>Up to {plan.limits.members.toLocaleString()} members · {plan.limits.workspaces === Infinity ? "unlimited" : plan.limits.workspaces} workspaces</Translated>
                   </p>
                 )}
 
@@ -223,7 +224,7 @@ export function PricingContent() {
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-500/15 text-success-600">
                         <Check className="h-3 w-3" strokeWidth={2.5} />
                       </span>
-                      <span className="text-sm text-(--text-secondary)">{feature}</span>
+                      <span className="text-sm text-(--text-secondary)"><Translated>{feature}</Translated></span>
                     </li>
                   ))}
                 </ul>
@@ -233,7 +234,7 @@ export function PricingContent() {
                   className="mt-8 w-full"
                   variant={plan.highlight ? "primary" : "secondary"}
                 >
-                  <Link href={custom ? "/pricing#custom" : "/register"}>{plan.cta}</Link>
+                  <Link href={custom ? "/pricing#custom" : "/register"}><Translated>{plan.cta}</Translated></Link>
                 </Button>
               </motion.div>
             );
@@ -245,21 +246,21 @@ export function PricingContent() {
       <section className="rounded-2xl border border-(--border)">
         <div className="border-b border-(--border) px-6 py-5">
           <h2 className="text-lg font-semibold tracking-tight text-(--text-primary)">
-            Compare every feature
+            <Translated>Compare every feature</Translated>
           </h2>
           <p className="mt-1 text-sm text-(--text-secondary)">
-            Custom-tier features unlock when you purchase their add-on below.
+            <Translated>Custom-tier features unlock when you purchase their add-on below.</Translated>
           </p>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
+          <table className="w-full min-w-160 border-collapse text-sm">
             <thead>
               <tr className="border-b border-(--border) text-left">
-                <th className="px-6 py-3 font-medium text-(--text-tertiary)">Feature</th>
-                <th className="w-24 px-4 py-3 text-center font-medium text-(--text-tertiary)">Free</th>
-                <th className="w-24 px-4 py-3 text-center font-semibold text-brand-500">Pro</th>
-                <th className="w-24 px-4 py-3 text-center font-medium text-(--text-tertiary)">Custom</th>
+                <th className="px-6 py-3 font-medium text-(--text-tertiary)"><Translated>Feature</Translated></th>
+                <th className="w-24 px-4 py-3 text-center font-medium text-(--text-tertiary)"><Translated>Free</Translated></th>
+                <th className="w-24 px-4 py-3 text-center font-semibold text-brand-500"><Translated>Pro</Translated></th>
+                <th className="w-24 px-4 py-3 text-center font-medium text-(--text-tertiary)"><Translated>Custom</Translated></th>
               </tr>
             </thead>
             <tbody>
@@ -267,7 +268,7 @@ export function PricingContent() {
                 <Fragment key={category}>
                   <tr className="border-b border-(--border) bg-(--bg-elevated)">
                     <td colSpan={4} className="px-6 py-2.5 text-xs font-semibold uppercase tracking-widest text-(--text-tertiary)">
-                      {category}
+                      <Translated>{category}</Translated>
                     </td>
                   </tr>
                   {features.map((feature) => {
@@ -278,8 +279,8 @@ export function PricingContent() {
                         className="border-b border-(--border) last:border-b-0 hover:bg-(--bg-overlay)/50"
                       >
                         <td className="px-6 py-3">
-                          <span className="font-medium text-(--text-primary)">{feature.name}</span>
-                          <span className="block text-xs text-(--text-tertiary)">{feature.summary}</span>
+                          <span className="font-medium text-(--text-primary)"><Translated>{feature.name}</Translated></span>
+                          <span className="block text-xs text-(--text-tertiary)"><Translated>{feature.summary}</Translated></span>
                         </td>
                         <td className="px-4 py-3 text-center">
                           <Included value={rank <= 0} />
@@ -314,12 +315,11 @@ export function PricingContent() {
               <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-brand-500" />
                 <h2 className="text-lg font-semibold tracking-tight text-(--text-primary)">
-                  Build your Custom plan
+                  <Translated>Build your Custom plan</Translated>
                 </h2>
               </div>
               <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
-                Start with everything in Pro, then add the enterprise capabilities your
-                organization needs. Price updates live.
+                <Translated>Start with everything in Pro, then add the enterprise capabilities your organization needs. Price updates live.</Translated>
               </p>
 
               <div className="mt-6 grid gap-2.5 md:grid-cols-2">
@@ -350,15 +350,15 @@ export function PricingContent() {
                       >
                         {selected && <Check className="h-3 w-3" />}
                       </span>
-                      <span className="min-w-0">
-                        <span className="flex items-center gap-1.5 text-sm font-medium text-(--text-primary)">
-                          {addon.name}
-                          <span className="text-xs text-(--text-tertiary)">+${addon.priceMonthly}/mo</span>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5 text-sm font-medium text-(--text-primary)">
+                            <Translated>{addon.name}</Translated>
+                            <span className="text-xs text-(--text-tertiary)">+${addon.priceMonthly}/mo</span>
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-relaxed text-(--text-muted)">
+                            <Translated>{addon.description}</Translated>
+                          </span>
                         </span>
-                        <span className="mt-0.5 block text-xs leading-relaxed text-(--text-muted)">
-                          {addon.description}
-                        </span>
-                      </span>
                     </button>
                   );
                 })}
@@ -366,18 +366,18 @@ export function PricingContent() {
             </div>
 
             <div className="rounded-2xl border border-(--border) bg-(--bg) p-6">
-              <p className="text-sm font-semibold text-(--text-primary)">Your estimate</p>
+              <p className="text-sm font-semibold text-(--text-primary)"><Translated>Your estimate</Translated></p>
               <div className="mt-4 space-y-3 text-sm">
                 <div className="flex items-center justify-between text-(--text-secondary)">
-                  <span>Pro base</span>
+                  <span><Translated>Pro base</Translated></span>
                   <span>${PLANS.pro.priceMonthly}/mo</span>
                 </div>
                 <div className="flex items-center justify-between text-(--text-secondary)">
-                  <span>Enterprise base</span>
+                  <span><Translated>Enterprise base</Translated></span>
                   <span>${CUSTOM_ENTERPRISE_BASE}/mo</span>
                 </div>
                 <div className="flex items-center justify-between text-(--text-secondary)">
-                  <span>Add-ons ({selectedAddOns.length})</span>
+                  <span><Translated>Add-ons ({selectedAddOns.length})</Translated></span>
                   <span>
                     +
                     {selectedAddOns.reduce((sum, id) => sum + (CUSTOM_ADDONS[id]?.priceMonthly || 0), 0)}
@@ -385,24 +385,24 @@ export function PricingContent() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between border-t border-(--border) pt-3">
-                  <span className="font-semibold text-(--text-primary)">Monthly</span>
+                  <span className="font-semibold text-(--text-primary)"><Translated>Monthly</Translated></span>
                   <span className="text-xl font-bold text-(--text-primary)">${customEstimate.monthly}/mo</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-(--text-secondary)">Annual (save 30%)</span>
+                  <span className="text-(--text-secondary)"><Translated>Annual (save 30%)</Translated></span>
                   <span className="font-semibold text-(--text-primary)">
                     ${customEstimate.annual}/yr · ${Math.round(customEstimate.annual / 12)}/mo
                   </span>
                 </div>
               </div>
               <Button asChild className="mt-6 w-full">
-                <Link href="/register">Start on Custom</Link>
+                <Link href="/register"><Translated>Start on Custom</Translated></Link>
               </Button>
               <Button asChild variant="secondary" className="mt-3 w-full">
-                <Link href="/contact">Talk to sales</Link>
+                <Link href="/contact"><Translated>Talk to sales</Translated></Link>
               </Button>
               <p className="mt-3 text-center text-xs text-(--text-tertiary)">
-                No credit card required to start.
+                <Translated>No credit card required to start.</Translated>
               </p>
             </div>
           </div>
@@ -411,38 +411,38 @@ export function PricingContent() {
 
       {/* ── Which plan is right for you ────────────────────────────── */}
       <section className="rounded-2xl border border-(--border) p-6">
-        <h2 className="text-base font-semibold text-(--text-primary)">Which plan is right for you?</h2>
+        <h2 className="text-base font-semibold text-(--text-primary)"><Translated>Which plan is right for you?</Translated></h2>
         <ul className="mt-4 space-y-2 text-sm leading-relaxed text-(--text-secondary)">
           <li>
-            <strong className="text-(--text-primary)">Free</strong> — great for trying FlexFlow, a
-            new product, or small teams that stay within one workspace.
+            <strong className="text-(--text-primary)">Free</strong> <Translated> great for trying FlexFlow, a
+            new product, or small teams that stay within one workspace.</Translated>
           </li>
           <li>
-            <strong className="text-(--text-primary)">Pro</strong> — best for growing teams that
-            need multiple organizations, advanced permissions, analytics, and integrations.
+            <strong className="text-(--text-primary)">Pro</strong> <Translated> best for growing teams that
+            need multiple organizations, advanced permissions, analytics, and integrations.</Translated>
           </li>
           <li>
-            <strong className="text-(--text-primary)">Custom</strong> — for organizations with SSO,
-            audit, custom roles, or compliance requirements. Configure it yourself or talk to sales.
+            <strong className="text-(--text-primary)">Custom</strong> <Translated> for organizations with SSO,
+            audit, custom roles, or compliance requirements. Configure it yourself or talk to sales.</Translated>
           </li>
         </ul>
         <p className="mt-4 text-sm text-(--text-tertiary)">
-          Questions? Read our{" "}
+          <Translated>Questions? Read our</Translated>{" "}
           <Link href="/docs" className="font-medium text-brand-500 hover:text-brand-400">
-            documentation
+            <Translated>documentation</Translated>
           </Link>{" "}
-          or{" "}
+          <Translated>or</Translated>{" "}
           <Link href="/contact" className="font-medium text-brand-500 hover:text-brand-400">
-            contact us
+            <Translated>contact us</Translated>
           </Link>
-          .
+          <Translated>.</Translated>
         </p>
       </section>
 
       {/* ── FAQ ────────────────────────────────────────────────────── */}
       <section>
         <h2 className="text-center text-2xl font-semibold tracking-tight text-(--text-primary)">
-          Frequently asked questions
+          <Translated>Frequently asked questions</Translated>
         </h2>
         <div className="mx-auto mt-8 max-w-3xl space-y-3">
           {FAQS.map((faq, index) => {
@@ -459,7 +459,7 @@ export function PricingContent() {
                   aria-expanded={isOpen}
                   aria-controls={`pricing-faq-panel-${index}`}
                 >
-                  <span className="text-sm font-semibold text-(--text-primary)">{faq.question}</span>
+                  <span className="text-sm font-semibold text-(--text-primary)"><Translated>{faq.question}</Translated></span>
                   <ChevronDown
                     className={[
                       "h-4 w-4 shrink-0 transition-transform duration-200",
@@ -477,7 +477,7 @@ export function PricingContent() {
                 >
                   <div className="overflow-hidden">
                     <p className="px-5 pb-5 text-sm leading-relaxed text-(--text-secondary)">
-                      {faq.answer}
+                      <Translated>{faq.answer}</Translated>
                     </p>
                   </div>
                 </div>

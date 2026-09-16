@@ -20,6 +20,15 @@ jest.mock("@/hooks/useRole", () => ({
     useRole: () => ({ canManageProjects: true }),
 }));
 
+jest.mock("@/i18n", () => ({
+    useI18n: () => ({
+        t: (key) => key,
+        has: () => true,
+        locale: "en",
+        isRTL: false,
+    }),
+}));
+
 jest.mock("next/navigation", () => ({
     useRouter: () => ({ push: jest.fn() }),
     useParams: () => ({}),

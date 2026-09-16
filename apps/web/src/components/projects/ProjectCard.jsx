@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
+import { Translated } from "@/lib/translate";
 
 export function ProjectCard({ project }) {
   return (
@@ -34,11 +35,11 @@ export function ProjectCard({ project }) {
 
       <div className="mt-5">
         <h3 className="text-foreground dark:text-foreground-dark text-lg font-semibold">
-          {project.name}
+          <Translated>{project.name}</Translated>
         </h3>
 
         <p className="text-muted-foreground dark:text-muted-foreground-dark mt-2 text-sm leading-relaxed">
-          {project.description}
+          {project.description ? <Translated>{project.description}</Translated> : null}
         </p>
       </div>
 

@@ -8,6 +8,20 @@ jest.mock("@/lib/roles-api", () => ({
     updatePermission: jest.fn(),
 }));
 
+jest.mock("@/i18n", () => ({
+    useI18n: () => ({
+        t: (key, vars) => {
+            if (key === "settings.roles.toggleAria") return `${vars.permission} ${vars.role}`;
+            if (key === "settings.roles.disable") return "Disable";
+            if (key === "settings.roles.enable") return "Enable";
+            return key;
+        },
+        has: () => true,
+        locale: "en",
+        isRTL: false,
+    }),
+}));
+
 function renderWithProvider(ui) {
     return render(<ToastProvider>{ui}</ToastProvider>);
 }

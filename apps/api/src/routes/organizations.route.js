@@ -335,6 +335,37 @@ router.patch("/:orgId/members/:userId/role", requireOrgRole("OWNER", "ADMIN"), a
     }
 });
 
+router.patch("/:orgId/members/:userId/tag", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
+    try {
+        const raw = typeof req.body?.tag === "string" ? req.body.tag.trim() : "";
+        // Strip control characters so the tag can't carry hidden markup.
+        const tag = raw.replace(/[\u0000-\u001f\u007f]/g, "");
+        if (tag.length > 40) {
+            return res.status(422).json(errorResponse("VALIDATION_ERROR", "Member tag cannot exceed 40 characters"));
+        }
+
+        const targetMembership = await prisma.organizationMember.findUnique({
+            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.params.userId } },
+        });
+        if (!targetMembership) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
+        if (req.organizationMember.role === "ADMIN" && targetMembership.role === "OWNER") {
+            // Admin cannot tag-moderate an owner above their own rank.
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot tag this member"));
+        }
+
+        const updated = await prisma.organizationMember.update({
+            where: { organizationId_userId: { organizationId: req.params.orgId, userId: req.params.userId } },
+            data: { tag: tag || null },
+            include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+        });
+
+        return res.status(200).json(successResponse(updated));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to update member tag"));
+    }
+});
+
 router.delete("/:orgId/members/:userId", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
     try {
         if (req.params.userId === req.user.id) {

@@ -6,6 +6,7 @@ import { trackApiUsage } from "../middleware/usage.middleware.js";
 import { authorize } from "../middleware/rbac.middleware.js";
 import { checkPermission } from "../lib/permissions.js";
 import { enforceMinLimit } from "../lib/entitlements.js";
+import { nextTaskKey } from "../lib/task-key.js";
 import { notifyTaskParticipants, notifyTaskUsers } from "../services/task-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
@@ -25,7 +26,11 @@ async function assertWorkspaceAccess(workspaceId, userId) {
 
 // Work states an assignee may move a task through; DONE is reserved for
 // the assigner (task creator) and users with the tasks:update permission.
-const WORK_STATES = ["TODO", "IN_PROGRESS", "IN_REVIEW"];
+const WORK_STATES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED"];
+
+function emitToProject(io, projectId, event, payload) {
+    io?.to(`project:${projectId}`).emit(event, payload);
+}
 
 // Resolves who may set a task's status:
 // - "admin"    → has tasks:update permission (OWNER/ADMIN or a custom role granting it)
@@ -266,9 +271,10 @@ router.get("/:projectId/tasks/:taskId", async (req, res) => {
 
         const labels = await prisma.label.findMany({ where: { workspaceId: task.project.workspaceId } });
 
-        // Fetch org members for the assignee picker
-        const orgMembers = await prisma.organizationMember.findMany({
-            where: { organizationId: task.project.workspace.organizationId },
+        // Fetch workspace members for the assignee picker — never dumps the
+        // whole organization's roster into a workspace the caller belongs to.
+        const workspaceMembers = await prisma.workspaceMember.findMany({
+            where: { workspaceId: task.project.workspaceId },
             include: { user: { select: USER_SELECT } },
         });
 
@@ -277,7 +283,7 @@ router.get("/:projectId/tasks/:taskId", async (req, res) => {
             project: task.project,
             comments: task.comments,
             activityLog: task.activities,
-            people: orgMembers.map((m) => m.user),
+            people: workspaceMembers.map((m) => m.user),
             availableLabels: labels,
         }));
     } catch (error) {
@@ -294,9 +300,13 @@ router.post("/:projectId/tasks", authorize("tasks", "create"), async (req, res) 
         const { title, description, priority, status, assigneeId, dueDate } = req.body;
         if (!title?.trim()) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Title is required"));
 
+        const key = await nextTaskKey(project.workspaceId);
+
         const task = await prisma.task.create({
             data: {
                 projectId: project.id,
+                workspaceId: project.workspaceId,
+                key,
                 createdById: req.user.id,
                 title: title.trim(),
                 description: description || null,
@@ -304,6 +314,7 @@ router.post("/:projectId/tasks", authorize("tasks", "create"), async (req, res) 
                 status: status || "TODO",
                 assigneeId: assigneeId || null,
                 dueDate: dueDate ? new Date(dueDate) : null,
+                completedAt: (status || "TODO") === "DONE" ? new Date() : null,
             },
             include: {
                 assignee: { select: USER_SELECT },
@@ -313,7 +324,7 @@ router.post("/:projectId/tasks", authorize("tasks", "create"), async (req, res) 
         });
 
         await prisma.activityLog.create({
-            data: { userId: req.user.id, projectId: project.id, taskId: task.id, action: "created", entityType: "task", entityId: task.id },
+            data: { userId: req.user.id, projectId: project.id, workspaceId: project.workspaceId, taskId: task.id, action: "created", entityType: "task", entityId: task.id },
         });
 
         await notifyUser(req.user.id, {
@@ -343,7 +354,7 @@ router.post("/:projectId/tasks", authorize("tasks", "create"), async (req, res) 
 router.patch("/:projectId/tasks/:taskId/status", async (req, res) => {
     try {
         const { status } = req.body;
-        const validStatuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
+        const validStatuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED", "DONE"];
         if (!validStatuses.includes(status)) {
             return res.status(422).json(errorResponse("INVALID_STATUS", "Invalid status"));
         }
@@ -368,7 +379,10 @@ router.patch("/:projectId/tasks/:taskId/status", async (req, res) => {
 
         const updated = await prisma.task.update({
             where: { id: task.id },
-            data: { status },
+            data: {
+                status,
+                completedAt: status === "DONE" ? new Date() : null,
+            },
             include: {
                 assignee: { select: USER_SELECT },
                 assignees: { include: { user: { select: USER_SELECT } } },
@@ -378,7 +392,7 @@ router.patch("/:projectId/tasks/:taskId/status", async (req, res) => {
         });
 
         const activity = await prisma.activityLog.create({
-            data: { userId: req.user.id, projectId: task.projectId, taskId: task.id, action: `changed status to ${status}`, entityType: "task", entityId: task.id },
+            data: { userId: req.user.id, projectId: task.projectId, workspaceId: task.project.workspaceId, taskId: task.id, action: `changed status to ${status}`, entityType: "task", entityId: task.id },
             include: { user: { select: USER_SELECT } },
         });
 
@@ -436,7 +450,7 @@ router.patch("/:projectId/tasks/:taskId/status", async (req, res) => {
             });
         }
 
-        req.app.get("io")?.emit("task:status-updated", { projectId: req.params.projectId, task: updated, activity });
+        emitToProject(req.app.get("io"), req.params.projectId, "task:status-updated", { projectId: req.params.projectId, task: updated, activity });
         return res.status(200).json(successResponse(updated));
     } catch (error) {
         console.error(error);
@@ -464,7 +478,7 @@ router.patch("/:projectId/tasks/:taskId", authorize("tasks", "update"), async (r
         });
 
         const activity = await prisma.activityLog.create({
-            data: { userId: req.user.id, projectId: task.projectId, taskId: task.id, action: "updated task", entityType: "task", entityId: task.id },
+            data: { userId: req.user.id, projectId: task.projectId, workspaceId: task.project.workspaceId, taskId: task.id, action: "updated task", entityType: "task", entityId: task.id },
             include: { user: { select: USER_SELECT } },
         });
 
@@ -494,7 +508,7 @@ router.patch("/:projectId/tasks/:taskId", authorize("tasks", "update"), async (r
             excludeUserIds: assigneeId && assigneeId !== task.assigneeId ? [assigneeId] : [],
         });
 
-        req.app.get("io")?.emit("task:updated", { projectId: req.params.projectId, task: updated, activity });
+        emitToProject(req.app.get("io"), req.params.projectId, "task:updated", { projectId: req.params.projectId, task: updated, activity });
         return res.status(200).json(successResponse(updated));
     } catch (error) {
         console.error(error);
@@ -516,7 +530,7 @@ router.post("/:projectId/tasks/:taskId/comments", authorize("comments", "create"
         });
 
         const activity = await prisma.activityLog.create({
-            data: { userId: req.user.id, projectId: task.projectId, taskId: task.id, action: "added a comment", entityType: "comment", entityId: comment.id },
+            data: { userId: req.user.id, projectId: task.projectId, workspaceId: task.project.workspaceId, taskId: task.id, action: "added a comment", entityType: "comment", entityId: comment.id },
             include: { user: { select: USER_SELECT } },
         });
 
@@ -534,7 +548,7 @@ router.post("/:projectId/tasks/:taskId/comments", authorize("comments", "create"
             actionText: "Read comment",
         });
 
-        req.app.get("io")?.emit("task:comment-created", { projectId: req.params.projectId, taskId: task.id, comment, activity });
+        emitToProject(req.app.get("io"), req.params.projectId, "task:comment-created", { projectId: req.params.projectId, taskId: task.id, comment, activity });
         return res.status(201).json(successResponse(comment));
     } catch (error) {
         console.error(error);

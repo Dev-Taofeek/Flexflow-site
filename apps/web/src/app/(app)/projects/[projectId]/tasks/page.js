@@ -8,6 +8,22 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { fetchProject } from "@/lib/projects-api";
 import { Badge } from "@/components/ui/Badge";
+import { useI18n } from "@/i18n";
+import { Translated } from "@/lib/translate";
+
+const STATUS_LABEL = {
+  TODO: "todo",
+  IN_PROGRESS: "in_progress",
+  IN_REVIEW: "in_review",
+  BLOCKED: "blocked",
+  DONE: "done",
+};
+const PRIORITY_LABEL = {
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+  URGENT: "urgent",
+};
 
 function getStatusColor(status) {
   switch (status) {
@@ -17,6 +33,8 @@ function getStatusColor(status) {
       return "bg-blue-500";
     case "IN_REVIEW":
       return "bg-amber-500";
+    case "BLOCKED":
+      return "bg-rose-500";
     case "DONE":
       return "bg-emerald-500";
     default:
@@ -32,6 +50,7 @@ function formatDueDate(value) {
 
 export default function ProjectTasksPage() {
   const { projectId } = useParams();
+  const { t } = useI18n();
   const { accessToken, isReady } = useApp();
   const [project, setProject] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -71,8 +90,8 @@ export default function ProjectTasksPage() {
   if (error || !project) {
     return (
       <div className="flex flex-col items-center justify-center rounded-3xl border border-(--border) bg-surface py-24 text-center">
-        <p className="text-sm font-medium text-(--text-primary)">Something went wrong</p>
-        <p className="mt-1 text-sm text-(--text-muted)">{error || "Project not found"}</p>
+        <p className="text-sm font-medium text-(--text-primary)">{t("dashboard.somethingWentWrong")}</p>
+        <p className="mt-1 text-sm text-(--text-muted)">{error || t("tasks.projectNotFound")}</p>
       </div>
     );
   }
@@ -82,14 +101,14 @@ export default function ProjectTasksPage() {
       <section className="rounded-3xl border border-(--border) bg-surface p-8">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-brand-600">{project.name}</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-(--text-primary)">Tasks</h1>
+            <p className="text-sm font-medium text-brand-600"><Translated>{project.name}</Translated></p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-(--text-primary)">{t("tasks.title")}</h1>
             <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
-              Track and manage all tasks in this project.
+              {t("tasks.perProjectSubtitle")}
             </p>
           </div>
           <span className="shrink-0 rounded-full border border-(--border) bg-(--bg) px-3 py-1 text-xs font-medium text-(--text-secondary)">
-            {tasks.length} task{tasks.length === 1 ? "" : "s"}
+            {t("tasks.count", { n: tasks.length, s: tasks.length === 1 ? "" : "s" })}
           </span>
         </div>
       </section>
@@ -99,15 +118,15 @@ export default function ProjectTasksPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--bg-overlay)">
             <ListTodo className="h-5 w-5 text-(--text-muted)" />
           </div>
-          <p className="mt-4 text-sm font-medium text-(--text-primary)">No tasks yet</p>
+          <p className="mt-4 text-sm font-medium text-(--text-primary)">{t("tasks.noTasksYet")}</p>
           <p className="mt-1 max-w-sm text-sm text-(--text-muted)">
-            Create a task from the project board to start tracking work here.
+            {t("tasks.emptyProjectCreate")}
           </p>
           <Link
             href={`/projects/${project.id}`}
             className="mt-5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
           >
-            Open project board
+            {t("tasks.openProjectBoard")}
           </Link>
         </div>
       ) : (
@@ -123,18 +142,18 @@ export default function ProjectTasksPage() {
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
                       <span className={["h-2.5 w-2.5 rounded-full", getStatusColor(task.status)].join(" ")} />
-                      <span className="text-xs font-medium text-(--text-muted)">{task.status}</span>
+                      <span className="text-xs font-medium text-(--text-muted)">{t(`tasks.status.${STATUS_LABEL[task.status] || task.status.toLowerCase()}`)}</span>
                     </div>
-                    <Badge variant="outline">{task.priority}</Badge>
+                    <Badge variant="outline">{t(`tasks.priority.${PRIORITY_LABEL[task.priority] || task.priority.toLowerCase()}`)}</Badge>
                   </div>
 
                   <h2 className="mt-4 text-xl font-semibold text-(--text-primary)">
-                    {task.title}
+                    <Translated>{task.title}</Translated>
                   </h2>
 
                   {task.description && (
                     <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-(--text-secondary)">
-                      {task.description?.replace(/<[^>]*>/g, "")?.slice(0, 180)}
+                      <Translated>{task.description?.replace(/<[^>]*>/g, "")?.slice(0, 180)}</Translated>
                     </p>
                   )}
 
