@@ -4,7 +4,7 @@ services:
     runtime: node
     rootDir: apps/api
     buildCommand: apt-get install -y openssl libssl-dev && corepack enable pnpm && pnpm install --no-frozen-lockfile && pnpm prisma generate
-    startCommand: apt-get install -y openssl libssl-dev && pnpm prisma db push && node src/server.js
+    startCommand: pnpm prisma db push --accept-data-loss && node src/server.js
     envVars:
       - key: NODE_ENV
         value: production
