@@ -23,10 +23,10 @@ export function FloatingSettingsTrigger() {
         aria-label={t("settingsAppearance.title")}
         title={t("settingsAppearance.title")}
         className={cn(
-          "fixed bottom-5 end-5 z-40 flex h-10 w-10 items-center justify-center rounded-full",
+          "fixed bottom-5 inset-e-5 z-40 flex h-10 w-10 items-center justify-center rounded-full",
           "border border-(--border) bg-(--bg-elevated) text-(--text-secondary) shadow-lg",
           "transition-all duration-150 hover:scale-105 hover:text-(--text-primary)",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         )}
       >
         <Monitor className="h-4.5 w-4.5" />

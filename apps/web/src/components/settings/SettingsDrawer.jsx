@@ -42,7 +42,7 @@ function RadioList({ options, value, onChange, renderMeta }) {
             onClick={() => onChange(option.id)}
             className={cn(
               "flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               selected
                 ? "border-brand-500/50 bg-brand-500/10"
                 : "border-(--border) hover:border-(--border-strong)",
@@ -82,7 +82,7 @@ function Toggle({ checked, onChange, label, description }) {
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-start gap-3 rounded-lg border border-(--border) px-3 py-2.5 text-left transition-colors hover:border-(--border-strong) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)"
+      className="flex w-full items-start gap-3 rounded-lg border border-(--border) px-3 py-2.5 text-left transition-colors hover:border-(--border-strong) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] font-medium text-(--text-primary)">{label}</span>
@@ -197,7 +197,7 @@ export function SettingsDrawer({ open, onOpenChange }) {
 
       <aside
         className={cn(
-          "absolute inset-y-0 end-0 flex w-[min(21rem,92vw)] flex-col border-s border-(--border)",
+          "absolute inset-y-0 inset-e-0 flex w-[min(21rem,92vw)] flex-col border-s border-(--border)",
           "bg-(--bg-elevated) shadow-2xl",
         )}
       >
