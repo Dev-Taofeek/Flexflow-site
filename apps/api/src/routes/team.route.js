@@ -2,12 +2,15 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
-import { isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
+import { trackApiUsage } from "../middleware/usage.middleware.js";
+import { requireWorkspaceRole } from "../lib/permissions.js";
+import { getEmailConfigStatus, isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
 router.use(authenticate);
+router.use(trackApiUsage);
 
 function dedupeInvites(invites) {
     const byEmail = new Map();
@@ -18,6 +21,15 @@ function dedupeInvites(invites) {
         }
     }
     return [...byEmail.values()];
+}
+
+const VALID_ROLES = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
+
+function canManageWorkspaceRole(actorRole, targetRole, nextRole) {
+    if (targetRole === "OWNER" || nextRole === "OWNER") return false;
+    if (actorRole === "OWNER") return true;
+    if (actorRole === "ADMIN") return targetRole !== "ADMIN" && nextRole !== "ADMIN";
+    return false;
 }
 
 router.get("/", async (req, res) => {
@@ -32,22 +44,34 @@ router.get("/", async (req, res) => {
 
         const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
 
-        const [members, invites] = await Promise.all([
+        const [members, invites, orgMembers] = await Promise.all([
             prisma.workspaceMember.findMany({
                 where: { workspaceId },
                 include: { user: { select: { id: true, name: true, email: true, avatarUrl: true, status: true, createdAt: true } } },
                 orderBy: { createdAt: "asc" },
             }),
+            // Only invites created FOR THIS WORKSPACE from the Team page — not org-wide invites.
             prisma.invite.findMany({
-                where: { organizationId: workspace.organizationId, accepted: false, expiresAt: { gt: new Date() } },
+                where: { workspaceId, accepted: false, expiresAt: { gt: new Date() } },
                 include: { invitedBy: { select: { id: true, name: true } } },
                 orderBy: { createdAt: "desc" },
             }),
+            prisma.organizationMember.findMany({
+                where: { organizationId: workspace.organizationId },
+                include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+                orderBy: { createdAt: "asc" },
+            }),
         ]);
+
+        const memberUserIds = new Set(members.map((m) => m.userId));
+        const availableMembers = orgMembers
+            .filter((om) => !memberUserIds.has(om.userId))
+            .map((om) => ({ ...om.user, orgRole: om.role }));
 
         return res.status(200).json(successResponse({
             members: members.map((m) => ({ ...m.user, role: m.role, memberId: m.id, joinedAt: m.createdAt })),
             invites: dedupeInvites(invites),
+            availableMembers,
             roles: ["OWNER", "ADMIN", "MEMBER", "VIEWER"],
             currentUserRole: self.role,
         }));
@@ -57,18 +81,11 @@ router.get("/", async (req, res) => {
     }
 });
 
-router.post("/invite", async (req, res) => {
+router.post("/invite", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) => {
     try {
         const { workspaceId, email, role = "MEMBER" } = req.body;
         if (!workspaceId || !email?.includes("@")) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId and valid email are required"));
-        }
-
-        const self = await prisma.workspaceMember.findUnique({
-            where: { workspaceId_userId: { workspaceId, userId: req.user.id } },
-        });
-        if (!self || !["OWNER", "ADMIN"].includes(self.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
         }
 
         const workspace = await prisma.workspace.findUnique({
@@ -93,9 +110,14 @@ router.post("/invite", async (req, res) => {
         }
 
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        // Scope the "already pending" lookup to this workspace specifically —
+        // otherwise a pending org-level invite (from Organization settings) for the
+        // same email would get silently reused/updated here and turned into a
+        // workspace-only invite (or vice versa).
         let invite = await prisma.invite.findFirst({
             where: {
                 organizationId: workspace.organizationId,
+                workspaceId,
                 email: normalizedEmail,
                 accepted: false,
                 expiresAt: { gt: new Date() },
@@ -107,11 +129,18 @@ router.post("/invite", async (req, res) => {
         if (invite) {
             invite = await prisma.invite.update({
                 where: { id: invite.id },
-                data: { role, expiresAt, invitedById: req.user.id },
+                data: { role, expiresAt, invitedById: req.user.id, workspaceId },
             });
         } else {
             invite = await prisma.invite.create({
-                data: { organizationId: workspace.organizationId, invitedById: req.user.id, email: normalizedEmail, role, expiresAt },
+                data: {
+                    organizationId: workspace.organizationId,
+                    workspaceId,
+                    invitedById: req.user.id,
+                    email: normalizedEmail,
+                    role,
+                    expiresAt,
+                },
             });
         }
 
@@ -124,12 +153,14 @@ router.post("/invite", async (req, res) => {
             try {
                 await sendTransactionalEmail({
                     to: email,
-                    subject: `Join ${workspace.organization.name} on FlexFlow`,
-                    title: "You've been invited",
-                    message: `${req.user.name} invited you to join ${workspace.organization.name} on FlexFlow as ${role}.`,
-                    actionText: "Accept invitation",
-                    actionUrl: inviteUrl,
-                    footer: "This invitation expires in 7 days.",
+                    subject: `${req.user.name} invited you to join ${workspace.organization.name} on FlexFlow`,
+                    extraParams: {
+                        to_name: email,
+                        inviter_name: req.user.name,
+                        org_name: workspace.organization.name,
+                        role,
+                        invite_link: inviteUrl,
+                    },
                 });
                 emailSent = true;
             } catch (emailErr) {
@@ -152,6 +183,7 @@ router.post("/invite", async (req, res) => {
             emailSent,
             resent,
             emailError: emailError || (!isEmailConfigured() ? "EMAILJS_NOT_CONFIGURED" : null),
+            emailConfig: getEmailConfigStatus(),
         }));
     } catch (error) {
         console.error(error);
@@ -159,21 +191,13 @@ router.post("/invite", async (req, res) => {
     }
 });
 
-router.delete("/invites/:inviteId", async (req, res) => {
+router.delete("/invites/:inviteId", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) => {
     try {
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId is required"));
 
-        const self = await prisma.workspaceMember.findUnique({
-            where: { workspaceId_userId: { workspaceId, userId: req.user.id } },
-        });
-        if (!self || !["OWNER", "ADMIN"].includes(self.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
-
-        const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
         const invite = await prisma.invite.findUnique({ where: { id: req.params.inviteId } });
-        if (!workspace || !invite || invite.organizationId !== workspace.organizationId || invite.accepted) {
+        if (!invite || invite.workspaceId !== workspaceId || invite.accepted) {
             return res.status(404).json(errorResponse("NOT_FOUND", "Invitation not found"));
         }
 
@@ -190,23 +214,18 @@ router.delete("/invites/:inviteId", async (req, res) => {
     }
 });
 
-router.patch("/members/:memberId/role", async (req, res) => {
+router.patch("/members/:memberId/role", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) => {
     try {
         const { workspaceId, role } = req.body;
         if (!workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId is required"));
 
-        const self = await prisma.workspaceMember.findUnique({
-            where: { workspaceId_userId: { workspaceId, userId: req.user.id } },
-        });
-        if (!self || !["OWNER", "ADMIN"].includes(self.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
-
-        const validRoles = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
-        if (!validRoles.includes(role)) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Invalid role"));
+        if (!VALID_ROLES.includes(role)) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Invalid role"));
 
         const target = await prisma.workspaceMember.findUnique({ where: { id: req.params.memberId } });
         if (!target) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
+        if (!canManageWorkspaceRole(req.workspaceMember.role, target.role, role)) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot change this member's role"));
+        }
 
         const updated = await prisma.workspaceMember.update({
             where: { id: req.params.memberId },
@@ -234,23 +253,19 @@ router.patch("/members/:memberId/role", async (req, res) => {
     }
 });
 
-router.delete("/members/:memberId", async (req, res) => {
+router.delete("/members/:memberId", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) => {
     try {
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId is required"));
-
-        const self = await prisma.workspaceMember.findUnique({
-            where: { workspaceId_userId: { workspaceId, userId: req.user.id } },
-        });
-        if (!self || !["OWNER", "ADMIN"].includes(self.role)) {
-            return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
-        }
 
         const target = await prisma.workspaceMember.findUnique({ where: { id: req.params.memberId } });
         if (!target) return res.status(404).json(errorResponse("NOT_FOUND", "Member not found"));
 
         if (target.userId === req.user.id) {
             return res.status(400).json(errorResponse("BAD_REQUEST", "Cannot remove yourself"));
+        }
+        if (target.role === "OWNER" || (req.workspaceMember.role === "ADMIN" && target.role === "ADMIN")) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You cannot remove this member"));
         }
 
         const removed = await prisma.workspaceMember.delete({

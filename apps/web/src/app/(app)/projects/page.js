@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, FolderKanban } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { useRole } from "@/hooks/useRole";
 import { fetchProjects, createProject } from "@/lib/projects-api";
 import { ProjectsClient } from "@/components/projects/ProjectsClient";
 
 export default function ProjectsPage() {
   const { currentWorkspace, accessToken, isReady } = useApp();
+  const { canManageProjects } = useRole();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15,23 +17,28 @@ export default function ProjectsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", visibility: "PRIVATE" });
 
-  useEffect(() => {
-    if (!isReady || !currentWorkspace?.id || !accessToken) return;
-    load();
-  }, [currentWorkspace?.id, accessToken, isReady]);
+  const workspaceId = currentWorkspace?.id;
 
-  async function load() {
+  const load = useCallback(async () => {
+    if (!workspaceId || !accessToken) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchProjects({ workspaceId: currentWorkspace.id, token: accessToken });
+      const data = await fetchProjects({ workspaceId, token: accessToken });
       setProjects(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [workspaceId, accessToken]);
+
+  useEffect(() => {
+    if (!isReady) return;
+    let cancelled = false;
+    (async () => { await load(); })();
+    return () => { cancelled = true; };
+  }, [isReady, load]);
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -63,16 +70,18 @@ export default function ProjectsPage() {
             {currentWorkspace?.name || "this workspace"}
           </p>
         </div>
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
-        >
-          <Plus className="h-4 w-4" /> New Project
-        </button>
+        {canManageProjects && (
+          <button
+            onClick={() => setShowForm((s) => !s)}
+            className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+          >
+            <Plus className="h-4 w-4" /> New Project
+          </button>
+        )}
       </div>
 
       {/* Create form */}
-      {showForm && (
+      {showForm && canManageProjects && (
         <form
           onSubmit={handleCreate}
           className="space-y-4 rounded-xl border border-(--border) bg-(--bg-elevated) p-5"
@@ -88,7 +97,7 @@ export default function ProjectsPage() {
                 placeholder="Project name"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-brand-500 focus:outline-none"
               />
             </div>
             <div>
@@ -98,7 +107,7 @@ export default function ProjectsPage() {
               <select
                 value={form.visibility}
                 onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value }))}
-                className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none"
               >
                 <option value="PRIVATE">Private</option>
                 <option value="PUBLIC">Public</option>
@@ -114,7 +123,7 @@ export default function ProjectsPage() {
               rows={2}
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              className="w-full resize-none rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
+              className="w-full resize-none rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-brand-500 focus:outline-none"
             />
           </div>
           <div className="flex items-center justify-end gap-2">
@@ -128,7 +137,7 @@ export default function ProjectsPage() {
             <button
               type="submit"
               disabled={creating}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
             >
               {creating ? "Creating..." : "Create project"}
             </button>
@@ -152,7 +161,7 @@ export default function ProjectsPage() {
           <FolderKanban className="mx-auto h-8 w-8 text-(--text-muted)" />
           <p className="mt-3 text-sm font-medium text-(--text-primary)">No projects yet</p>
           <p className="mt-1 text-sm text-(--text-muted)">
-            Create your first project to get started.
+            {canManageProjects ? "Create your first project to get started." : "You have read-only access in this workspace."}
           </p>
         </div>
       ) : (

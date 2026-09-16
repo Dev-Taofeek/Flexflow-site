@@ -1,35 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
-import { fetchTeamData, inviteMember, updateMemberRole, removeMember, cancelInvite } from "@/lib/team-api";
+import { fetchTeamData, inviteMember, addExistingMember, updateMemberRole, removeMember, cancelInvite } from "@/lib/team-api";
+import { useI18n } from "@/i18n";
 import { TeamClient } from "@/components/team/TeamClient";
 
 export default function TeamPage() {
   const { currentWorkspace, accessToken, isReady } = useApp();
   const { addToast } = useToast();
+  const { t } = useI18n();
   const [teamData, setTeamData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (!isReady || !currentWorkspace?.id || !accessToken) return;
-    load();
-  }, [currentWorkspace?.id, accessToken, isReady]);
+  const workspaceId = currentWorkspace?.id;
 
-  async function load() {
+  const load = useCallback(async () => {
+    if (!workspaceId || !accessToken) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchTeamData(currentWorkspace.id, accessToken);
+      const data = await fetchTeamData(workspaceId, accessToken);
       setTeamData(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [workspaceId, accessToken]);
+
+  useEffect(() => {
+    if (!isReady) return;
+    let cancelled = false;
+    (async () => { await load(); })();
+    return () => { cancelled = true; };
+  }, [isReady, load]);
 
   async function handleInvite({ email, role }) {
     const invite = await inviteMember({
@@ -43,11 +50,28 @@ export default function TeamPage() {
       invites: [invite, ...(prev.invites || []).filter((i) => i.id !== invite.id && i.email?.toLowerCase() !== invite.email?.toLowerCase())],
     }));
     if (invite.emailSent) {
-      addToast(invite.resent ? "Invite email resent." : "Invitation email sent.", "success");
+      addToast(invite.resent ? t("team.inviteResent") : t("team.inviteSent"), "success");
     } else {
-      addToast("Invite link created, but EmailJS is not configured so no email was sent.", "info");
+      const missing = invite.emailConfig?.missing?.length ? ` Missing: ${invite.emailConfig.missing.join(", ")}.` : "";
+      addToast(`${t("team.inviteLinkNoEmail")}${missing}`, "info");
     }
     return invite;
+  }
+
+  async function handleAddExisting({ userId, role }) {
+    const result = await addExistingMember({
+      workspaceId: currentWorkspace.id,
+      userId,
+      role,
+      token: accessToken,
+    });
+    const member = { ...result.user, role: result.role, memberId: result.id, joinedAt: result.createdAt };
+    setTeamData((prev) => ({
+      ...prev,
+      members: [...(prev.members || []), member],
+      availableMembers: (prev.availableMembers || []).filter((m) => m.id !== userId),
+    }));
+    addToast(t("team.memberAdded", { name: member.name, workspace: currentWorkspace.name }), "success");
   }
 
   async function handleRoleChange({ memberId, role }) {
@@ -61,7 +85,7 @@ export default function TeamPage() {
       ...prev,
       members: prev.members.map((m) => (m.memberId === memberId ? { ...m, ...updated } : m)),
     }));
-    addToast("Member role updated.", "success");
+    addToast(t("team.roleUpdated"), "success");
   }
 
   async function handleRemove(memberId) {
@@ -70,7 +94,7 @@ export default function TeamPage() {
       ...prev,
       members: prev.members.filter((m) => m.memberId !== memberId),
     }));
-    addToast("Member removed.", "success");
+    addToast(t("team.memberRemoved"), "success");
   }
 
   async function handleCancelInvite(inviteId) {
@@ -79,7 +103,7 @@ export default function TeamPage() {
       ...prev,
       invites: prev.invites.filter((inv) => inv.id !== inviteId),
     }));
-    addToast("Invitation cancelled.", "success");
+    addToast(t("team.inviteCancelled"), "success");
   }
 
   if (loading || !isReady) {
@@ -102,19 +126,20 @@ export default function TeamPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-(--text-primary)">Team</h1>
+        <h1 className="text-xl font-semibold text-(--text-primary)">{t("team.title")}</h1>
         <p className="mt-0.5 text-sm text-(--text-muted)">
-          {teamData?.members?.length || 0} member{teamData?.members?.length !== 1 ? "s" : ""} in{" "}
-          {currentWorkspace?.name}
+          {t(teamData?.members?.length === 1 ? "team.memberInWorkspaceOne" : "team.memberInWorkspaceMany", { count: teamData?.members?.length || 0, name: currentWorkspace?.name })}
         </p>
       </div>
 
       <TeamClient
         initialMembers={teamData?.members || []}
         initialInvitations={teamData?.invites || []}
+        availableMembers={teamData?.availableMembers || []}
         roles={teamData?.roles || ["OWNER", "ADMIN", "MEMBER", "VIEWER"]}
         currentUserRole={teamData?.currentUserRole}
         onInvite={handleInvite}
+        onAddExisting={handleAddExisting}
         onRoleChange={handleRoleChange}
         onRemove={handleRemove}
         onCancelInvite={handleCancelInvite}

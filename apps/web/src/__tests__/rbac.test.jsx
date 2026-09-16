@@ -2,20 +2,25 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PermissionMatrix } from "@/components/settings/roles/PermissionMatrix";
 import { updatePermission } from "@/lib/roles-api";
+import { ToastProvider } from "@/contexts/ToastContext";
 
 jest.mock("@/lib/roles-api", () => ({
     updatePermission: jest.fn(),
 }));
 
+function renderWithProvider(ui) {
+    return render(<ToastProvider>{ui}</ToastProvider>);
+}
+
 const ROLES = ["Admin", "Member", "Viewer"];
 const RESOURCES = [
-    { id: "issues",   label: "Issues",   actions: ["create", "read", "update", "delete"] },
+    { id: "tasks",   label: "Tasks",   actions: ["create", "read", "update", "delete"] },
     { id: "projects", label: "Projects", actions: ["create", "read", "update", "delete"] },
 ];
 const INITIAL_PERMISSIONS = {
-    Admin:  { issues: ["create", "read", "update", "delete"], projects: ["create", "read", "update", "delete"] },
-    Member: { issues: ["create", "read", "update"],           projects: ["read"] },
-    Viewer: { issues: ["read"],                               projects: ["read"] },
+    Admin:  { tasks: ["create", "read", "update", "delete"], projects: ["create", "read", "update", "delete"] },
+    Member: { tasks: ["read"],                                projects: ["read"] },
+    Viewer: { tasks: ["read"],                               projects: ["read"] },
 };
 
 describe("PermissionMatrix", () => {
@@ -24,7 +29,7 @@ describe("PermissionMatrix", () => {
     });
 
     function renderMatrix() {
-        return render(
+        return renderWithProvider(
             <PermissionMatrix
                 roles={ROLES}
                 resources={RESOURCES}
@@ -50,7 +55,7 @@ describe("PermissionMatrix", () => {
     it("calls updatePermission when a toggle is clicked", async () => {
         const user = userEvent.setup();
         updatePermission.mockResolvedValue({
-            data: { permissions: INITIAL_PERMISSIONS },
+            permissions: INITIAL_PERMISSIONS,
         });
         renderMatrix();
 
@@ -82,7 +87,7 @@ describe("PermissionMatrix", () => {
             expect(target.getAttribute("aria-label")).not.toBe(label);
         });
 
-        resolve({ data: { permissions: INITIAL_PERMISSIONS } });
+        resolve({ permissions: INITIAL_PERMISSIONS });
     });
 });
 
@@ -91,19 +96,19 @@ describe("RBAC role hierarchy — pure logic", () => {
         return permissions[role]?.[resource]?.includes(action) ?? false;
     }
 
-    it("Admin can delete issues", () => {
-        expect(canPerform("Admin", INITIAL_PERMISSIONS, "issues", "delete")).toBe(true);
+    it("Admin can delete tasks", () => {
+        expect(canPerform("Admin", INITIAL_PERMISSIONS, "tasks", "delete")).toBe(true);
     });
 
-    it("Member cannot delete issues", () => {
-        expect(canPerform("Member", INITIAL_PERMISSIONS, "issues", "delete")).toBe(false);
+    it("Member cannot delete tasks", () => {
+        expect(canPerform("Member", INITIAL_PERMISSIONS, "tasks", "delete")).toBe(false);
     });
 
-    it("Viewer cannot create issues", () => {
-        expect(canPerform("Viewer", INITIAL_PERMISSIONS, "issues", "create")).toBe(false);
+    it("Viewer cannot create tasks", () => {
+        expect(canPerform("Viewer", INITIAL_PERMISSIONS, "tasks", "create")).toBe(false);
     });
 
-    it("Member can update issues", () => {
-        expect(canPerform("Member", INITIAL_PERMISSIONS, "issues", "update")).toBe(true);
+    it("Member cannot update tasks", () => {
+        expect(canPerform("Member", INITIAL_PERMISSIONS, "tasks", "update")).toBe(false);
     });
 });

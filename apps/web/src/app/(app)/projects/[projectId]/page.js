@@ -18,6 +18,20 @@ const KanbanBoard = dynamic(
 
 const INITIAL_ACTIVITY_LIMIT = 5;
 
+function relativeTime(d) {
+    if (!d) return "";
+    const date = new Date(d);
+    const diff = (Date.now() - date.getTime()) / 1000;
+    if (diff < 60) return "just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function labelActivities(list) {
+    return (list || []).map((a) => ({ ...a, timeLabel: relativeTime(a.createdAt) }));
+}
+
 function ActivityFeed({ projectId, token }) {
     const [activities, setActivities] = useState([]);
     const [total, setTotal] = useState(0);
@@ -27,14 +41,19 @@ function ActivityFeed({ projectId, token }) {
 
     useEffect(() => {
         if (!projectId || !token) return;
-        setLoading(true);
-        apiRequest(`/projects/${projectId}/activity`, {
-            token,
-            params: { limit: INITIAL_ACTIVITY_LIMIT, skip: 0 },
-        })
-            .then((data) => { setActivities(data.activities || []); setTotal(data.total || 0); })
-            .catch(() => {})
-            .finally(() => setLoading(false));
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            try {
+                const data = await apiRequest(`/projects/${projectId}/activity`, {
+                    token,
+                    params: { limit: INITIAL_ACTIVITY_LIMIT, skip: 0 },
+                });
+                if (!cancelled) { setActivities(labelActivities(data.activities)); setTotal(data.total || 0); }
+            } catch {}
+            finally { if (!cancelled) setLoading(false); }
+        })();
+        return () => { cancelled = true; };
     }, [projectId, token]);
 
     async function loadAll() {
@@ -44,19 +63,10 @@ function ActivityFeed({ projectId, token }) {
                 token,
                 params: { limit: 100, skip: 0 },
             });
-            setActivities(data.activities || []);
+            setActivities(labelActivities(data.activities));
             setExpanded(true);
         } catch {}
         finally { setLoadingMore(false); }
-    }
-
-    function formatTime(d) {
-        const date = new Date(d);
-        const diff = (Date.now() - date.getTime()) / 1000;
-        if (diff < 60) return "just now";
-        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-        return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     }
 
     if (loading) {
@@ -75,19 +85,19 @@ function ActivityFeed({ projectId, token }) {
         <div className="space-y-1">
             {activities.map((a) => (
                 <div key={a.id} className="flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-(--bg-overlay) transition-colors">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-bold text-brand-700">
                         {a.user?.name?.[0]?.toUpperCase() ?? "?"}
                     </div>
                     <div className="min-w-0 flex-1">
                         <p className="text-sm text-(--text-primary)">
                             <span className="font-medium">{a.user?.name}</span>
                             {" "}<span className="text-(--text-muted)">{a.action}</span>
-                            {a.issue?.title && (
-                                <> <span className="text-(--text-secondary) font-medium">"{a.issue.title}"</span></>
+                            {a.task?.title && (
+                                <> <span className="text-(--text-secondary) font-medium">&ldquo;{a.task.title}&rdquo;</span></>
                             )}
                         </p>
                     </div>
-                    <span className="shrink-0 text-xs text-(--text-muted) whitespace-nowrap">{formatTime(a.createdAt)}</span>
+                    <span className="shrink-0 text-xs text-(--text-muted) whitespace-nowrap">{a.timeLabel}</span>
                 </div>
             ))}
 
@@ -98,7 +108,7 @@ function ActivityFeed({ projectId, token }) {
                     className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-(--border) py-2 text-xs text-(--text-secondary) hover:bg-(--bg-overlay) transition-colors mt-1"
                 >
                     {loadingMore ? (
-                        <span className="animate-spin h-3 w-3 rounded-full border-2 border-indigo-500 border-t-transparent" />
+                        <span className="animate-spin h-3 w-3 rounded-full border-2 border-brand-500 border-t-transparent" />
                     ) : (
                         <ChevronDown className="h-3.5 w-3.5" />
                     )}
@@ -113,18 +123,26 @@ export default function ProjectDetailPage() {
     const { projectId } = useParams();
     const { accessToken, isReady, currentOrg } = useApp();
     const [project, setProject] = useState(null);
-    const [issues, setIssues] = useState([]);
+    const [tasks, setTasks] = useState([]);
     const [members, setMembers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
         if (!isReady || !accessToken || !projectId) return;
-        setLoading(true);
-        fetchProject(projectId, accessToken)
-            .then((data) => { setProject(data.project); setIssues(data.issues); })
-            .catch((e) => setError(e.message))
-            .finally(() => setLoading(false));
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            try {
+                const data = await fetchProject(projectId, accessToken);
+                if (!cancelled) { setProject(data.project); setTasks(data.tasks); }
+            } catch (e) {
+                if (!cancelled) setError(e.message);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
     }, [projectId, accessToken, isReady]);
 
     useEffect(() => {
@@ -151,8 +169,8 @@ export default function ProjectDetailPage() {
         );
     }
 
-    const total = issues.length;
-    const done = issues.filter((i) => i.status === "DONE").length;
+    const total = tasks.length;
+    const done = tasks.filter((i) => i.status === "DONE").length;
     const progress = total ? Math.round((done / total) * 100) : 0;
 
     return (
@@ -174,13 +192,13 @@ export default function ProjectDetailPage() {
                         <p className="text-xl font-semibold text-(--text-primary)">{progress}%</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-xs text-(--text-muted)">Issues</p>
+                        <p className="text-xs text-(--text-muted)">Tasks</p>
                         <p className="text-xl font-semibold text-(--text-primary)">{total}</p>
                     </div>
                 </div>
             </div>
 
-            <KanbanBoard projectId={project.id} initialIssues={issues} token={accessToken} members={members} />
+            <KanbanBoard projectId={project.id} initialTasks={tasks} token={accessToken} members={members} />
 
             {/* Activity feed */}
             <section className="rounded-xl border border-(--border) bg-(--bg-elevated) p-5">

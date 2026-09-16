@@ -5,6 +5,42 @@ import Google from "next-auth/providers/google";
 import { loginSchema } from "@/lib/auth/schemas";
 import { apiUrl } from "@/lib/api-url";
 
+// Slack OAuth (custom provider — Slack has no built-in in NextAuth v4).
+function SlackProvider(options) {
+  return {
+    id: "slack",
+    name: "Slack",
+    type: "oauth",
+    authorization: {
+      url: "https://slack.com/oauth/v2/authorize",
+      params: { scope: "identity.basic,identity.email", user_scope: "identity.basic,identity.email" },
+    },
+    token: "https://slack.com/api/oauth.v2.access",
+    userinfo: {
+      url: "https://slack.com/api/openid.connect.userInfo",
+      async request(context) {
+        const res = await fetch(context.url, {
+          headers: { Authorization: `Bearer ${context.tokens.access_token}` },
+        });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error || "Slack user info request failed");
+        return { ...json.sub, id: json.sub, email: json.email, name: json.name, image: json.picture };
+      },
+    },
+    profile(profile) {
+      return {
+        id: profile.id,
+        name: profile.name || profile.sub || "Slack user",
+        email: profile.email,
+        image: profile.image || profile.picture || null,
+      };
+    },
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    allowDangerousEmailAccountLinking: true,
+  };
+}
+
 // Access token lifetime: 23h so refresh happens once a day max
 const ACCESS_TOKEN_TTL_MS = 23 * 60 * 60 * 1000;
 
@@ -40,14 +76,21 @@ async function authorize(credentials) {
         const res = await fetch(apiUrl("/auth/login"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
+            body: JSON.stringify({
+                email: parsed.data.email,
+                password: parsed.data.password,
+                ...(parsed.data.code ? { code: parsed.data.code } : {}),
+            }),
         });
 
         if (!res.ok) return null;
         const json = await res.json();
         if (!json.success || !json.data) return null;
 
-        const { user, accessToken } = json.data;
+        const { user, accessToken, requiresTwoFactor } = json.data;
+        // 2FA user without a code — no session until a valid TOTP code is supplied
+        if (requiresTwoFactor) return null;
+
         return {
             id: user.id,
             name: user.name,
@@ -65,7 +108,10 @@ async function oauthLogin({ email, name, image }) {
     try {
         const res = await fetch(apiUrl("/auth/oauth"), {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "x-internal-secret": process.env.INTERNAL_SECRET,
+            },
             body: JSON.stringify({ email, name, avatarUrl: image }),
         });
         if (!res.ok) return null;
@@ -120,6 +166,10 @@ export const authOptions = {
             clientId: process.env.AUTH_GITHUB_ID,
             clientSecret: process.env.AUTH_GITHUB_SECRET,
         }),
+        SlackProvider({
+            clientId: process.env.AUTH_SLACK_ID,
+            clientSecret: process.env.AUTH_SLACK_SECRET,
+        }),
         Credentials({
             name: "Credentials",
             credentials: {
@@ -148,7 +198,7 @@ export const authOptions = {
             }
 
             // ── OAuth login ────────────────────────────────────────────────
-            if (account && (account.provider === "google" || account.provider === "github")) {
+            if (account && ["google", "github", "slack"].includes(account.provider)) {
                 const data = await oauthLogin({ email: user.email, name: user.name, image: user.image });
                 if (data) {
                     return compactToken({

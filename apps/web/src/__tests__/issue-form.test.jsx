@@ -16,6 +16,10 @@ jest.mock("@/contexts/AppContext", () => ({
     }),
 }));
 
+jest.mock("@/hooks/useRole", () => ({
+    useRole: () => ({ canManageProjects: true }),
+}));
+
 jest.mock("next/navigation", () => ({
     useRouter: () => ({ push: jest.fn() }),
     useParams: () => ({}),
@@ -32,7 +36,7 @@ async function renderReady() {
     return result;
 }
 
-describe("Issue / Project creation form", () => {
+describe("Task / Project creation form", () => {
     beforeEach(() => {
         createProject.mockReset();
         fetchProjects.mockReset();

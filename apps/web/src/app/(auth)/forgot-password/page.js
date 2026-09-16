@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiUrl } from "@/lib/api-url";
 import { useToast } from "@/contexts/ToastContext";
+import { useI18n } from "@/i18n";
 
 export default function ForgotPasswordPage() {
     const { addToast } = useToast();
+    const { t } = useI18n();
     const [email, setEmail] = useState("");
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -20,7 +22,7 @@ export default function ForgotPasswordPage() {
 
     async function onSubmit(e) {
         e.preventDefault();
-        if (!email.includes("@")) { setError("Enter a valid email address"); return; }
+        if (!email.includes("@")) { setError(t("auth.forgot.enterValidEmail")); return; }
         setError("");
         setLoading(true);
         try {
@@ -30,9 +32,9 @@ export default function ForgotPasswordPage() {
                 body: JSON.stringify({ email }),
             });
             const json = await res.json();
-            if (!res.ok) throw new Error(json.error?.message || "Failed to send reset email");
+            if (!res.ok) throw new Error(json.error?.message || t("auth.forgot.failedToSend"));
             setSubmitted(true);
-            addToast("If that account exists, a reset email has been sent.", "success");
+            addToast(t("auth.forgot.emailSentToast"), "success");
         } catch (err) {
             setError(err.message);
             addToast(err.message, "error");
@@ -43,31 +45,31 @@ export default function ForgotPasswordPage() {
 
     return (
         <AuthShell
-            title="Reset your password"
-            description="Enter your email and we'll send you a secure password reset link."
+            title={t("auth.forgot.title")}
+            description={t("auth.forgot.description")}
         >
             {submitted ? (
                 <div className="space-y-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                    <div className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 flex h-12 w-12 items-center justify-center rounded-xl">
                         <Mail className="h-5 w-5" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-semibold text-(--text-primary)">Check your inbox</h3>
+                        <h3 className="text-lg font-semibold text-(--text-primary)">{t("auth.forgot.checkInbox")}</h3>
                         <p className="mt-2 text-sm text-(--text-secondary)">
-                            If an account exists for <strong>{email}</strong>, you'll receive a reset link shortly.
+                            {t("auth.forgot.checkInboxDescription", { email })}
                         </p>
                     </div>
                     <Button asChild className="w-full">
-                        <Link href="/login">Back to login</Link>
+                        <Link href="/login">{t("auth.backToLogin")}</Link>
                     </Button>
                 </div>
             ) : (
                 <form onSubmit={onSubmit} className="space-y-6">
-                    <FormField id="email" label="Email">
+                    <FormField id="email" label={t("auth.email")}>
                         <Input
                             id="email"
                             type="email"
-                            placeholder="you@company.com"
+                            placeholder={t("auth.emailPlaceholder")}
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
@@ -79,14 +81,14 @@ export default function ForgotPasswordPage() {
                     )}
 
                     <Button type="submit" className="w-full" isLoading={loading}>
-                        Send reset link
+                        {t("auth.forgot.sendResetLink")}
                     </Button>
 
                     <Link
                         href="/login"
                         className="inline-flex items-center gap-2 text-sm font-medium text-(--text-muted) transition-colors hover:text-(--text-primary)"
                     >
-                        <ArrowLeft className="h-4 w-4" /> Back to login
+                        <ArrowLeft className="h-4 w-4" /> {t("auth.backToLogin")}
                     </Link>
                 </form>
             )}

@@ -11,9 +11,11 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiUrl } from "@/lib/api-url";
 import { useToast } from "@/contexts/ToastContext";
+import { useI18n } from "@/i18n";
 
 function ResetPasswordForm() {
   const { addToast } = useToast();
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
 
@@ -26,9 +28,9 @@ function ResetPasswordForm() {
 
   async function onSubmit(e) {
     e.preventDefault();
-    if (password.length < 8) { setError("Password must be at least 8 characters"); return; }
-    if (password !== confirm) { setError("Passwords do not match"); return; }
-    if (!token) { setError("Reset token missing — request a new link"); return; }
+    if (password.length < 8) { setError(t("auth.error.passwordMin")); return; }
+    if (password !== confirm) { setError(t("auth.reset.passwordsMismatch")); return; }
+    if (!token) { setError(t("auth.reset.missingToken")); return; }
     setError("");
     setLoading(true);
     try {
@@ -38,9 +40,9 @@ function ResetPasswordForm() {
         body: JSON.stringify({ token, password }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error?.message || "Failed to reset password");
+      if (!res.ok) throw new Error(json.error?.message || t("auth.reset.failedToReset"));
       setDone(true);
-      addToast("Password reset successfully.", "success");
+      addToast(t("auth.reset.successToast"), "success");
     } catch (err) {
       setError(err.message);
       addToast(err.message, "error");
@@ -51,39 +53,39 @@ function ResetPasswordForm() {
 
   return (
     <AuthShell
-      title="Create new password"
-      description="Choose a strong password to secure your FlexFlow account."
+      title={t("auth.reset.title")}
+      description={t("auth.reset.description")}
     >
       {done ? (
         <div className="space-y-6">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+          <div className="bg-success-50 text-success-600 flex h-12 w-12 items-center justify-center rounded-xl">
             <CheckCircle2 className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-(--text-primary)">Password updated</h3>
+            <h3 className="text-lg font-semibold text-(--text-primary)">{t("auth.reset.updated")}</h3>
             <p className="mt-2 text-sm text-(--text-secondary)">
-              Your password has been changed. You can now sign in with your new credentials.
+              {t("auth.reset.updatedDescription")}
             </p>
           </div>
           <Button asChild className="w-full">
-            <Link href="/login">Sign in</Link>
+            <Link href="/login">{t("common.signIn")}</Link>
           </Button>
         </div>
       ) : !token ? (
         <div className="space-y-4 text-center">
-          <p className="text-sm text-(--text-muted)">Invalid or missing reset link.</p>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/forgot-password">Request a new link</Link>
+          <p className="text-sm text-(--text-muted)">{t("auth.reset.invalidLink")}</p>
+          <Button asChild variant="secondary" className="w-full">
+            <Link href="/forgot-password">{t("auth.reset.requestNewLink")}</Link>
           </Button>
         </div>
       ) : (
         <form onSubmit={onSubmit} className="space-y-5">
-          <FormField id="password" label="New password">
+          <FormField id="password" label={t("auth.reset.newPassword")}>
             <div className="relative">
               <Input
                 id="password"
                 type={showPw ? "text" : "password"}
-                placeholder="At least 8 characters"
+                placeholder={t("auth.passwordMinPlaceholder")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pr-10"
@@ -91,7 +93,7 @@ function ResetPasswordForm() {
               />
               <button
                 type="button"
-                aria-label={showPw ? "Hide password" : "Show password"}
+                aria-label={showPw ? t("auth.hidePassword") : t("auth.showPassword")}
                 onClick={() => setShowPw((s) => !s)}
                 className="absolute top-1/2 right-3 -translate-y-1/2 text-(--text-muted) hover:text-(--text-secondary)"
               >
@@ -100,11 +102,11 @@ function ResetPasswordForm() {
             </div>
           </FormField>
 
-          <FormField id="confirm" label="Confirm password">
+          <FormField id="confirm" label={t("auth.reset.confirmPassword")}>
             <Input
               id="confirm"
               type="password"
-              placeholder="Re-enter password"
+              placeholder={t("auth.reset.reenterPassword")}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               required
@@ -116,7 +118,7 @@ function ResetPasswordForm() {
           )}
 
           <Button type="submit" className="w-full" isLoading={loading}>
-            Update password
+            {t("auth.reset.updatePassword")}
           </Button>
         </form>
       )}
@@ -125,9 +127,10 @@ function ResetPasswordForm() {
 }
 
 export default function ResetPasswordPage() {
+  const { t } = useI18n();
   return (
     <Suspense fallback={
-      <AuthShell title="Create new password" description="Choose a strong password.">
+      <AuthShell title={t("auth.reset.title")} description={t("auth.suspense.resetDescription")}>
         <div className="h-48 animate-pulse rounded-xl bg-gray-100" />
       </AuthShell>
     }>

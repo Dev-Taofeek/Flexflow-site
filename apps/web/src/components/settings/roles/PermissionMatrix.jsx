@@ -6,15 +6,22 @@ import { Check, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/contexts/ToastContext";
 import { updatePermission } from "@/lib/roles-api";
+import { useI18n } from "@/i18n";
 
-export function PermissionMatrix({ workspaceId, token, roles, resources, initialPermissions }) {
+export function PermissionMatrix({ workspaceId, token, roles, resources, initialPermissions, canEdit = true }) {
   const { addToast } = useToast();
+  const { t } = useI18n();
   const [permissions, setPermissions] = useState(initialPermissions);
   const [savingKey, setSavingKey] = useState("");
 
   async function handleToggle({ role, resource, action }) {
     if (role === "Owner") {
-      addToast("Owner permissions are locked.", "info");
+      addToast(t("settings.roles.ownerLocked"), "info");
+      return;
+    }
+
+    if (!canEdit) {
+      addToast(t("settings.roles.noPermission"), "info");
       return;
     }
 
@@ -48,7 +55,7 @@ export function PermissionMatrix({ workspaceId, token, roles, resources, initial
       setPermissions(response.permissions);
     } catch (err) {
       setPermissions(previousPermissions);
-      addToast(err.message || "Failed to update permission.", "error");
+      addToast(err.message || t("settings.roles.updateFailed"), "error");
     } finally {
       setSavingKey("");
     }
@@ -65,25 +72,31 @@ export function PermissionMatrix({ workspaceId, token, roles, resources, initial
 
             <div>
               <h2 className="text-foreground dark:text-foreground-dark text-lg font-semibold">
-                Permission matrix
+                {t("settings.roles.matrixTitle")}
               </h2>
 
               <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-                Toggle which roles can perform each action across core FlexFlow resources.
+                {t("settings.roles.matrixDescription")}
               </p>
             </div>
           </div>
         </div>
 
-        <Badge variant="secondary">{roles.length} roles</Badge>
+        <Badge variant="secondary">{t("settings.roles.rolesCount", { count: roles.length })}</Badge>
       </div>
+
+      {!canEdit && (
+        <p className="text-muted-foreground dark:text-muted-foreground-dark mt-4 text-sm">
+          {t("settings.roles.readOnlyNote")}
+        </p>
+      )}
 
       <div className="border-border dark:border-border-dark mt-8 overflow-x-auto rounded-2xl border">
         <table className="w-full min-w-245 border-collapse">
           <thead className="bg-muted dark:bg-muted-dark">
             <tr>
               <th className="text-muted-foreground dark:text-muted-foreground-dark w-55 px-4 py-4 text-left text-xs font-semibold tracking-wide uppercase">
-                Resource action
+                {t("settings.roles.resourceActionColumn")}
               </th>
 
               {roles.map((role) => (
@@ -119,7 +132,7 @@ export function PermissionMatrix({ workspaceId, token, roles, resources, initial
                     const isEnabled = permissions[role]?.[resource.id]?.includes(action);
                     const key = `${role}-${resource.id}-${action}`;
                     const isSaving = savingKey === key;
-                    const isLocked = role === "Owner";
+                    const isLocked = role === "Owner" || !canEdit;
 
                     return (
                       <td key={key} className="px-4 py-4">
@@ -142,7 +155,12 @@ export function PermissionMatrix({ workspaceId, token, roles, resources, initial
                             isSaving ? "opacity-60" : "",
                             isLocked ? "cursor-not-allowed opacity-80" : "",
                           ].join(" ")}
-                          aria-label={`${isEnabled ? "Disable" : "Enable"} ${role} ${action} ${resource.label} permission`}
+                          aria-label={t("settings.roles.toggleAria", {
+                          verb: isEnabled ? t("settings.roles.disable") : t("settings.roles.enable"),
+                          role,
+                          action,
+                          resource: resource.label,
+                        })}
                         >
                           {isEnabled ? (
                             <Check className="h-4 w-4" strokeWidth={1.8} />

@@ -19,6 +19,12 @@ build
 # Prisma
 apps/api/prisma/migrations/*.db
 
+# Embedded dev database (tools/dev-db)
+tools/dev-db/node_modules
+tools/dev-db/data
+tools/dev-db/.pid
+tools/dev-db/*.log
+
 # Logs
 *.log
 npm-debug.log*

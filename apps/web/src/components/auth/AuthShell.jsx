@@ -1,8 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useI18n } from "@/i18n";
 
 export function AuthShell({ title, description, children }) {
+  const { t } = useI18n();
   return (
     <main className="bg-background dark:bg-background-dark relative flex min-h-screen overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_45%)] dark:bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.18),transparent_45%)]" />
@@ -16,23 +18,22 @@ export function AuthShell({ title, description, children }) {
 
             <div>
               <p className="text-foreground dark:text-foreground-dark text-sm font-medium">
-                FlexFlow
+                {t("common.appName")}
               </p>
 
               <p className="text-muted-foreground dark:text-muted-foreground-dark text-xs">
-                Workflow orchestration platform
+                {t("auth.platformTagline")}
               </p>
             </div>
           </div>
 
           <div className="mt-16 max-w-sm">
             <h1 className="text-foreground dark:text-foreground-dark text-4xl font-semibold tracking-tight">
-              Manage projects with clarity and speed.
+              {t("auth.sidebarHeadline")}
             </h1>
 
             <p className="text-muted-foreground dark:text-muted-foreground-dark mt-5 text-base leading-relaxed">
-              FlexFlow helps engineering teams organize tasks, collaborate in real time, and ship
-              products faster with modern workflows.
+              {t("auth.sidebarDescription")}
             </p>
           </div>
         </div>
@@ -43,11 +44,11 @@ export function AuthShell({ title, description, children }) {
 
             <div>
               <p className="text-foreground dark:text-foreground-dark text-sm font-medium">
-                “The cleanest project management tool we’ve ever used.”
+                {t("auth.testimonialQuote")}
               </p>
 
               <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                Senior Product Team · Horizon Labs
+                {t("auth.testimonialAttribution")}
               </p>
             </div>
           </div>

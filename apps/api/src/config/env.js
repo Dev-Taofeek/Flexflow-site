@@ -16,6 +16,15 @@ const envSchema = z.object({
     EMAILJS_TEMPLATE_ID: z.string().optional(),
     EMAILJS_PUBLIC_KEY: z.string().optional(),
     EMAILJS_PRIVATE_KEY: z.string().optional(),
+    VAPID_PUBLIC_KEY: z.string().optional(),
+    VAPID_PRIVATE_KEY: z.string().optional(),
+    VAPID_SUBJECT: z.string().optional(),
+    // When "true", enables POST /auth/demo-credentials for the marketing site.
+    DEMO_MODE: z.string().optional(),
+    // ── Paystack ──────────────────────────────────────────────────────────────
+    PAYSTACK_SECRET_KEY: z.string().optional(),
+    PAYSTACK_PUBLIC_KEY: z.string().optional(),
+    PAYSTACK_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

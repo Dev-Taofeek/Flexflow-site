@@ -2,446 +2,950 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { motion } from "framer-motion";
-import {
-  ArrowRight,
-  BarChart3,
-  Check,
-  ChevronDown,
-  GitBranch,
-  LockKeyhole,
-  MessageSquare,
-  ShieldCheck,
-  Sparkles,
-  Users,
-  Workflow,
-  Zap,
-} from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { PLANS, FEATURES, getFeatureInfo } from "@flexflow/plans";
+
+function createIcon(paths) {
+  return function Icon({ className, strokeWidth = 2, ...rest }) {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className={className}
+        {...rest}
+      >
+        {paths}
+      </svg>
+    );
+  };
+}
+
+const ArrowRight = createIcon(
+  <>
+    <path d="M5 12h14" />
+    <path d="m12 5 7 7-7 7" />
+  </>,
+);
+const BarChart3 = createIcon(
+  <>
+    <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+    <path d="M18 17V9" />
+    <path d="M13 17V5" />
+    <path d="M8 17v-3" />
+  </>,
+);
+const Check = createIcon(<path d="M20 6 9 17l-5-5" />);
+const CheckCircle = createIcon(
+  <>
+    <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+    <path d="m9 11 3 3L22 4" />
+  </>,
+);
+const ChevronDown = createIcon(<path d="m6 9 6 6 6-6" />);
+const GitPullRequest = createIcon(
+  <>
+    <circle cx="18" cy="18" r="3" />
+    <circle cx="6" cy="6" r="3" />
+    <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+    <line x1="6" x2="6" y1="9" y2="21" />
+  </>,
+);
+const LayoutGrid = createIcon(
+  <>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </>,
+);
+const LockKeyhole = createIcon(
+  <>
+    <circle cx="12" cy="16" r="1" />
+    <rect x="3" y="10" width="18" height="12" rx="2" />
+    <path d="M7 10V7a5 5 0 0 1 10 0v3" />
+  </>,
+);
+const Lock = createIcon(
+  <>
+    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </>,
+);
+const Search = createIcon(
+  <>
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.35-4.35" />
+  </>,
+);
+const ShieldCheck = createIcon(
+  <>
+    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z" />
+    <path d="m9 12 2 2 4-4" />
+  </>,
+);
+const Sparkles = createIcon(
+  <>
+    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+    <path d="M20 3v4" />
+    <path d="M22 5h-4" />
+  </>,
+);
+const Users = createIcon(
+  <>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </>,
+);
+const Zap = createIcon(
+  <>
+    <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
+  </>,
+);
+const Plug = createIcon(
+  <>
+    <path d="M12 22v-5" />
+    <path d="M9 8V2" />
+    <path d="M15 8V2" />
+    <path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />
+  </>,
+);
+const BookOpen = createIcon(
+  <>
+    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+  </>,
+);
 
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { ContactForm } from "@/components/marketing/ContactForm";
 
 const features = [
   {
     title: "Role-based access control",
     description:
-      "Create Owner, Admin, Member, and Viewer permissions with clean workspace-level control.",
+      "Owner, Admin, Member, and Viewer roles with a permission matrix you can read at a glance. Fine-grained control per workspace, project, and task.",
     icon: ShieldCheck,
   },
   {
-    title: "Project workflows",
+    title: "Kanban boards",
     description:
-      "Plan work with projects, issues, labels, comments, subtasks, and deadline tracking.",
-    icon: Workflow,
+      "Drag work across To Do, In Progress, In Review, and Done on a board that stays in sync for every teammate.",
+    icon: LayoutGrid,
+  },
+  {
+    title: "Review workflows",
+    description:
+      "Assignees submit completed work for review. The assigner approves it as done or sends it back with requested changes straight from the task.",
+    icon: GitPullRequest,
   },
   {
     title: "Live collaboration",
     description:
-      "Keep teams in sync with real-time issue updates, comments, activity logs, and presence-ready architecture.",
+      "Socket-powered real-time updates keep boards, tasks, and notifications current the moment anything changes.",
     icon: Users,
   },
   {
-    title: "Kanban execution",
+    title: "Team analytics",
     description:
-      "Move work across To Do, In Progress, In Review, and Done with a polished drag-and-drop board.",
-    icon: GitBranch,
-  },
-  {
-    title: "Team communication",
-    description:
-      "Use comments, mentions, pending invites, role dropdowns, and notification-ready workflows.",
-    icon: MessageSquare,
-  },
-  {
-    title: "Analytics dashboards",
-    description:
-      "Track velocity, workload, burndown, cycle time, and delivery health with responsive charts.",
+      "Velocity, workload, burndown, and cycle time rendered as readable charts no spreadsheet wrangling.",
     icon: BarChart3,
+  },
+  {
+    title: "Fast search",
+    description:
+      "Find any task or project across your workspace in milliseconds, filtered to what you can actually see.",
+    icon: Search,
   },
 ];
 
 const steps = [
   {
     title: "Create your workspace",
-    description: "Set up your organization, invite teammates, and assign initial roles in minutes.",
+    description:
+      "Set up your organization, create a workspace, and assign roles to teammates in minutes.",
   },
   {
-    title: "Plan and prioritize",
+    title: "Plan and assign",
     description:
-      "Create projects, define issues, add labels, assign owners, and organize deadlines.",
+      "Create projects, define tasks, add labels, set deadlines, and assign work to the right people.",
   },
   {
-    title: "Ship with confidence",
+    title: "Track and ship",
     description:
-      "Track progress, review activity, monitor analytics, and keep every teammate aligned.",
+      "Move work across the board, review completed tasks, and keep the whole team aligned on progress.",
   },
 ];
 
-const pricing = {
-  monthly: [
-    {
-      name: "Free",
-      price: "$0",
-      description: "For solo builders and small experiments.",
-      features: ["1 workspace", "3 projects", "Basic Kanban", "Community support"],
-      cta: "Start free",
-    },
-    {
-      name: "Pro",
-      price: "$12",
-      description: "For growing teams shipping real products.",
-      features: ["Unlimited projects", "RBAC roles", "Analytics", "Priority support"],
-      cta: "Start Pro",
-      highlighted: true,
-    },
-    {
-      name: "Enterprise",
-      price: "Custom",
-      description: "For organizations with advanced security needs.",
-      features: ["Custom roles", "Audit logs", "SSO-ready", "Dedicated support"],
-      cta: "Contact sales",
-    },
-  ],
-  annual: [
-    {
-      name: "Free",
-      price: "$0",
-      description: "For solo builders and small experiments.",
-      features: ["1 workspace", "3 projects", "Basic Kanban", "Community support"],
-      cta: "Start free",
-    },
-    {
-      name: "Pro",
-      price: "$99",
-      description: "For growing teams shipping real products.",
-      features: ["Unlimited projects", "RBAC roles", "Analytics", "Priority support"],
-      cta: "Start Pro",
-      highlighted: true,
-    },
-    {
-      name: "Enterprise",
-      price: "Custom",
-      description: "For organizations with advanced security needs.",
-      features: ["Custom roles", "Audit logs", "SSO-ready", "Dedicated support"],
-      cta: "Contact sales",
-    },
-  ],
-};
+const intelligenceQuestions = [
+  {
+    question: "Why did we choose this architecture?",
+    answer: "Your platform team recorded the call: TypeScript everywhere, strict mode, on the event pipeline to cut integration bugs.",
+    source: "Decision memory · Platform workspace",
+  },
+  {
+    question: "Which projects are currently blocked?",
+    answer: "Payments API was flagged blocked on a security review. Checkout flow has 3 open bugs in review.",
+    source: "Tasks · Insights workspace",
+  },
+  {
+    question: "Who owns the mobile app initiative?",
+    answer: "Priya owns the mobile initiative. Six tasks are assigned to her across Sprint 12.",
+    source: "Tasks · Product workspace",
+  },
+];
+
+const integrations = [
+  { name: "Slack", detail: "Post task updates and decision summaries to channels.", icon: Zap },
+  { name: "GitHub", detail: "Link pull requests to tasks and review workflows.", icon: GitPullRequest },
+  { name: "Webhooks", detail: "Push anything to your own tools, or receive events in.", icon: Plug },
+  { name: "REST API", detail: "Full read/write API with scoped tokens and usage limits.", icon: ArrowRight },
+];
+
+const securityPoints = [
+  "Encryption in transit and at rest",
+  "Role-based permissions enforced on the server",
+  "Workspace and organization isolation",
+  "Organization 2FA on Pro",
+  "SSO / SAML on Custom",
+  "Advanced audit logs on Custom",
+];
 
 const faqs = [
   {
-    question: "Is FlexFlow built for engineering teams?",
+    question: "What can FlexFlow do out of the box?",
     answer:
-      "Yes. FlexFlow is designed around projects, issues, roles, comments, activity logs, analytics, and team workflows.",
+      "Projects, tasks, kanban boards, team management, role-based permissions, review workflows, notifications, activity logs, analytics, and Team Intelligence all in one workspace.",
   },
   {
-    question: "Does it support role-based permissions?",
+    question: "How do roles and permissions work?",
     answer:
-      "Yes. The platform includes Owner, Admin, Member, and Viewer roles with a visual permission matrix.",
+      "Every member is assigned a role (Owner, Admin, Member, or Viewer). Permissions are enforced on both the UI and the API, so sensitive actions are gated server-side. Pro and Custom plans unlock customizable permission matrices.",
   },
   {
-    question: "Can teams collaborate in real time?",
+    question: "What is Team Intelligence?",
     answer:
-      "Yes. Issue updates use Socket.io-powered live sync, so board changes and issue updates can be reflected across clients.",
+      "It turns your team's scattered work tasks, projects, comments, activity, and decision memory into a searchable, citable knowledge base. Ask questions in plain English and get answers with sources you're actually allowed to see.",
   },
   {
-    question: "Is this responsive?",
+    question: "Is collaboration real-time?",
     answer:
-      "Yes. The app shell, dashboard, projects, team, analytics, settings, and marketing pages are designed for desktop, tablet, and mobile.",
+      "Yes. Task and board updates are pushed over Socket.io, so changes show up for your team the moment they happen.",
+  },
+  {
+    question: "Can I change plans later?",
+    answer:
+      "Anytime. Upgrade to Pro or Custom for immediate entitlements, or cancel and keep paid access until the end of your billing window.",
   },
 ];
 
+function KanbanPreview() {
+  const columns = [
+    { name: "To Do", tone: "bg-neutral-500", cards: ["Design tokens", "Public docs"] },
+    { name: "In Progress", tone: "bg-brand-500", cards: ["Rate limiting"] },
+    { name: "In Review", tone: "bg-warning-500", cards: ["RBAC matrix"], highlight: true },
+    { name: "Done", tone: "bg-success-500", cards: ["Auth setup", "Seed script"] },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {columns.map((col) => (
+        <div
+          key={col.name}
+          className={[
+            "rounded-xl border p-2.5",
+            col.highlight
+              ? "border-brand-500/50 bg-brand-500/10"
+              : "border-(--border) bg-(--bg-overlay)",
+          ].join(" ")}
+        >
+          <div className="flex items-center gap-1.5 pb-2">
+            <span className={`h-1.5 w-1.5 rounded-full ${col.tone}`} />
+            <span className="text-[11px] font-semibold text-(--text-secondary)">{col.name}</span>
+          </div>
+          <div className="space-y-1.5">
+            {col.cards.map((card) => (
+              <div
+                key={card}
+                className="rounded-lg border border-(--border) bg-(--bg-elevated) px-2 py-1.5 text-[11px] font-medium text-(--text-secondary)"
+              >
+                {card}
+              </div>
+            ))}
+            {col.cards.length === 0 ? (
+              <div className="flex h-8 items-center justify-center rounded-lg border border-dashed border-(--border)">
+                <span className="text-[10px] text-(--text-tertiary)">Empty</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const PREVIEW_NAV = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "projects", label: "Projects" },
+  { id: "board", label: "Board" },
+  { id: "team", label: "Team" },
+  { id: "intelligence", label: "Intelligence" },
+];
+
+const PREVIEW_PROJECTS = [
+  { name: "Website relaunch", color: "#6366f1", done: 12, total: 16, updated: "2h ago" },
+  { name: "Mobile app", color: "#22c55e", done: 8, total: 21, updated: "yesterday" },
+  { name: "Onboarding flows", color: "#f59e0b", done: 3, total: 9, updated: "3d ago" },
+  { name: "Design system", color: "#ec4899", done: 5, total: 5, updated: "5d ago" },
+];
+
+const PREVIEW_TEAM = [
+  { name: "Priya Sharma", initials: "PS", role: "Owner", you: false },
+  { name: "Marcus Webb", initials: "MW", role: "Admin", you: false },
+  { name: "Aisha Khan", initials: "AK", role: "Member", you: false },
+  { name: "Tomas Rivera", initials: "TR", role: "Member", you: false },
+  { name: "You", initials: "YO", role: "Owner", you: true },
+];
+
+function Avatar({ initials }) {
+  return (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-(--border) bg-(--bg-overlay) text-[10px] font-semibold text-(--text-secondary)">
+      {initials}
+    </span>
+  );
+}
+
+function PreviewProjects() {
+  return (
+    <div className="space-y-2.5">
+      {PREVIEW_PROJECTS.map((p, i) => {
+        const pct = Math.round((p.done / p.total) * 100);
+        return (
+          <motion.div
+            key={p.name}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05, duration: 0.3, ease: "easeOut" }}
+            className="rounded-xl border border-(--border) bg-(--bg-overlay) p-3"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />
+              <span className="text-xs font-semibold text-(--text-primary)">{p.name}</span>
+              <span className="text-[11px] text-(--text-tertiary)">
+                {p.done}/{p.total} tasks
+              </span>
+              <span className="ml-auto text-[11px] text-(--text-tertiary)">{p.updated}</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-(--bg-overlay)">
+              <motion.span
+                initial={{ width: 0 }}
+                animate={{ width: `${pct}%` }}
+                transition={{ delay: 0.2 + i * 0.05, duration: 0.6, ease: "easeOut" }}
+                className="block h-full rounded-full"
+                style={{ background: p.color }}
+              />
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PreviewTeam() {
+  return (
+    <div className="space-y-1.5">
+      {PREVIEW_TEAM.map((m, i) => (
+        <motion.div
+          key={m.name}
+          initial={{ opacity: 0, x: 8 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: i * 0.05, duration: 0.3, ease: "easeOut" }}
+          className="flex items-center gap-3 rounded-xl border border-(--border) bg-(--bg-overlay) px-3 py-2.5"
+        >
+          <Avatar initials={m.initials} />
+          <span className="text-xs font-medium text-(--text-primary)">
+            {m.name}
+            {m.you ? <span className="text-(--text-tertiary)"> (that&apos;s you)</span> : null}
+          </span>
+          <span
+            className={[
+              "ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold",
+              m.you
+                ? "bg-brand-500/10 text-brand-500"
+                : "bg-(--bg-overlay) text-(--text-tertiary)",
+            ].join(" ")}
+          >
+            {m.role}
+          </span>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+function PreviewIntelligence() {
+  return (
+    <div className="space-y-2.5">
+      {intelligenceQuestions.slice(0, 2).map((item, i) => (
+        <motion.div
+          key={item.question}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.08, duration: 0.3, ease: "easeOut" }}
+          className="rounded-xl border border-(--border) bg-(--bg-overlay) p-3.5"
+        >
+          <p className="flex items-start gap-2 text-xs font-semibold text-(--text-primary)">
+            <Search className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" strokeWidth={1.7} />
+            {item.question}
+          </p>
+          <p className="mt-2 flex items-start gap-2 rounded-lg bg-(--bg) p-2.5 text-[11px] leading-relaxed text-(--text-secondary)">
+            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" strokeWidth={1.7} />
+            {item.answer}
+          </p>
+          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-(--text-tertiary)">
+            <BookOpen className="h-3 w-3" strokeWidth={1.7} />
+            {item.source}
+          </p>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+function PreviewBoard() {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-(--text-primary)">Product · Sprint 12</p>
+          <p className="text-xs text-(--text-tertiary)">Drag tasks across columns, in real time</p>
+        </div>
+        <span className="rounded-full bg-(--bg-overlay) px-2 py-0.5 text-[11px] font-medium text-(--text-tertiary)">
+          Live sync
+        </span>
+      </div>
+      <KanbanPreview />
+    </>
+  );
+}
+
+function PreviewDashboard() {
+  return (
+    <>
+      <div>
+        <p className="text-sm font-semibold text-(--text-primary)">Design System</p>
+        <p className="text-xs text-(--text-tertiary)">5 tasks pending review</p>
+      </div>
+      <KanbanPreview />
+    </>
+  );
+}
+
+function AppPreview() {
+  const [tab, setTab] = useState("dashboard");
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-(--border) bg-(--bg-elevated) p-2 shadow-2xl">
+      <div className="overflow-hidden rounded-xl border border-(--border)">
+        <div className="flex items-center gap-2 border-b border-(--border) px-4 py-3">
+          <LockKeyhole className="h-3.5 w-3.5 text-(--text-tertiary)" strokeWidth={1.7} />
+          <span className="text-xs font-medium text-(--text-tertiary)">Flexflow Design System</span>
+          <span className="ml-auto rounded-md bg-(--bg-overlay) px-2 py-0.5 text-[11px] font-medium text-(--text-tertiary)">
+            Live preview
+          </span>
+        </div>
+
+        <div className="grid gap-4 p-4 lg:grid-cols-[180px_1fr]">
+          <aside className="hidden flex-col gap-1 lg:flex">
+            {PREVIEW_NAV.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                aria-pressed={tab === item.id}
+                className={[
+                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  tab === item.id
+                    ? "border border-(--border) bg-(--bg-overlay) text-(--text-primary)"
+                    : "text-(--text-tertiary) hover:text-(--text-secondary)",
+                ].join(" ")}
+              >
+                {item.label}
+              </button>
+            ))}
+          </aside>
+
+          <div className="min-w-0 space-y-4">
+            <div
+              className="grid grid-cols-5 gap-1 lg:hidden"
+              role="tablist"
+              aria-label="FlexFlow preview tabs"
+            >
+              {PREVIEW_NAV.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setTab(item.id)}
+                  aria-pressed={tab === item.id}
+                  className={[
+                    "rounded-lg px-1.5 py-1.5 text-[11px] font-medium transition-colors",
+                    tab === item.id
+                      ? "bg-(--bg-overlay) text-(--text-primary)"
+                      : "text-(--text-tertiary)",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="min-h-52">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.22, ease: "easeOut" }}
+                >
+                  {tab === "dashboard" ? (
+                    <PreviewDashboard />
+                  ) : tab === "projects" ? (
+                    <PreviewProjects />
+                  ) : tab === "board" ? (
+                    <PreviewBoard />
+                  ) : tab === "team" ? (
+                    <PreviewTeam />
+                  ) : (
+                    <PreviewIntelligence />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-(--border) px-4 py-2.5 text-center text-[11px] text-(--text-tertiary)">
+          A look inside your dashboard — click a section to explore.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeading({ eyebrow, title, align = "left", description }) {
+  return (
+    <div className={align === "center" ? "mx-auto max-w-2xl text-center" : "max-w-2xl"}>
+      <p className="text-sm font-semibold uppercase tracking-widest text-brand-500">{eyebrow}</p>
+      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-(--text-primary) md:text-4xl">
+        {title}
+      </h2>
+      {description ? (
+        <p className="mt-4 text-base leading-relaxed text-(--text-secondary)">{description}</p>
+      ) : null}
+    </div>
+  );
+}
+
 export function LandingPageClient() {
+  const minimizeMotion = useReducedMotion();
   const [billing, setBilling] = useState("monthly");
   const [openFaq, setOpenFaq] = useState(faqs[0].question);
 
+  const fadeUp = minimizeMotion
+    ? { opacity: 1, y: 0 }
+    : {
+        initial: { opacity: 0, y: 24 },
+        whileInView: { opacity: 1, y: 0 },
+        viewport: { once: true, margin: "-80px" },
+        transition: { duration: 0.5, ease: "easeOut" },
+      };
+
+  const planFeatureLists = {
+    free: PLANS.free.features.map((id) => getFeatureInfo(id)).filter(Boolean),
+    pro: PLANS.pro.features
+      .map((id) => getFeatureInfo(id))
+      .filter(Boolean)
+      .slice(0, 8),
+    custom: [
+      "SSO / SAML",
+      "Custom roles",
+      "Advanced audit logs",
+      "Dedicated support",
+      "Advanced security",
+      "Unlimited Team Intelligence",
+    ],
+  };
+
   return (
-    <main className="bg-background text-foreground dark:bg-background-dark dark:text-foreground-dark min-h-screen">
-      <section className="border-border dark:border-border-dark relative overflow-hidden border-b">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.16),transparent_45%)] dark:bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.24),transparent_45%)]" />
-
-        <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-6 py-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="bg-brand-600 dark:bg-brand-500 flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold text-white">
-              FF
-            </div>
-
-            <span className="text-sm font-semibold">FlexFlow</span>
-          </Link>
-
-          <nav className="hidden items-center gap-8 md:flex">
-            {["Features", "How it works", "Pricing", "FAQ"].map((item) => (
-              <a
-                key={item}
-                href={`#${item.toLowerCase().replaceAll(" ", "-")}`}
-                className="text-muted-foreground hover:text-foreground dark:text-muted-foreground-dark dark:hover:text-foreground-dark text-sm font-medium transition-colors"
-              >
-                {item}
-              </a>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" className="hidden sm:inline-flex">
-              <Link href="/login">Sign in</Link>
-            </Button>
-
-            <Button asChild>
-              <Link href="/register">
-                Get started
-                <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
-              </Link>
-            </Button>
-          </div>
-        </header>
-
-        <div className="relative z-10 mx-auto max-w-7xl px-6 pt-16 pb-24 text-center lg:px-8 lg:pb-32">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: "easeOut" }}
-            className="mx-auto max-w-4xl"
-          >
-            <Badge variant="secondary" className="mx-auto">
-              <Sparkles className="mr-2 h-3.5 w-3.5" strokeWidth={1.7} />
-              RBAC and team collaboration for modern SaaS teams
-            </Badge>
-
-            <h1 className="text-foreground dark:text-foreground-dark mt-8 text-5xl font-semibold tracking-tight md:text-6xl lg:text-7xl">
-              Plan, assign, track, and ship with one polished workspace.
+    <main className="min-h-screen bg-(--bg) text-(--text-primary)">
+      {/* ── Hero ─────────────────────────────────────────────────────── */}
+      <section className="border-b border-(--border)">
+        <div className="mx-auto w-full max-w-7xl px-6 pt-18 pb-20 lg:px-8">
+          <motion.div {...fadeUp} className="mx-auto max-w-3xl text-center">
+            <h1 className="text-balance text-5xl font-semibold tracking-tight text-(--text-primary) md:text-7xl">
+              Plan, assign, track, and ship and remember why.
             </h1>
 
-            <p className="text-muted-foreground dark:text-muted-foreground-dark mx-auto mt-6 max-w-2xl text-base leading-8 md:text-lg">
-              FlexFlow brings projects, issues, permissions, comments, workflows, analytics, and
-              team management into a clean dashboard inspired by Linear, Vercel, and Notion.
+            <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-(--text-secondary) md:text-lg">
+              FlexFlow brings projects, tasks, permissions, review workflows, and Team
+              Intelligence into a single real-time workspace. Decisions stop living in your
+              head they become answers your whole team can ask for.
             </p>
 
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button asChild size="lg">
                 <Link href="/register">
-                  Start building
+                  Start building free
                   <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
                 </Link>
               </Button>
 
               <Button asChild variant="secondary" size="lg">
-                <Link href="/dashboard">View dashboard</Link>
+                <Link href="/login">Sign in</Link>
               </Button>
             </div>
+
+            <p className="mt-4 text-sm text-(--text-tertiary)">
+              No credit card required · Free to start · Set up in minutes
+            </p>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 36, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ delay: 0.15, duration: 0.55, ease: "easeOut" }}
-            className="border-border bg-surface/80 dark:border-border-dark dark:bg-surface-dark/80 mx-auto mt-16 max-w-6xl rounded-[2rem] border p-3 shadow-md backdrop-blur"
-          >
-            <div className="border-border bg-background dark:border-border-dark dark:bg-background-dark overflow-hidden rounded-[1.5rem] border">
-              <div className="border-border dark:border-border-dark flex items-center gap-2 border-b px-4 py-3">
-                <span className="bg-danger-500 h-3 w-3 rounded-full" />
-                <span className="bg-warning-500 h-3 w-3 rounded-full" />
-                <span className="bg-success-500 h-3 w-3 rounded-full" />
-              </div>
-
-              <div className="grid gap-4 p-5 lg:grid-cols-[240px_1fr]">
-                <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark hidden rounded-2xl border p-4 lg:block">
-                  <div className="bg-muted dark:bg-muted-dark h-8 w-28 rounded-lg" />
-                  <div className="mt-8 space-y-3">
-                    {["Dashboard", "Projects", "Issues", "Team", "Analytics"].map((item, index) => (
-                      <div
-                        key={item}
-                        className={[
-                          "h-10 rounded-xl",
-                          index === 1 ? "bg-brand-600/15" : "bg-muted dark:bg-muted-dark",
-                        ].join(" ")}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-4">
-                    {[103, "3.4d", "82%", "91%"].map((item) => (
-                      <div
-                        key={item}
-                        className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-2xl border p-4 text-left"
-                      >
-                        <p className="text-2xl font-semibold">{item}</p>
-                        <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                          Workspace metric
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-2xl border p-5">
-                      <div className="flex items-end gap-2">
-                        {[38, 62, 48, 82, 70, 96].map((height, index) => (
-                          <div
-                            key={index}
-                            className="bg-brand-600/80 dark:bg-brand-500/80 w-full rounded-t-lg"
-                            style={{ height }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-2xl border p-5">
-                      <div className="space-y-3">
-                        {["Finalize RBAC matrix", "Review onboarding", "Ship analytics"].map(
-                          (item) => (
-                            <div
-                              key={item}
-                              className="bg-background dark:bg-background-dark flex items-center justify-between rounded-xl p-3"
-                            >
-                              <span className="text-sm font-medium">{item}</span>
-                              <Check className="text-success-500 h-4 w-4" />
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <motion.div {...fadeUp} className="mx-auto mt-16 max-w-5xl">
+            <AppPreview />
           </motion.div>
         </div>
       </section>
 
-      <section id="features" className="mx-auto max-w-7xl px-6 py-24 lg:px-8">
-        <div className="max-w-2xl">
-          <p className="text-brand-600 dark:text-brand-400 text-sm font-medium">Features</p>
+      {/* ── Team Intelligence (the differentiator) ───────────────────── */}
+      <section
+        id="intelligence"
+        className="scroll-mt-20 border-b border-(--border) bg-(--bg-elevated) py-24"
+      >
+        <div className="mx-auto w-full max-w-7xl px-6 lg:px-8">
+          <div className="grid items-start gap-12 lg:grid-cols-2">
+            <div className="lg:sticky lg:top-24">
+              <SectionHeading
+                eyebrow="Team Intelligence"
+                title="Ask anything. Your team's history answers with receipts."
+                description="Team Intelligence turns tokens of work into organizational memory. Tasks, projects, comments, activity, and decisions become answerable in plain English scoped to what each person is allowed to see."
+              />
+              <ul className="mt-8 space-y-3">
+                {[
+                  "Answers cite the exact source task, comment, or decision entry",
+                  "Respects RBAC, workspace, and organization boundaries on every query",
+                  "Never invents facts or reveals data you don't have access to",
+                  "Pro gets 50 questions/day; Custom gets unlimited plus a decision memory",
+                ].map((point) => (
+                  <li key={point} className="flex items-start gap-3 text-sm text-(--text-secondary)">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-500/15 text-success-600">
+                      <Check className="h-3 w-3" strokeWidth={2.5} />
+                    </span>
+                    {point}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button asChild>
+                  <Link href="/register">
+                    Start with Team Intelligence
+                    <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
+                  </Link>
+                </Button>
+                <Button asChild variant="secondary">
+                  <Link href="/pricing">See plans</Link>
+                </Button>
+              </div>
+            </div>
 
-          <h2 className="mt-3 text-4xl font-semibold tracking-tight">
-            Everything your team needs to move work forward.
-          </h2>
+            <div className="space-y-4">
+              {intelligenceQuestions.map((item) => (
+                <motion.div
+                  key={item.question}
+                  {...fadeUp}
+                  className="rounded-2xl border border-(--border) bg-(--bg) p-5"
+                >
+                  <p className="flex items-start gap-2.5 text-sm font-semibold text-(--text-primary)">
+                    <Search className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" strokeWidth={1.7} />
+                    {item.question}
+                  </p>
+                  <p className="mt-3 flex items-start gap-2.5 rounded-xl bg-(--bg-overlay) p-4 text-sm leading-relaxed text-(--text-secondary)">
+                    <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" strokeWidth={1.7} />
+                    {item.answer}
+                  </p>
+                  <p className="mt-3 flex items-center gap-2 text-xs text-(--text-tertiary)">
+                    <BookOpen className="h-3.5 w-3.5" strokeWidth={1.7} />
+                    {item.source}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature) => {
+      {/* ── Features ─────────────────────────────────────────────────── */}
+      <section id="features" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 py-24 lg:px-8">
+        <SectionHeading
+          eyebrow="Features"
+          title="Everything your team needs to move work forward."
+          description="One workspace for planning, permissions, execution, review, and delivery no duct-taped integrations."
+        />
+
+        <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature, index) => {
             const Icon = feature.icon;
-
             return (
-              <div
+              <motion.div
                 key={feature.title}
-                className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6"
+                {...fadeUp}
+                transition={{ ...fadeUp.transition, delay: minimizeMotion ? 0 : index * 0.04 }}
+                className="group rounded-2xl border border-(--border) bg-(--bg-elevated) p-6 transition-colors hover:border-(--border-strong)"
               >
-                <div className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 flex h-11 w-11 items-center justify-center rounded-2xl">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-(--border) bg-(--bg-overlay) text-brand-500 transition-colors group-hover:border-brand-500/40">
                   <Icon className="h-5 w-5" strokeWidth={1.7} />
                 </div>
-
-                <h3 className="mt-5 text-lg font-semibold">{feature.title}</h3>
-
-                <p className="text-muted-foreground dark:text-muted-foreground-dark mt-2 text-sm leading-relaxed">
+                <h3 className="mt-5 text-lg font-semibold text-(--text-primary)">{feature.title}</h3>
+                <p className="mt-2.5 text-sm leading-relaxed text-(--text-secondary)">
                   {feature.description}
                 </p>
-              </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <motion.div
+          {...fadeUp}
+          className="mt-5 rounded-2xl border border-brand-500/40 bg-brand-600 p-8"
+        >
+          <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+            <div className="max-w-xl">
+              <h3 className="text-xl font-semibold tracking-tight text-white md:text-2xl">
+                From signup to shipping no migrations, no setup spreadsheets.
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-white/70">
+                Invite your team, create your first project, and assign tasks the same day.
+              </p>
+            </div>
+            <Button asChild size="lg" className="bg-white text-brand-700 shadow-md hover:bg-white/90">
+              <Link href="/register">
+                Create workspace
+                <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
+              </Link>
+            </Button>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* ── How it works ─────────────────────────────────────────────── */}
+      <section
+        id="how-it-works"
+        className="scroll-mt-20 border-y border-(--border) bg-(--bg-elevated) py-24"
+      >
+        <div className="mx-auto w-full max-w-7xl px-6 lg:px-8">
+          <SectionHeading
+            eyebrow="How it works"
+            title="A simple flow from setup to shipping."
+            description="Three steps. No tutorials required."
+            align="center"
+          />
+
+          <div className="mt-16 grid gap-5 lg:grid-cols-3">
+            {steps.map((step, index) => (
+              <motion.div
+                key={step.title}
+                {...fadeUp}
+                transition={{ ...fadeUp.transition, delay: minimizeMotion ? 0 : index * 0.08 }}
+                className="rounded-2xl border border-(--border) bg-(--bg) p-8"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-(--border) bg-(--bg-overlay) text-sm font-semibold text-brand-500">
+                  {index + 1}
+                </div>
+                <h3 className="mt-5 text-lg font-semibold text-(--text-primary)">{step.title}</h3>
+                <p className="mt-2.5 text-sm leading-relaxed text-(--text-secondary)">
+                  {step.description}
+                </p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Integrations ─────────────────────────────────────────────── */}
+      <section id="integrations" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 py-24 lg:px-8">
+        <SectionHeading
+          eyebrow="Integrations"
+          title="Work where your team already works."
+          description="Connect the tools you're running today, or build on top of the API."
+          align="center"
+        />
+
+        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {integrations.map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <motion.div
+                key={item.name}
+                {...fadeUp}
+                transition={{ ...fadeUp.transition, delay: minimizeMotion ? 0 : index * 0.04 }}
+                className="rounded-2xl border border-(--border) bg-(--bg-elevated) p-6"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-(--border) bg-(--bg-overlay) text-brand-500">
+                  <Icon className="h-5 w-5" strokeWidth={1.7} />
+                </div>
+                <h3 className="mt-5 text-base font-semibold text-(--text-primary)">{item.name}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">{item.detail}</p>
+                <span className="mt-3 inline-block rounded-full border border-brand-500/30 bg-brand-500/10 px-2.5 py-0.5 text-[11px] font-medium text-brand-500">
+                  {item.name === "Slack" || item.name === "GitHub" ? "Pro plan" : "All plans"}
+                </span>
+              </motion.div>
             );
           })}
         </div>
       </section>
 
+      {/* ── Security ─────────────────────────────────────────────────── */}
       <section
-        id="how-it-works"
-        className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark border-y py-24"
+        id="security"
+        className="scroll-mt-20 border-y border-(--border) bg-(--bg-elevated) py-24"
       >
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="max-w-2xl">
-            <p className="text-brand-600 dark:text-brand-400 text-sm font-medium">How it works</p>
-
-            <h2 className="mt-3 text-4xl font-semibold tracking-tight">
-              A simple flow from setup to shipping.
-            </h2>
-          </div>
-
-          <div className="mt-12 grid gap-5 lg:grid-cols-3">
-            {steps.map((step, index) => (
-              <div
-                key={step.title}
-                className="border-border bg-background dark:border-border-dark dark:bg-background-dark rounded-3xl border p-6"
-              >
-                <div className="bg-brand-600 dark:bg-brand-500 flex h-12 w-12 items-center justify-center rounded-2xl text-lg font-semibold text-white">
-                  {index + 1}
-                </div>
-
-                <h3 className="mt-6 text-xl font-semibold">{step.title}</h3>
-
-                <p className="text-muted-foreground dark:text-muted-foreground-dark mt-3 text-sm leading-relaxed">
-                  {step.description}
-                </p>
-              </div>
-            ))}
+        <div className="mx-auto w-full max-w-7xl px-6 lg:px-8">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
+            <div>
+              <SectionHeading
+                eyebrow="Security"
+                title="Permissions aren't decoration they're enforced."
+                description="Every role, workspace, and plan boundary is checked on the server. UI gating is just the ergonomics; the API is where access is actually decided."
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {securityPoints.map((point, index) => (
+                <motion.div
+                  key={point}
+                  {...fadeUp}
+                  transition={{ ...fadeUp.transition, delay: minimizeMotion ? 0 : index * 0.03 }}
+                  className="flex items-start gap-3 rounded-xl border border-(--border) bg-(--bg) p-4"
+                >
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-500/15 text-success-600">
+                    <CheckCircle className="h-3.5 w-3.5" strokeWidth={2} />
+                  </span>
+                  <span className="text-sm text-(--text-secondary)">{point}</span>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section id="pricing" className="mx-auto max-w-7xl px-6 py-24 lg:px-8">
+      {/* ── Pricing ──────────────────────────────────────────────────── */}
+      <section id="pricing" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 py-24 lg:px-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-brand-600 dark:text-brand-400 text-sm font-medium">Pricing</p>
+          <SectionHeading
+            eyebrow="Pricing"
+            title="Start free, scale when your team grows."
+            description="Transparent plans with no hidden costs. Upgrade or cancel anytime."
+          />
 
-            <h2 className="mt-3 text-4xl font-semibold tracking-tight">
-              Start free, scale when your team grows.
-            </h2>
-          </div>
-
-          <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark inline-flex rounded-xl border p-1">
-            {["monthly", "annual"].map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setBilling(option)}
-                className={[
-                  "rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors",
-                  billing === option
-                    ? "bg-brand-600 dark:bg-brand-500 text-white"
-                    : "text-muted-foreground hover:text-foreground dark:text-muted-foreground-dark dark:hover:text-foreground-dark",
-                ].join(" ")}
-              >
-                {option}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <div className="inline-flex items-center rounded-xl border border-(--border) bg-(--bg-elevated) p-1">
+              {["monthly", "annual"].map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setBilling(option)}
+                  aria-pressed={billing === option}
+                  className={[
+                    "rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors",
+                    billing === option
+                      ? "bg-brand-600 text-white"
+                      : "text-(--text-secondary) hover:text-(--text-primary)",
+                  ].join(" ")}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+            <span className="rounded-full border border-success-500/40 bg-success-500/10 px-2.5 py-1 text-xs font-medium text-success-500">
+              Save 30%
+            </span>
           </div>
         </div>
 
         <div className="mt-12 grid gap-5 lg:grid-cols-3">
-          {pricing[billing].map((plan) => (
-            <div
-              key={plan.name}
+          {[
+            {
+              key: "free",
+              name: "Free",
+              price: billing === "monthly" ? "$0" : "$0",
+              cadence: "/forever",
+              description: "For small teams and evaluating the product.",
+              features: planFeatureLists.free.slice(0, 6).map((f) => f.name),
+              cta: "Start free",
+              highlighted: false,
+            },
+            {
+              key: "pro",
+              name: "Pro",
+              price: billing === "monthly" ? `$${PLANS.pro.priceMonthly}` : `$${PLANS.pro.priceAnnual}`,
+              cadence: billing === "monthly" ? "/member / month" : "/member / year",
+              description: "For teams shipping real products.",
+              features: planFeatureLists.pro.map((f) => f.name),
+              cta: "Start Pro",
+              highlighted: true,
+            },
+            {
+              key: "custom",
+              name: "Custom",
+              price: `From $${PLANS.custom.priceMonthly}`,
+              cadence: "/mo · configurable",
+              description: "For organizations with enterprise requirements.",
+              features: planFeatureLists.custom,
+              cta: "Build custom plan",
+              highlighted: false,
+            },
+          ].map((plan, index) => (
+            <motion.div
+              key={plan.key}
+              {...fadeUp}
+              transition={{ ...fadeUp.transition, delay: minimizeMotion ? 0 : index * 0.06 }}
               className={[
-                "bg-surface dark:bg-surface-dark rounded-3xl border p-6",
-                plan.highlighted
-                  ? "border-brand-500 shadow-md"
-                  : "border-border dark:border-border-dark",
+                "relative flex flex-col rounded-2xl border p-6 lg:p-7",
+                plan.highlighted ? "border-brand-500/60 shadow-lg" : "border-(--border) bg-(--bg-elevated)",
               ].join(" ")}
             >
-              {plan.highlighted ? <Badge>Most popular</Badge> : null}
-
-              <h3 className="mt-5 text-xl font-semibold">{plan.name}</h3>
-
-              <p className="text-muted-foreground dark:text-muted-foreground-dark mt-2 text-sm leading-relaxed">
-                {plan.description}
-              </p>
-
-              <div className="mt-6 flex items-end gap-2">
-                <span className="text-4xl font-semibold">{plan.price}</span>
-
-                {plan.price !== "$0" && plan.price !== "Custom" ? (
-                  <span className="text-muted-foreground dark:text-muted-foreground-dark pb-1 text-sm">
-                    /{billing === "monthly" ? "month" : "year"}
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-(--text-primary)">{plan.name}</h3>
+                {plan.highlighted ? (
+                  <span className="rounded-full border border-brand-500/40 bg-brand-500/10 px-2.5 py-1 text-xs font-medium text-brand-500">
+                    Most popular
                   </span>
                 ) : null}
               </div>
 
-              <div className="mt-6 space-y-3">
+              <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
+                {plan.description}
+              </p>
+
+              <div className="mt-6 flex items-end gap-2">
+                <span className="text-4xl font-bold tracking-tight text-(--text-primary)">
+                  {plan.price}
+                </span>
+                <span className="pb-1 text-sm text-(--text-tertiary)">{plan.cadence}</span>
+              </div>
+
+              <div className="mt-6 flex-1 space-y-3">
                 {plan.features.map((feature) => (
                   <div key={feature} className="flex items-center gap-3">
-                    <Check className="text-success-500 h-4 w-4" strokeWidth={1.7} />
-                    <span className="text-muted-foreground dark:text-muted-foreground-dark text-sm">
-                      {feature}
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-500/15 text-success-600">
+                      <Check className="h-3 w-3" strokeWidth={2.5} />
                     </span>
+                    <span className="text-sm text-(--text-secondary)">{feature}</span>
                   </div>
                 ))}
               </div>
@@ -451,92 +955,159 @@ export function LandingPageClient() {
                 className="mt-8 w-full"
                 variant={plan.highlighted ? "primary" : "secondary"}
               >
-                <Link href="/register">{plan.cta}</Link>
+                <Link href={plan.key === "custom" ? "/pricing#custom" : "/register"}>
+                  {plan.cta}
+                </Link>
               </Button>
-            </div>
+            </motion.div>
           ))}
         </div>
+
+        <p className="mt-8 text-center text-sm text-(--text-tertiary)">
+          Need custom roles, audit logs, or SSO?{" "}
+          <Link href="/pricing#custom" className="font-medium text-brand-500 hover:text-brand-400">
+            Build a custom plan
+          </Link>{" "}
+          or{" "}
+          <Link href="/contact" className="font-medium text-brand-500 hover:text-brand-400">
+            talk to sales
+          </Link>
+          .
+        </p>
       </section>
 
-      <section
-        id="faq"
-        className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark border-y py-24"
-      >
-        <div className="mx-auto max-w-4xl px-6 lg:px-8">
-          <div className="text-center">
-            <p className="text-brand-600 dark:text-brand-400 text-sm font-medium">FAQ</p>
+      {/* ── FAQ ──────────────────────────────────────────────────────── */}
+      <section id="faq" className="mx-auto w-full max-w-4xl scroll-mt-20 px-6 pb-24 lg:px-8">
+        <SectionHeading
+          eyebrow="FAQ"
+          title="Questions teams ask before switching."
+          align="center"
+        />
 
-            <h2 className="mt-3 text-4xl font-semibold tracking-tight">
-              Questions teams ask before switching.
-            </h2>
-          </div>
-
-          <div className="mt-12 space-y-3">
-            {faqs.map((faq) => {
-              const isOpen = openFaq === faq.question;
-
-              return (
-                <div
-                  key={faq.question}
-                  className="border-border bg-background dark:border-border-dark dark:bg-background-dark rounded-2xl border"
+        <div className="mt-12 space-y-3">
+          {faqs.map((faq, index) => {
+            const isOpen = openFaq === faq.question;
+            return (
+              <div
+                key={faq.question}
+                className="overflow-hidden rounded-2xl border border-(--border) bg-(--bg-elevated)"
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenFaq(isOpen ? "" : faq.question)}
+                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+                  aria-expanded={isOpen}
+                  aria-controls={`faq-panel-${index}`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaq(isOpen ? "" : faq.question)}
-                    className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-                    aria-expanded={isOpen}
-                  >
-                    <span className="text-sm font-semibold">{faq.question}</span>
+                  <span className="text-sm font-semibold text-(--text-primary)">
+                    {faq.question}
+                  </span>
+                  <ChevronDown
+                    className={[
+                      "h-4 w-4 shrink-0 transition-transform duration-200",
+                      isOpen ? "rotate-180 text-brand-500" : "text-(--text-tertiary)",
+                    ].join(" ")}
+                    strokeWidth={1.7}
+                  />
+                </button>
 
-                    <ChevronDown
-                      className={["h-4 w-4 transition-transform", isOpen ? "rotate-180" : ""].join(
-                        " "
-                      )}
-                      strokeWidth={1.7}
-                    />
-                  </button>
-
-                  {isOpen ? (
-                    <div className="text-muted-foreground dark:text-muted-foreground-dark px-5 pb-5 text-sm leading-relaxed">
+                <div
+                  id={`faq-panel-${index}`}
+                  role="region"
+                  aria-labelledby={`faq-button-${index}`}
+                  className={[
+                    "grid transition-all duration-200 ease-out",
+                    isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                  ].join(" ")}
+                >
+                  <div className="overflow-hidden">
+                    <p className="px-5 pb-5 text-sm leading-relaxed text-(--text-secondary)">
                       {faq.answer}
-                    </div>
-                  ) : null}
+                    </p>
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── Contact ──────────────────────────────────────────────────── */}
+      <section
+        id="contact"
+        className="scroll-mt-20 border-t border-(--border) bg-(--bg-elevated) py-24"
+      >
+        <div className="mx-auto w-full max-w-7xl px-6 lg:px-8">
+          <div className="grid items-start gap-12 lg:grid-cols-2">
+            <div>
+              <SectionHeading
+                eyebrow="Contact"
+                title="Talk to a human."
+                description="Sales, support, partnerships, or feedback all the same inbox. We usually reply within one business day."
+              />
+              <div className="mt-8 space-y-4 text-sm text-(--text-secondary)">
+                <p>
+                  <strong className="text-(--text-primary)">Sales</strong>{" "}
+                  <Link href="/pricing" className="font-medium text-brand-500 hover:text-brand-400">
+                    see pricing
+                  </Link>{" "}
+                  or email{" "}
+                  <a href="mailto:sales@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+                    sales@flexflow.app
+                  </a>
+                </p>
+                <p>
+                  <strong className="text-(--text-primary)">Support</strong> find answers in the{" "}
+                  <Link href="/help" className="font-medium text-brand-500 hover:text-brand-400">
+                    help center
+                  </Link>{" "}
+                  or email{" "}
+                  <a href="mailto:support@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+                    support@flexflow.app
+                  </a>
+                </p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-(--border) bg-(--bg) p-6">
+              <ContactForm />
+            </div>
           </div>
         </div>
       </section>
 
-      <footer className="mx-auto max-w-7xl px-6 py-20 lg:px-8">
-        <div className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-[2rem] border p-8 text-center lg:p-12">
-          <div className="bg-brand-600 dark:bg-brand-500 mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-white">
-            <Zap className="h-6 w-6" strokeWidth={1.7} />
-          </div>
+      {/* ── Final CTA ────────────────────────────────────────────────── */}
+      <section className="mx-auto w-full max-w-7xl px-6 py-24 lg:px-8">
+        <div className="relative overflow-hidden rounded-2xl border border-brand-500/40 bg-brand-600 px-6 py-16 text-center lg:px-12 lg:py-20">
+          <div className="relative">
+            <h2 className="mx-auto max-w-2xl text-balance text-3xl font-semibold tracking-tight text-white md:text-4xl">
+              Give your team a workspace that remembers.
+            </h2>
 
-          <h2 className="mx-auto mt-6 max-w-2xl text-4xl font-semibold tracking-tight">
-            Give your team a cleaner way to plan, collaborate, and ship.
-          </h2>
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-white/70 md:text-base">
+              Start with a polished workspace and scale into full role-based access control,
+              review workflows, analytics, and Team Intelligence when you&apos;re ready.
+            </p>
 
-          <p className="text-muted-foreground dark:text-muted-foreground-dark mx-auto mt-4 max-w-xl text-sm leading-relaxed">
-            Start with a polished workspace foundation and scale into full RBAC, analytics, and
-            collaboration workflows.
-          </p>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <Button asChild size="lg" className="bg-white text-brand-700 shadow-md hover:bg-white/90">
+                <Link href="/register">
+                  Create workspace
+                  <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
+                </Link>
+              </Button>
 
-          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button asChild size="lg">
-              <Link href="/register">
-                Create workspace
-                <ArrowRight className="h-4 w-4" strokeWidth={1.7} />
-              </Link>
-            </Button>
-
-            <Button asChild variant="secondary" size="lg">
-              <Link href="/login">Sign in</Link>
-            </Button>
+              <Button
+                asChild
+                variant="ghost"
+                size="lg"
+                className="text-white hover:bg-white/10 hover:text-white"
+              >
+                <Link href="/login">Sign in</Link>
+              </Button>
+            </div>
           </div>
         </div>
-      </footer>
+      </section>
     </main>
   );
 }

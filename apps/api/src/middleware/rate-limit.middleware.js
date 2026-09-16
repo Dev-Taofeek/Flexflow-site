@@ -1,10 +1,10 @@
 import rateLimit from "express-rate-limit";
 
-import { errorResponse } from "./tils/api-response.js";
+import { errorResponse } from "../utils/api-response.js";
 
 export const authRateLimiter = rateLimit({
     windowMs: 60 * 1000,
-    limit: 5,
+    limit: 10,
     standardHeaders: true,
     legacyHeaders: false,
     handler(req, res) {

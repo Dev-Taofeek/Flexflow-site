@@ -1,0 +1,15 @@
+{
+  "name": "flexflow-dev-db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Embedded PostgreSQL for FlexFlow local development (no Docker/installer). Persists data in ./data. Matches apps/api/.env (127.0.0.1:5433, postgres/flexflow-dev-pass, db: flexflow).",
+  "type": "module",
+  "main": "db.js",
+  "scripts": {
+    "start": "node db.js",
+    "stop": "node db.js --stop"
+  },
+  "dependencies": {
+    "embedded-postgres": "16.14.0-beta.17"
+  }
+}

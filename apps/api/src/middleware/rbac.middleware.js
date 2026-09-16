@@ -1,14 +1,10 @@
-import { prisma } from "./lib/prisma.js";
-import { errorResponse } from "./utils/api-response.js";
+import { errorResponse } from "../utils/api-response.js";
+import { checkPermission, resolveWorkspaceId } from "../lib/permissions.js";
 
 export function authorize(resource, action) {
     return async function rbacMiddleware(req, res, next) {
         try {
             const userId = req.user?.id;
-            const workspaceId =
-                req.params.workspaceId ||
-                req.body?.workspaceId ||
-                req.query?.workspaceId;
 
             if (!userId) {
                 return res
@@ -21,6 +17,8 @@ export function authorize(resource, action) {
                     );
             }
 
+            const workspaceId = await resolveWorkspaceId(req);
+
             if (!workspaceId) {
                 return res
                     .status(400)
@@ -32,29 +30,15 @@ export function authorize(resource, action) {
                     );
             }
 
-            const roleAssignment = await prisma.roleAssignment.findFirst({
-                where: {
-                    userId,
-                    workspaceId,
-                    role: {
-                        permissions: {
-                            some: {
-                                resource,
-                                action,
-                            },
-                        },
-                    },
-                },
-                include: {
-                    role: {
-                        include: {
-                            permissions: true,
-                        },
-                    },
-                },
-            });
+            const { allowed, member } = await checkPermission(workspaceId, userId, resource, action);
 
-            if (!roleAssignment) {
+            if (!member) {
+                return res
+                    .status(403)
+                    .json(errorResponse("FORBIDDEN", "Not a workspace member"));
+            }
+
+            if (!allowed) {
                 return res
                     .status(403)
                     .json(
@@ -65,12 +49,8 @@ export function authorize(resource, action) {
                     );
             }
 
-            req.permission = {
-                resource,
-                action,
-                roleId: roleAssignment.roleId,
-                roleName: roleAssignment.role.name,
-            };
+            req.workspaceMember = member;
+            req.permission = { resource, action };
 
             next();
         } catch (error) {

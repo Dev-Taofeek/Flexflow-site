@@ -2,94 +2,14 @@ import { Router } from "express";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { authorize } from "../middleware/rbac.middleware.js";
+import { enforceFeature } from "../lib/entitlements.js";
 import { notifyUser } from "../services/notification.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
+import { resources, roleSeeds, ensureRoles, checkPermission } from "../lib/permissions.js";
 
 const router = Router();
 router.use(authenticate);
-
-const resources = [
-    { id: "projects", label: "Projects", actions: ["create", "read", "update", "delete"] },
-    { id: "issues", label: "Issues", actions: ["create", "read", "update", "delete"] },
-    { id: "comments", label: "Comments", actions: ["create", "read", "update", "delete"] },
-    { id: "team", label: "Team", actions: ["invite", "read", "update", "remove"] },
-    { id: "settings", label: "Settings", actions: ["read", "update", "billing", "danger_zone"] },
-];
-
-const roleSeeds = [
-    {
-        name: "Owner",
-        permissions: {
-            projects: ["create", "read", "update", "delete"],
-            issues: ["create", "read", "update", "delete"],
-            comments: ["create", "read", "update", "delete"],
-            team: ["invite", "read", "update", "remove"],
-            settings: ["read", "update", "billing", "danger_zone"],
-        },
-    },
-    {
-        name: "Admin",
-        permissions: {
-            projects: ["create", "read", "update", "delete"],
-            issues: ["create", "read", "update", "delete"],
-            comments: ["create", "read", "update", "delete"],
-            team: ["invite", "read", "update"],
-            settings: ["read", "update"],
-        },
-    },
-    {
-        name: "Member",
-        permissions: {
-            projects: ["read"],
-            issues: ["create", "read", "update"],
-            comments: ["create", "read", "update"],
-            team: ["read"],
-            settings: ["read"],
-        },
-    },
-    {
-        name: "Viewer",
-        permissions: {
-            projects: ["read"],
-            issues: ["read"],
-            comments: ["read"],
-            team: ["read"],
-            settings: ["read"],
-        },
-    },
-];
-
-async function assertWorkspaceAdmin(workspaceId, userId) {
-    if (!workspaceId) return null;
-    const member = await prisma.workspaceMember.findUnique({
-        where: { workspaceId_userId: { workspaceId, userId } },
-    });
-    return member && ["OWNER", "ADMIN"].includes(member.role) ? member : null;
-}
-
-async function ensureRoles(workspaceId) {
-    for (const seed of roleSeeds) {
-        const role = await prisma.role.upsert({
-            where: { workspaceId_name: { workspaceId, name: seed.name } },
-            update: {},
-            create: {
-                workspaceId,
-                name: seed.name,
-                isSystemRole: true,
-            },
-        });
-
-        const existing = await prisma.permission.count({ where: { roleId: role.id } });
-        if (existing === 0) {
-            const data = Object.entries(seed.permissions).flatMap(([resource, actions]) =>
-                actions.map((action) => ({ roleId: role.id, resource, action })),
-            );
-            if (data.length > 0) {
-                await prisma.permission.createMany({ data, skipDuplicates: true });
-            }
-        }
-    }
-}
 
 async function getMatrix(workspaceId) {
     await ensureRoles(workspaceId);
@@ -118,25 +38,29 @@ async function getMatrix(workspaceId) {
     };
 }
 
-router.get("/", async (req, res) => {
+router.get("/", authorize("roles", "read"), async (req, res) => {
     try {
         const { workspaceId } = req.query;
-        const member = await assertWorkspaceAdmin(workspaceId, req.user.id);
-        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
+        const { allowed: canEdit } = await checkPermission(workspaceId, req.user.id, "roles", "update");
 
-        return res.status(200).json(successResponse(await getMatrix(workspaceId)));
+        return res.status(200).json(successResponse({ ...(await getMatrix(workspaceId)), canEdit }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch roles"));
     }
 });
 
-router.patch("/", async (req, res) => {
+router.patch("/", authorize("roles", "update"), async (req, res) => {
     try {
         const { workspaceId, role, resource, action, enabled } = req.body;
-        const member = await assertWorkspaceAdmin(workspaceId, req.user.id);
-        if (!member) return res.status(403).json(errorResponse("FORBIDDEN", "Insufficient permissions"));
         if (role === "Owner") return res.status(403).json(errorResponse("LOCKED_ROLE", "Owner permissions cannot be changed"));
+
+        // Editing the permission matrix is a paid entitlement: PRO can tune the
+        // built-in matrix; CUSTOM adds unlimited custom roles on top.
+        const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+        if (!workspace) return res.status(404).json(errorResponse("NOT_FOUND", "Workspace not found"));
+        const entitlements = await enforceFeature(req, res, workspace.organizationId, "customizable_permissions");
+        if (!entitlements) return;
 
         const foundResource = resources.find((item) => item.id === resource);
         if (!foundResource || !foundResource.actions.includes(action)) {

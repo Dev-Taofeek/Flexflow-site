@@ -1,10 +1,17 @@
 @import "tailwindcss";
 
+/* Class-based dark mode: the app ships dark-first. The `.dark` class is applied
+   to <html> by the preference system (which also sets `data-theme`). Multiple
+   curated themes share this base; each theme overrides the semantic variables.
+   Base styles here define the full token universe. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "Cascadia Code", monospace;
 
-  /* Brand */
+  /* Brand — indigo, used sparingly for actions and selected states.
+     Themes may widen/override this (e.g. a bluer accent under Ocean). */
   --color-brand-50:  #eef2ff;
   --color-brand-100: #e0e7ff;
   --color-brand-200: #c7d2fe;
@@ -32,16 +39,28 @@
 
   /* Status */
   --color-success-50:  #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-300: #86efac;
+  --color-success-400: #4ade80;
   --color-success-500: #22c55e;
   --color-success-600: #16a34a;
+  --color-success-700: #15803d;
 
   --color-warning-50:  #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-300: #fcd34d;
+  --color-warning-400: #fbbf24;
   --color-warning-500: #f59e0b;
   --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
 
   --color-danger-50:   #fef2f2;
+  --color-danger-100:  #fee2e2;
+  --color-danger-300:  #fca5a5;
+  --color-danger-400:  #f87171;
   --color-danger-500:  #ef4444;
   --color-danger-600:  #dc2626;
+  --color-danger-700:  #b91c1c;
 
   /* Font sizes */
   --font-size-2xs: 0.625rem;
@@ -54,25 +73,61 @@
   --font-size-3xl: 1.875rem;
   --font-size-4xl: 2.25rem;
 
-  /* Radius */
+  /* Radius — intentionally restrained. Cards use `lg`/`xl` at most. */
   --radius-sm:  0.25rem;
   --radius-md:  0.375rem;
   --radius-lg:  0.5rem;
   --radius-xl:  0.75rem;
   --radius-2xl: 1rem;
-  --radius-3xl: 1.5rem;
+  --radius-3xl: 1.25rem;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.06), 0 4px 6px -4px rgb(0 0 0 / 0.04);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+  /* Shadows — subtle; separation relies on borders + elevation, not drop shadows */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --shadow-md: 0 2px 4px 0 rgb(0 0 0 / 0.06), 0 4px 8px -2px rgb(0 0 0 / 0.08);
+  --shadow-lg: 0 4px 8px 0 rgb(0 0 0 / 0.06), 0 12px 24px -6px rgb(0 0 0 / 0.16);
+  --shadow-xl: 0 8px 16px 0 rgb(0 0 0 / 0.08), 0 20px 40px -12px rgb(0 0 0 / 0.24);
 }
 
-/* Light mode */
+/* Semantic tokens wired to the raw CSS variables below (inline refs so they
+   re-resolve on each element and flip automatically per theme). */
+@theme inline {
+  --color-background:       var(--bg);
+  --color-foreground:       var(--text-primary);
+  --color-surface:          var(--bg-elevated);
+  --color-muted:            var(--bg-sunken);
+  --color-muted-foreground: var(--text-tertiary);
+  --color-border:           var(--border);
+  --color-border-strong:    var(--border-strong);
+  --color-overlay:          var(--bg-overlay);
+
+  --color-background-dark:       var(--bg);
+  --color-foreground-dark:       var(--text-primary);
+  --color-surface-dark:          var(--bg-elevated);
+  --color-muted-dark:            var(--bg-sunken);
+  --color-muted-foreground-dark: var(--text-tertiary);
+  --color-border-dark:           var(--border);
+  --color-border-strong-dark:    var(--border-strong);
+  --color-overlay-dark:          var(--bg-overlay);
+
+  --color-input:            var(--bg-elevated);
+  --color-ring:             var(--ring);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Theme palettes.
+   The default (no attribute) is LIGHT. `.dark` flips to DARK. The `data-theme`
+   attribute enables the curated themes; each block overrides just the
+   variables that differ. The accent palette is swappable per theme so the
+   whole application (every `brand-*` utility maps to these vars) recolors
+   instantly when a theme is selected.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Light mode — the default. */
 :root {
+  color-scheme: light;
+
   --bg:          #fafafa;
   --bg-elevated: #ffffff;
   --bg-sunken:   #f4f4f5;
@@ -91,30 +146,232 @@
   --sidebar-item-active-bg: #f4f4f5;
   --sidebar-item-hover-bg:  #f4f4f5;
 
-  --ring:        rgba(99,102,241,0.3);
+  --ring: rgba(99,102,241,0.3);
 }
 
-/* Dark mode */
+/* Dark mode — the default (set on <html class="dark">). */
 .dark {
-  --bg:          #0a0a0b;
-  --bg-elevated: #111113;
+  color-scheme: dark;
+
+  --bg:          #0c0c0e;
+  --bg-elevated: #131316;
+  --bg-sunken:   #0c0c0e;
+  --bg-overlay:  rgba(255,255,255,0.06);
+
+  --border:      #222226;
+  --border-strong: #2e2e33;
+
+  --text-primary:   #f5f5f6;
+  --text-secondary: #a3a3ab;
+  --text-tertiary:  #75757d;
+  --text-muted:     #52525a;
+
+  --sidebar-bg:     #101014;
+  --sidebar-border: #222226;
+  --sidebar-item-active-bg: #1d1d22;
+  --sidebar-item-hover-bg:  #19191e;
+
+  --ring: rgba(129,140,248,0.45);
+}
+
+/* ── Dim — a softer, less saturated dark theme. Easy on the eyes at night. */
+[data-theme="dim"]:is(.dark) {
+  color-scheme: dark;
+
+  --bg:          #09090a;
+  --bg-elevated: #0f0f11;
   --bg-sunken:   #0a0a0b;
-  --bg-overlay:  rgba(255,255,255,0.04);
+  --bg-overlay:  rgba(255,255,255,0.05);
 
-  --border:      #1f1f23;
-  --border-strong: #27272a;
+  --border:      #1a1a1d;
+  --border-strong: #232327;
 
-  --text-primary:   #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-tertiary:  #71717a;
-  --text-muted:     #52525b;
+  --text-primary:   #e8e8ea;
+  --text-secondary: #9a9aa1;
+  --text-tertiary:  #6b6b72;
+  --text-muted:     #47474d;
 
-  --sidebar-bg:     #111113;
-  --sidebar-border: #1f1f23;
-  --sidebar-item-active-bg: #1f1f23;
-  --sidebar-item-hover-bg:  #1a1a1e;
+  --sidebar-bg:     #0c0c0e;
+  --sidebar-border: #1a1a1d;
+  --sidebar-item-active-bg: #16161a;
+  --sidebar-item-hover-bg:  #131316;
+}
 
-  --ring: rgba(99,102,241,0.4);
+/* ── High contrast — pure black + white, strong borders, max readability. */
+[data-theme="high-contrast"]:is(.dark) {
+  color-scheme: dark;
+
+  --bg:          #000000;
+  --bg-elevated: #0a0a0a;
+  --bg-sunken:   #000000;
+  --bg-overlay:  rgba(255,255,255,0.1);
+
+  --border:      #4a4a4a;
+  --border-strong: #7a7a7a;
+
+  --text-primary:   #ffffff;
+  --text-secondary: #e0e0e0;
+  --text-tertiary:  #b0b0b0;
+  --text-muted:     #8f8f8f;
+
+  --sidebar-bg:     #000000;
+  --sidebar-border: #4a4a4a;
+  --sidebar-item-active-bg: #1a1a1a;
+  --sidebar-item-hover-bg:  #141414;
+
+  --ring: rgba(255,255,255,0.85);
+}
+
+/* ── Ocean — a calm blue-tinted palette for focus-friendly deep work. */
+[data-theme="ocean"]:is(.dark) {
+  color-scheme: dark;
+
+  --bg:          #0a0f1c;
+  --bg-elevated: #101828;
+  --bg-sunken:   #0c1220;
+  --bg-overlay:  rgba(255,255,255,0.06);
+
+  --border:      #1c2a42;
+  --border-strong: #263652;
+
+  --text-primary:   #f0f4ff;
+  --text-secondary: #b3c1d8;
+  --text-tertiary:  #7b8aa5;
+  --text-muted:     #56647f;
+
+  --sidebar-bg:     #0d1424;
+  --sidebar-border: #1c2a42;
+  --sidebar-item-active-bg: #17223a;
+  --sidebar-item-hover-bg:  #131d31;
+
+  --ring: rgba(96,165,250,0.5);
+
+  /* Shift the brand accent to a clearer ocean blue. */
+  --color-brand-50:  #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+  --color-brand-900: #1e3a8a;
+}
+
+/* ── Midnight — deep, near-black navy with a cool violet light. */
+[data-theme="midnight"]:is(.dark) {
+  color-scheme: dark;
+
+  --bg:          #0b0a11;
+  --bg-elevated: #12111b;
+  --bg-sunken:   #0e0d15;
+  --bg-overlay:  rgba(255,255,255,0.06);
+
+  --border:      #232033;
+  --border-strong: #2f2a45;
+
+  --text-primary:   #f2f0fa;
+  --text-secondary: #b4afc9;
+  --text-tertiary:  #7c768f;
+  --text-muted:     #57516a;
+
+  --sidebar-bg:     #0e0d16;
+  --sidebar-border: #232033;
+  --sidebar-item-active-bg: #1b1830;
+  --sidebar-item-hover-bg:  #16142a;
+
+  --ring: rgba(167,139,250,0.5);
+}
+
+/* Light variants of the extra themes. When a dark-oriented curated theme is
+   chosen the preference system forces `.dark`; these light blocks exist so
+   `data-theme` never produces an illegible page even if class state races. */
+[data-theme="dim"]:not(.dark),
+[data-theme="ocean"]:not(.dark),
+[data-theme="midnight"]:not(.dark),
+[data-theme="high-contrast"]:not(.dark) {
+  color-scheme: light;
+
+  --bg:          #f8f8fa;
+  --bg-elevated: #ffffff;
+  --bg-sunken:   #f2f2f5;
+  --bg-overlay:  rgba(0,0,0,0.04);
+  --border:      #e2e2e8;
+  --border-strong: #cfcfd8;
+  --text-primary:   #14141a;
+  --text-secondary: #4c4c57;
+  --text-tertiary:  #6b6b76;
+  --text-muted:     #9a9aa4;
+  --sidebar-bg:     #ffffff;
+  --sidebar-border: #e2e2e8;
+  --sidebar-item-active-bg: #f2f2f5;
+  --sidebar-item-hover-bg:  #f2f2f5;
+  --ring: rgba(99,102,241,0.3);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Accessibility preference hooks
+   These are driven by real attributes the PreferencesContext sets on <html>,
+   so every enabled control genuinely changes the rendered page.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* Font-size scaling — rem-based Tailwind sizing rescales with it. */
+html[data-font-size="sm"] { font-size: 14px; }
+html[data-font-size="base"] { font-size: 16px; }
+html[data-font-size="lg"] { font-size: 18px; }
+html[data-font-size="xl"] { font-size: 20px; }
+
+/* Focus visibility — "high" paints an unmistakable ring; "off" keeps a subtle
+   outline for non-keyboard users (keyboard navigation keeps `:focus-visible`). */
+html[data-focus-visible="high"] {
+  --ring: rgba(99,102,241,0.65);
+}
+html[data-focus-visible="high"] :focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Text spacing — WCAG 1.4.12 widow-safe spacing for readability. */
+html[data-text-spacing="true"] {
+  letter-spacing: 0.06em;
+  word-spacing: 0.08em;
+}
+html[data-text-spacing="true"] h1,
+html[data-text-spacing="true"] h2,
+html[data-text-spacing="true"] h3,
+html[data-text-spacing="true"] p,
+html[data-text-spacing="true"] li,
+html[data-text-spacing="true"] label {
+  line-height: 1.6;
+}
+
+/* High-contrast toggle — further strengthens borders and text contrast. */
+html[data-high-contrast="true"] {
+  --border: var(--border-strong);
+}
+html[data-high-contrast="true"] :root,
+html[data-high-contrast="true"] body,
+html[data-high-contrast="true"] [data-high-contrast="true"] {
+  --text-secondary: var(--text-primary);
+  --text-tertiary: var(--text-secondary);
+}
+html[data-high-contrast="true"] ::selection {
+  background: rgba(99,102,241,0.45);
+}
+
+/* Reduced motion — kill CSS animations/transitions app-wide. */
+html[data-reduced-motion="true"] {
+  scroll-behavior: auto;
+}
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 /* Base */
@@ -139,25 +396,31 @@ body {
   line-height: 1.5;
 }
 
+/* RTL — mirror the UI when the document direction is set. */
+[dir="rtl"] {
+  text-align: right;
+}
+[dir="rtl"] .ltr\:text-left { text-align: left; }
+
 /* Selection */
 ::selection {
-  background: rgba(99,102,241,0.15);
+  background: rgba(129,140,248,0.28);
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
-/* Focus */
+/* Focus — global accessible focus ring */
 :focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid var(--ring, #6366f1);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* Typography scale */
+/* Typography scale — tight tracking, strong hierarchy */
 h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.3; }
 h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.015em; line-height: 1.4; }
 h3 { font-size: 1rem; font-weight: 600; line-height: 1.4; }
@@ -169,4 +432,58 @@ h3 { font-size: 1rem; font-weight: 600; line-height: 1.4; }
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Motion utilities (tailwindcss-animate-style class names used by the UI kit) */
+@utility animate-in {
+  animation-duration: 150ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+  animation-name: flexflow-enter;
+}
+@utility animate-out {
+  animation-duration: 150ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  animation-fill-mode: both;
+  animation-name: flexflow-exit;
+}
+@utility fade-in-0 { --tw-enter-opacity: 0; }
+@utility fade-out-0 { --tw-exit-opacity: 0; }
+@utility zoom-in-95  { --tw-enter-scale: 0.95; --tw-exit-scale: 0.95; }
+@utility zoom-out-95 { --tw-enter-scale: 1.05; --tw-exit-scale: 1.05; }
+
+@keyframes flexflow-enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+      scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), 1)
+      rotate(var(--tw-enter-rotate, 0));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes flexflow-exit {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: var(--tw-exit-opacity, 1);
+    transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0)
+      scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), 1)
+      rotate(var(--tw-exit-rotate, 0));
+  }
+}
+
+/* Respect users who prefer reduced motion (OS-level). */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

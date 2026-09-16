@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { signIn } from "next-auth/react";
 
 import { AuthShell } from "@/components/auth/AuthShell";
@@ -12,10 +12,14 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiUrl } from "@/lib/api-url";
 import { useToast } from "@/contexts/ToastContext";
+import { useI18n } from "@/i18n";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { addToast } = useToast();
+  const { t } = useI18n();
+  const callbackUrl = searchParams.get("callbackUrl") || "/onboarding";
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,9 +28,9 @@ export default function RegisterPage() {
 
   function validate() {
     const errors = {};
-    if (!form.name.trim()) errors.name = "Full name is required";
-    if (!form.email.includes("@")) errors.email = "Valid email is required";
-    if (form.password.length < 8) errors.password = "Password must be at least 8 characters";
+    if (!form.name.trim()) errors.name = t("auth.error.fullNameRequired");
+    if (!form.email.includes("@")) errors.email = t("auth.error.validEmailRequired");
+    if (form.password.length < 8) errors.password = t("auth.error.passwordMin");
     return errors;
   }
 
@@ -48,7 +52,7 @@ export default function RegisterPage() {
         body: JSON.stringify(form),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error?.message || "Registration failed");
+      if (!res.ok || !json.success) throw new Error(json.error?.message || t("auth.error.registrationFailed"));
 
       // Sign in immediately after registration
       const result = await signIn("credentials", {
@@ -57,9 +61,9 @@ export default function RegisterPage() {
         redirect: false,
       });
 
-      if (result?.error) throw new Error("Auto-login failed — please sign in manually");
-      addToast("Account created.", "success");
-      router.push("/onboarding");
+      if (result?.error) throw new Error(t("auth.error.autoLoginFailed"));
+      addToast(t("auth.toast.accountCreated"), "success");
+      router.push(callbackUrl);
     } catch (err) {
       setError(err.message);
       addToast(err.message, "error");
@@ -70,19 +74,19 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
-      title="Create your account"
-      description="Get started with FlexFlow — manage projects and collaborate with your team."
+      title={t("auth.createAccount")}
+      description={t("auth.createAccountDescription")}
     >
       <form onSubmit={onSubmit} className="space-y-5">
         <FormField
           id="name"
-          label="Full name"
+          label={t("auth.fullName")}
           error={fieldErrors.name ? { message: fieldErrors.name } : undefined}
         >
           <Input
             id="name"
             type="text"
-            placeholder="Jane Smith"
+            placeholder={t("auth.namePlaceholder")}
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             isInvalid={Boolean(fieldErrors.name)}
@@ -91,13 +95,13 @@ export default function RegisterPage() {
 
         <FormField
           id="email"
-          label="Work email"
+          label={t("auth.workEmail")}
           error={fieldErrors.email ? { message: fieldErrors.email } : undefined}
         >
           <Input
             id="email"
             type="email"
-            placeholder="you@company.com"
+            placeholder={t("auth.emailPlaceholder")}
             value={form.email}
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
             isInvalid={Boolean(fieldErrors.email)}
@@ -106,14 +110,14 @@ export default function RegisterPage() {
 
         <FormField
           id="password"
-          label="Password"
+          label={t("auth.password")}
           error={fieldErrors.password ? { message: fieldErrors.password } : undefined}
         >
           <div className="relative">
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
-              placeholder="At least 8 characters"
+              placeholder={t("auth.passwordMinPlaceholder")}
               value={form.password}
               onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
               className="pr-10"
@@ -121,7 +125,7 @@ export default function RegisterPage() {
             />
             <button
               type="button"
-              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
               onClick={() => setShowPassword((s) => !s)}
               className="absolute top-1/2 right-3 -translate-y-1/2 text-(--text-muted) transition-colors hover:text-(--text-secondary)"
             >
@@ -136,21 +140,35 @@ export default function RegisterPage() {
           </p>
         )}
 
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Create account
+        <Button type="submit" className="w-full" isLoading={loading}>
+          {t("auth.createAccountButton")}
         </Button>
 
-        <p className="text-center text-sm text-(--text-muted)">
-          Already have an account?{" "}
+        <p className="text-muted-foreground text-center text-sm">
+          {t("auth.alreadyHaveAccount")}{" "}
           <Link
-            href="/login"
-            className="font-medium text-indigo-600 transition-colors hover:text-indigo-500"
+            href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+            className="text-brand-600 hover:text-brand-500 font-medium transition-colors"
           >
-            Sign in
+            {t("common.signIn")}
           </Link>
         </p>
       </form>
     </AuthShell>
+  );
+}
+
+export default function RegisterPage() {
+  const { t } = useI18n();
+  return (
+    <Suspense
+      fallback={
+        <AuthShell title={t("auth.createAccount")} description={t("auth.suspense.createAccountDescription")}>
+          <div className="h-64 animate-pulse rounded-xl bg-gray-100" />
+        </AuthShell>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }

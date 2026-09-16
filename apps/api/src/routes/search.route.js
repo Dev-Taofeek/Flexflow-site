@@ -10,7 +10,7 @@ router.get("/", async (req, res) => {
     const { q, workspaceId } = req.query;
 
     if (!q || q.trim().length < 2) {
-        return res.status(200).json(successResponse({ issues: [], projects: [], members: [] }));
+        return res.status(200).json(successResponse({ tasks: [], projects: [], members: [] }));
     }
 
     const query = q.trim();
@@ -23,9 +23,20 @@ router.get("/", async (req, res) => {
         });
         const orgIds = memberships.map((m) => m.organizationId);
 
-        const [issues, projects, members] = await Promise.all([
+        // Workspace-scoped search must only reach workspaces the user belongs to
+        if (workspaceId) {
+            const member = await prisma.workspaceMember.findUnique({
+                where: { workspaceId_userId: { workspaceId, userId: req.user.id } },
+                select: { id: true },
+            });
+            if (!member) {
+                return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
+            }
+        }
+
+        const [tasks, projects, members] = await Promise.all([
             workspaceId
-                ? prisma.issue.findMany({
+                ? prisma.task.findMany({
                       where: {
                           project: { workspaceId },
                           OR: [
@@ -63,7 +74,7 @@ router.get("/", async (req, res) => {
             }),
         ]);
 
-        return res.status(200).json(successResponse({ issues, projects, members }));
+        return res.status(200).json(successResponse({ tasks, projects, members }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Search failed"));

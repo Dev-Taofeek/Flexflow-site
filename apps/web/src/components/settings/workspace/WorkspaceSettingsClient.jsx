@@ -1,84 +1,89 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, LayoutGrid, Lock } from "lucide-react";
+import { ImagePlus, LayoutGrid, Plus, Tag, X } from "lucide-react";
 import Image from "next/image";
 
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { PremiumModal } from "@/components/ui/PremiumModal";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useRole } from "@/hooks/useRole";
+import { imageFileToLogoDataUrl } from "@/lib/image-upload";
 import { fetchWorkspace, updateWorkspace } from "@/lib/org-api";
+import { apiRequest } from "@/lib/api-client";
+import Link from "next/link";
+import { useI18n } from "@/i18n";
+
+const LABEL_COLORS = [
+  "#ef4444", "#f97316", "#f59e0b", "#eab308",
+  "#22c55e", "#10b981", "#06b6d4", "#3b82f6",
+  "#6366f1", "#8b5cf6", "#ec4899", "#64748b",
+];
 
 export function WorkspaceSettingsClient() {
-  const { isOwner, canManage } = useRole();
+  const { canManage } = useRole();
   const { currentWorkspace, accessToken, refreshOrganizations } = useApp();
   const { addToast } = useToast();
   const logoInputRef = useRef(null);
-  const [premiumModal, setPremiumModal] = useState({ open: false, feature: "", description: "" });
+  const { t } = useI18n();
+
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDescription, setWorkspaceDescription] = useState("");
   const [workspaceLogo, setWorkspaceLogo] = useState("");
   const [savingWorkspace, setSavingWorkspace] = useState(false);
-  const [columns, setColumns] = useState(["To Do", "In Progress", "In Review", "Done"]);
 
-  const [labels, setLabels] = useState([
-    {
-      id: "label-1",
-      name: "Security",
-      color: "#ef4444",
-    },
-    {
-      id: "label-2",
-      name: "Frontend",
-      color: "#6366f1",
-    },
-    {
-      id: "label-3",
-      name: "Backend",
-      color: "#22c55e",
-    },
-  ]);
+  const [labels, setLabels] = useState([]);
+  const [labelsLoading, setLabelsLoading] = useState(true);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState("#6366f1");
+  const [savingLabel, setSavingLabel] = useState(false);
+  const [deletingLabelId, setDeletingLabelId] = useState(null);
 
-  const [newColumn, setNewColumn] = useState("");
-  const [newLabel, setNewLabel] = useState("");
-  const [githubRepo, setGithubRepo] = useState("");
+  const workspaceId = currentWorkspace?.id;
 
   useEffect(() => {
-    if (!currentWorkspace?.id || !accessToken) return;
-    fetchWorkspace(currentWorkspace.id, accessToken)
+    if (!workspaceId || !accessToken) return;
+    fetchWorkspace(workspaceId, accessToken)
       .then((workspace) => {
         setWorkspaceName(workspace.name || "");
         setWorkspaceDescription(workspace.description || "");
         setWorkspaceLogo(workspace.logoUrl || "");
       })
       .catch((err) => addToast(err.message, "error"));
-  }, [currentWorkspace?.id, accessToken, addToast]);
+  }, [workspaceId, accessToken, addToast]);
 
-  function handleWorkspaceLogoUpload(event) {
+  useEffect(() => {
+    if (!workspaceId || !accessToken) return;
+    apiRequest(`/workspaces/${workspaceId}/labels`, { token: accessToken })
+      .then(setLabels)
+      .catch((err) => addToast(err.message, "error"))
+      .finally(() => setLabelsLoading(false));
+  }, [workspaceId, accessToken, addToast]);
+
+  async function handleWorkspaceLogoUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => setWorkspaceLogo(String(reader.result || ""));
-    reader.readAsDataURL(file);
+    try {
+      setWorkspaceLogo(await imageFileToLogoDataUrl(file));
+      addToast(t("settings.common.logoReady"), "success");
+    } catch (err) {
+      addToast(err.message, "error");
+    }
   }
 
   async function handleSaveWorkspace(event) {
     event.preventDefault();
-    if (!currentWorkspace?.id || !accessToken) return;
+    if (!workspaceId || !accessToken) return;
     setSavingWorkspace(true);
     try {
-      await updateWorkspace(currentWorkspace.id, {
-        name: workspaceName,
-        description: workspaceDescription,
-        logoUrl: workspaceLogo,
-      }, accessToken);
+      await updateWorkspace(
+        workspaceId,
+        { name: workspaceName, description: workspaceDescription, logoUrl: workspaceLogo },
+        accessToken,
+      );
       await refreshOrganizations();
-      addToast("Workspace updated.", "success");
+      addToast(t("settings.workspace.workspaceUpdated"), "success");
     } catch (err) {
       addToast(err.message, "error");
     } finally {
@@ -86,434 +91,281 @@ export function WorkspaceSettingsClient() {
     }
   }
 
-  function handleAddColumn(event) {
+  async function handleAddLabel(event) {
     event.preventDefault();
-
-    if (!newColumn.trim()) {
-      return;
+    if (!workspaceId || !accessToken) return;
+    if (!newLabelName.trim()) return;
+    setSavingLabel(true);
+    try {
+      const label = await apiRequest(`/workspaces/${workspaceId}/labels`, {
+        method: "POST",
+        token: accessToken,
+        body: { name: newLabelName.trim(), color: newLabelColor },
+      });
+      setLabels((current) => [...current, label]);
+      setNewLabelName("");
+      setNewLabelColor("#6366f1");
+      addToast(t("settings.workspace.labelAdded"), "success");
+    } catch (err) {
+      addToast(err.message, "error");
+    } finally {
+      setSavingLabel(false);
     }
-
-    setColumns((current) => [...current, newColumn.trim()]);
-    setNewColumn("");
   }
 
-  function handleRemoveColumn(column) {
-    setColumns((current) => current.filter((item) => item !== column));
-  }
-
-  function handleAddLabel(event) {
-    event.preventDefault();
-
-    if (!newLabel.trim()) {
-      return;
+  async function handleRemoveLabel(labelId) {
+    if (!workspaceId || !accessToken) return;
+    setDeletingLabelId(labelId);
+    try {
+      await apiRequest(`/workspaces/${workspaceId}/labels/${labelId}`, {
+        method: "DELETE",
+        token: accessToken,
+      });
+      setLabels((current) => current.filter((label) => label.id !== labelId));
+      addToast(t("settings.workspace.labelRemoved"), "success");
+    } catch (err) {
+      addToast(err.message, "error");
+    } finally {
+      setDeletingLabelId(null);
     }
-
-    setLabels((current) => [
-      ...current,
-      {
-        id: `label-${Date.now()}`,
-        name: newLabel.trim(),
-        color: "#6366f1",
-      },
-    ]);
-
-    setNewLabel("");
   }
 
-  function handleRemoveLabel(labelId) {
-    setLabels((current) => current.filter((label) => label.id !== labelId));
-  }
-
-  function handleSaveIntegrations() {
-    if (!isOwner) {
-      addToast("Only the organization owner can configure integrations.", "error");
-      return;
-    }
-    setPremiumModal({
-      open: true,
-      feature: "Workspace Integrations",
-      description: "Slack and GitHub integrations are available on the Premium plan.",
-    });
-    addToast("Integrations are available on the Premium plan.", "info");
-  }
+  const labelClass = "mb-1.5 block text-sm font-medium text-(--text-primary)";
 
   return (
     <div className="space-y-6">
-      <section className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
+      {/* ── Workspace profile ────────────────────────────────────────── */}
+      <section className="rounded-2xl border border-(--border) bg-(--bg-elevated) p-6">
         <div className="flex items-center gap-3">
-          <div className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 flex h-11 w-11 items-center justify-center rounded-2xl">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-(--bg-overlay) text-brand-500">
             <LayoutGrid className="h-5 w-5" strokeWidth={1.7} />
           </div>
-
           <div>
-            <h2 className="text-foreground dark:text-foreground-dark text-lg font-semibold">
-              Workspace profile
-            </h2>
-            <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-              Update the name, description, and logo shown in the sidebar.
+            <h2 className="text-lg font-semibold text-(--text-primary)">{t("settings.workspace.profileTitle")}</h2>
+            <p className="mt-1 text-sm text-(--text-secondary)">
+              {t("settings.workspace.profileDescription")}
             </p>
           </div>
         </div>
 
         <form onSubmit={handleSaveWorkspace} className="mt-6 space-y-4">
           <div>
-            <label className="text-foreground dark:text-foreground-dark text-sm font-medium">Workspace name</label>
+            <label className={labelClass}>{t("settings.workspace.nameLabel")}</label>
             <Input value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} className="mt-2" />
           </div>
 
           <div>
-            <label className="text-foreground dark:text-foreground-dark text-sm font-medium">Description</label>
+            <label className={labelClass}>{t("settings.workspace.descriptionLabel")}</label>
             <textarea
               value={workspaceDescription}
               onChange={(event) => setWorkspaceDescription(event.target.value)}
               rows={2}
-              className="mt-2 w-full resize-none rounded-lg border border-(--border) bg-(--bg) px-3 py-2.5 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-indigo-500 focus:outline-none"
-              placeholder="What does this workspace contain?"
+              className="mt-2 w-full resize-none rounded-lg border border-(--border) bg-(--bg) px-3 py-2.5 text-sm text-(--text-primary) placeholder-(--text-muted) focus:border-brand-500 focus:outline-none"
+              placeholder={t("settings.workspace.descriptionPlaceholder")}
             />
           </div>
 
           <div>
-            <p className="text-foreground dark:text-foreground-dark text-sm font-medium">Workspace logo</p>
-            <div className="border-border bg-background dark:border-border-dark dark:bg-background-dark mt-3 flex items-center gap-3 rounded-2xl border p-4">
+            <p className={labelClass}>{t("settings.workspace.logoLabel")}</p>
+            <div className="mt-3 flex items-center gap-3 rounded-xl border border-(--border) bg-(--bg) p-4">
               <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-(--bg-overlay)">
                 {workspaceLogo ? (
-                  <Image src={workspaceLogo} alt={`${workspaceName || "Workspace"} logo`} fill className="object-cover" />
+                  <Image src={workspaceLogo} alt={`${workspaceName || t("settings.workspace.workspace")} ${t("settings.workspace.logoWord")}`} fill className="object-cover" />
                 ) : (
                   <LayoutGrid className="h-5 w-5 text-(--text-muted)" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-foreground dark:text-foreground-dark text-sm">Upload a square PNG, JPG, or WebP logo.</p>
-                <p className="text-muted-foreground dark:text-muted-foreground-dark text-xs">This appears before the workspace name in the sidebar.</p>
+                <p className="text-sm text-(--text-secondary)">
+                  {t("settings.workspace.logoHint")}
+                </p>
+                <p className="mt-0.5 text-xs text-(--text-tertiary)">
+                  {t("settings.workspace.logoSidebarHint")}
+                </p>
               </div>
-              <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleWorkspaceLogoUpload} className="hidden" />
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleWorkspaceLogoUpload}
+                className="hidden"
+              />
               <Button type="button" variant="secondary" onClick={() => logoInputRef.current?.click()}>
                 <ImagePlus className="h-4 w-4" strokeWidth={1.7} />
-                Upload
+                {t("settings.common.upload")}
               </Button>
             </div>
           </div>
 
           <div className="flex justify-end">
             <Button type="submit" disabled={!canManage || savingWorkspace}>
-              {savingWorkspace ? "Saving..." : "Save workspace"}
+              {savingWorkspace ? t("settings.common.saving") : t("settings.workspace.saveWorkspace")}
             </Button>
           </div>
         </form>
       </section>
 
-      <section className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
+      {/* ── Labels ───────────────────────────────────────────────────── */}
+      <section className="rounded-2xl border border-(--border) bg-(--bg-elevated) p-6">
         <div className="flex items-center gap-3">
-          <div className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 flex h-11 w-11 items-center justify-center rounded-2xl">
-            <svg
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.7}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="3" width="6" height="6" rx="1" />
-              <rect x="15" y="3" width="6" height="6" rx="1" />
-              <rect x="9" y="15" width="6" height="6" rx="1" />
-              <path d="M6 9v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V9" />
-            </svg>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-(--bg-overlay) text-brand-500">
+            <Tag className="h-5 w-5" strokeWidth={1.7} />
           </div>
-
           <div>
-            <h2 className="text-foreground dark:text-foreground-dark text-lg font-semibold">
-              Workflow columns
-            </h2>
-
-            <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-              Customize the stages used by your Kanban board.
+            <h2 className="text-lg font-semibold text-(--text-primary)">{t("settings.workspace.labelsTitle")}</h2>
+            <p className="mt-1 text-sm text-(--text-secondary)">
+              {t("settings.workspace.labelsDescription")}
             </p>
           </div>
         </div>
 
-        <div className="mt-6 space-y-3">
-          {columns.map((column) => (
-            <div
-              key={column}
-              className="border-border bg-background dark:border-border-dark dark:bg-background-dark flex items-center justify-between rounded-2xl border p-4"
-            >
-              <div className="flex items-center gap-3">
-                <svg
-                  className="text-muted-foreground dark:text-muted-foreground-dark h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.7}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="9" cy="5" r="1" />
-                  <circle cx="9" cy="12" r="1" />
-                  <circle cx="9" cy="19" r="1" />
-                  <circle cx="15" cy="5" r="1" />
-                  <circle cx="15" cy="12" r="1" />
-                  <circle cx="15" cy="19" r="1" />
-                </svg>
-
-                <p className="text-foreground dark:text-foreground-dark text-sm font-medium">
-                  {column}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleRemoveColumn(column)}
-                className="text-muted-foreground hover:bg-muted hover:text-foreground dark:text-muted-foreground-dark dark:hover:bg-muted-dark dark:hover:text-foreground-dark rounded-md p-1 transition-colors"
-                aria-label={`Remove ${column}`}
-              >
-                <svg
-                  className="h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.7}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ))}
-        </div>
-
-        <form onSubmit={handleAddColumn} className="mt-5 flex gap-3">
-          <Input
-            value={newColumn}
-            onChange={(event) => setNewColumn(event.target.value)}
-            placeholder="Add workflow column..."
-          />
-
-          <Button type="submit">
-            <svg
-              className="h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.7}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Add
-          </Button>
-        </form>
-      </section>
-
-      <section className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
-        <div className="flex items-center gap-3">
-          <div className="bg-brand-600/10 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 flex h-11 w-11 items-center justify-center rounded-2xl">
-            <svg
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.7}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2H7a2 2 0 0 0-2 2v5l9.29 9.29a2 2 0 0 0 2.83 0l3.88-3.88a2 2 0 0 0 0-2.83z" />
-              <circle cx="7.5" cy="7.5" r="1" />
-            </svg>
-          </div>
-
-          <div>
-            <h2 className="text-foreground dark:text-foreground-dark text-lg font-semibold">
-              Labels
-            </h2>
-
-            <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-              Create and manage issue labels for filtering work.
+        {labelsLoading ? (
+          <p className="mt-6 text-sm text-(--text-tertiary)">{t("settings.workspace.loadingLabels")}</p>
+        ) : labels.length === 0 ? (
+          <div className="mt-6 rounded-xl border border-dashed border-(--border) p-6 text-center">
+            <p className="text-sm font-medium text-(--text-secondary)">{t("settings.workspace.noLabelsYet")}</p>
+            <p className="mt-1 text-xs text-(--text-tertiary)">
+              {t("settings.workspace.noLabelsHint")}
             </p>
           </div>
-        </div>
-
-        <div className="mt-6 flex flex-wrap gap-3">
-          {labels.map((label) => (
-            <div
-              key={label.id}
-              className="border-border bg-background dark:border-border-dark dark:bg-background-dark inline-flex items-center gap-2 rounded-full border px-3 py-2"
-            >
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{
-                  backgroundColor: label.color,
-                }}
-              />
-
-              <span className="text-foreground dark:text-foreground-dark text-sm font-medium">
-                {label.name}
-              </span>
-
-              <button
-                type="button"
-                onClick={() => handleRemoveLabel(label.id)}
-                className="text-muted-foreground hover:text-danger-600 dark:text-muted-foreground-dark dark:hover:text-danger-400 transition-colors"
-                aria-label={`Remove ${label.name}`}
+        ) : (
+          <div className="mt-6 flex flex-wrap gap-3">
+            {labels.map((label) => (
+              <div
+                key={label.id}
+                className="inline-flex items-center gap-2 rounded-full border border-(--border) bg-(--bg) px-3 py-2"
               >
-                <svg
-                  className="h-3.5 w-3.5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.7}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ))}
-        </div>
-
-        <form onSubmit={handleAddLabel} className="mt-5 flex gap-3">
-          <Input
-            value={newLabel}
-            onChange={(event) => setNewLabel(event.target.value)}
-            placeholder="Add label..."
-          />
-
-          <Button type="submit">
-            <svg
-              className="h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.7}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Add
-          </Button>
-        </form>
-      </section>
-
-      <section className="border-border bg-surface dark:border-border-dark dark:bg-surface-dark rounded-3xl border p-6">
-        <div>
-          <h2 className="text-foreground dark:text-foreground-dark text-lg font-semibold">
-            Integrations
-          </h2>
-
-          <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
-            Connect external tools to keep your workspace in sync.
-          </p>
-        </div>
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          <div className="border-border bg-background dark:border-border-dark dark:bg-background-dark rounded-2xl border p-5">
-            <div className="flex items-center gap-3">
-              <svg
-                className="text-brand-500 h-5 w-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.7}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="14.5" y="2" width="4" height="8" rx="2" />
-                <path d="M18.5 6H3" />
-                <rect x="2" y="14.5" width="8" height="4" rx="2" />
-                <path d="M6 18.5V3" />
-                <rect x="14.5" y="14.5" width="4" height="4" rx="2" />
-                <rect x="2" y="2" width="4" height="4" rx="2" />
-              </svg>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-foreground dark:text-foreground-dark text-sm font-semibold">
-                    Slack webhook
-                  </p>
-                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 uppercase tracking-wide">
-                    Premium
-                  </span>
-                </div>
-
-                <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                  Send issue updates to a Slack channel.
-                </p>
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: label.color }} />
+                <span className="text-sm font-medium text-(--text-primary)">{label.name}</span>
+                {canManage ? (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveLabel(label.id)}
+                    disabled={deletingLabelId === label.id}
+                    className="text-(--text-tertiary) transition-colors hover:text-danger-500 disabled:opacity-50"
+                    aria-label={t("settings.workspace.removeLabelAria", { name: label.name })}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
               </div>
-            </div>
-
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <p className="font-semibold">Upgrade to unlock</p>
-              <p className="mt-0.5">Slack notifications are available on the Premium plan.</p>
-            </div>
-
-            <Badge variant="secondary" className="mt-4">
-              Not connected
-            </Badge>
-          </div>
-
-          <div className="border-border bg-background dark:border-border-dark dark:bg-background-dark rounded-2xl border p-5 opacity-75">
-            <div className="flex items-center gap-3">
-              <svg
-                className="text-brand-500 h-5 w-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.7}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-              </svg>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-foreground dark:text-foreground-dark text-sm font-semibold">
-                    GitHub sync
-                  </p>
-                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 uppercase tracking-wide">
-                    Premium
-                  </span>
-                </div>
-
-                <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-xs">
-                  Link commits and pull requests to issues.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <p className="font-semibold">Upgrade to unlock</p>
-              <p className="mt-0.5">GitHub sync is available on the Premium plan.</p>
-            </div>
-
-            <Badge variant="secondary" className="mt-4">
-              Not connected
-            </Badge>
-          </div>
-        </div>
-
-        {!isOwner && (
-          <div className="mt-4 flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-            <Lock className="h-3.5 w-3.5 shrink-0" />
-            Only the organization <strong>Owner</strong> can configure integrations.
+            ))}
           </div>
         )}
 
-        <div className="mt-6 flex justify-end">
-          <Button type="button" disabled={!isOwner} onClick={handleSaveIntegrations}>Save integrations</Button>
-        </div>
+        {canManage ? (
+          <form onSubmit={handleAddLabel} className="mt-6 rounded-xl border border-(--border) bg-(--bg) p-4">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Input
+                value={newLabelName}
+                onChange={(event) => setNewLabelName(event.target.value)}
+                placeholder={t("settings.workspace.labelNamePlaceholder")}
+                className="flex-1"
+              />
+              <div className="flex flex-wrap items-center gap-1.5">
+                {LABEL_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setNewLabelColor(color)}
+                    aria-label={t("settings.workspace.colorAria", { color })}
+                    className={[
+                      "h-6 w-6 rounded-full transition-transform",
+                      newLabelColor === color ? "scale-110 ring-2 ring-brand-500 ring-offset-2 ring-offset-(--bg)" : "hover:scale-110",
+                    ].join(" ")}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+              <Button type="submit" disabled={savingLabel || !newLabelName.trim()}>
+                <Plus className="h-4 w-4" />
+                {savingLabel ? t("settings.common.adding") : t("settings.workspace.addLabel")}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-(--text-tertiary)">
+              {t("settings.workspace.labelsFootnote")}
+            </p>
+          </form>
+        ) : (
+          <p className="mt-4 text-xs text-(--text-tertiary)">
+            {t("settings.workspace.labelsNoAccess")}
+          </p>
+        )}
       </section>
 
-      <PremiumModal
-        open={premiumModal.open}
-        onClose={() => setPremiumModal((s) => ({ ...s, open: false }))}
-        feature={premiumModal.feature}
-        description={premiumModal.description}
-      />
+      {/* ── Integrations ─────────────────────────────────────────────── */}
+      <section className="rounded-2xl border border-(--border) bg-(--bg-elevated) p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-(--bg-overlay) text-brand-500">
+            <svg
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.7}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="14.5" y="2" width="4" height="8" rx="2" />
+              <path d="M18.5 6H3" />
+              <rect x="2" y="14.5" width="8" height="4" rx="2" />
+              <path d="M6 18.5V3" />
+              <rect x="14.5" y="14.5" width="4" height="4" rx="2" />
+              <rect x="2" y="2" width="4" height="4" rx="2" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-(--text-primary)">{t("settings.workspace.integrationsTitle")}</h2>
+            <p className="mt-1 text-sm text-(--text-secondary)">
+              {t("settings.workspace.integrationsDescription")}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-xl border border-(--border) bg-(--bg) p-5">
+          <div className="flex items-center gap-3">
+            <svg
+              className="h-5 w-5 shrink-0 text-brand-500"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.7}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="14.5" y="2" width="4" height="8" rx="2" />
+              <path d="M18.5 6H3" />
+              <rect x="2" y="14.5" width="8" height="4" rx="2" />
+              <path d="M6 18.5V3" />
+              <rect x="14.5" y="14.5" width="4" height="4" rx="2" />
+              <rect x="2" y="2" width="4" height="4" rx="2" />
+            </svg>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-(--text-primary)">{t("settings.workspace.slackWebhooks")}</p>
+                <span className="rounded-full border border-(--border) px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-(--text-tertiary)">
+                  {t("settings.common.planned")}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-(--text-tertiary)">
+                {t("settings.workspace.slackWebhooksDescription")}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-4 text-xs leading-relaxed text-(--text-tertiary)">
+          {t("settings.workspace.roadmapLine1")}{" "}
+          <Link href="/roadmap" className="font-medium text-brand-500 hover:text-brand-400">
+            {t("settings.workspace.roadmap")}
+          </Link>{". "}
+          {t("settings.workspace.roadmapLine2")}{" "}
+          <Link href="/contact" className="font-medium text-brand-500 hover:text-brand-400">
+            {t("settings.workspace.tellUs")}
+          </Link>{" "}
+          {t("settings.workspace.roadmapLine3")}
+        </p>
+      </section>
     </div>
   );
 }
