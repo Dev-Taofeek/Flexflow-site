@@ -291,12 +291,12 @@ export default function OnboardingPage() {
                 <motion.div
                     animate={{ x: [0, 40, -20, 0], y: [0, -30, 20, 0] }}
                     transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
-                    className="bg-brand-600/10 absolute top-[-10%] right-[-8%] h-[26rem] w-[26rem] rounded-full blur-3xl"
+                    className="bg-brand-600/10 absolute top-[-10%] right-[-8%] h-104 w-104 rounded-full blur-3xl"
                 />
                 <motion.div
                     animate={{ x: [0, -30, 20, 0], y: [0, 25, -25, 0] }}
                     transition={{ duration: 26, repeat: Infinity, ease: "easeInOut" }}
-                    className="bg-brand-400/5 absolute bottom-[-12%] left-[-10%] h-[30rem] w-[30rem] rounded-full blur-3xl"
+                    className="bg-brand-400/5 absolute bottom-[-12%] left-[-10%] h-120 w-120 rounded-full blur-3xl"
                 />
             </div>
 

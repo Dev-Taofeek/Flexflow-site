@@ -201,7 +201,7 @@ export default function IntelligencePage() {
     return (
         <div className="space-y-6">
             {/* Hero */}
-            <section className="relative overflow-hidden rounded-3xl border border-brand-500/30 bg-gradient-to-br from-brand-600/15 via-brand-500/5 to-transparent p-6 sm:p-8">
+            <section className="relative overflow-hidden rounded-3xl border border-brand-500/30 bg-linear-to-br from-brand-600/15 via-brand-500/5 to-transparent p-6 sm:p-8">
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                     <div className="max-w-2xl">
                         <p className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs font-medium text-brand-500">
