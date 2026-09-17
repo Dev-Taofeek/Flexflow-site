@@ -28,7 +28,8 @@ function ResetPasswordForm() {
 
   async function onSubmit(e) {
     e.preventDefault();
-    if (password.length < 8) { setError(t("auth.error.passwordMin")); return; }
+    const pwErrors = validatePassword(password);
+    if (pwErrors.length) { setError(pwErrors[0]); return; }
     if (password !== confirm) { setError(t("auth.reset.passwordsMismatch")); return; }
     if (!token) { setError(t("auth.reset.missingToken")); return; }
     setError("");
@@ -49,6 +50,15 @@ function ResetPasswordForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function validatePassword(pw) {
+    const errors = [];
+    if (pw.length < 8) errors.push(t("auth.error.passwordMin"));
+    else if (!/[A-Z]/.test(pw)) errors.push(t("auth.error.passwordUppercase"));
+    else if (!/[a-z]/.test(pw)) errors.push(t("auth.error.passwordLowercase"));
+    else if (!/[0-9]/.test(pw)) errors.push(t("auth.error.passwordNumber"));
+    return errors;
   }
 
   return (

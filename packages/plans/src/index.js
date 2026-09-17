@@ -15,6 +15,25 @@
 export const PLAN_ORDER = ["free", "pro", "custom"];
 export const PLAN_RANK = { free: 0, pro: 1, custom: 2 };
 
+/**
+ * The public demo organization keeps the FREE plan (so billing/upgrade flows
+ * show the real free-tier experience) but unlocks every gated feature so
+ * reviewers can explore Intelligence, Analytics, and enterprise surfaces.
+ * Detection is by organization slug — the seed creates this org.
+ */
+export const DEMO_ORG_SLUG = "demo-org";
+
+/** Features the demo organization can use even while its plan shows as Free. */
+export const DEMO_UNLOCKED_FEATURES = new Set([
+  "advanced_analytics",
+  "team_intelligence_limited",
+  "team_intelligence_full",
+]);
+
+export function isDemoOrg(org) {
+  return Boolean(org) && (org.slug === DEMO_ORG_SLUG || org.isDemo === true);
+}
+
 export const ANNUAL_DISCOUNT = 0.3; // 30% saved on annual billing
 
 /** Base price of the CUSTOM plan ($20/mo). All nine enterprise add-ons sum to
@@ -536,10 +555,14 @@ PLANS.custom.features = [...PLANS.pro.features, "sso", "audit_logs", "custom_rol
  * Whether an organization (identified by its plan + purchased add-ons) can use
  * a feature. `addOns` is the array of purchased CUSTOM add-on ids.
  */
-export function canAccessFeature(planId, addOns = [], featureKey) {
+export function canAccessFeature(planId, addOns = [], featureKey, options = {}) {
   if (!planId) return false;
   const feature = FEATURES[featureKey];
   if (!feature) return false;
+
+  // The demo organization bypasses the gate for its curated feature set so
+  // reviewers can try Intelligence and Analytics while billing still shows Free.
+  if (options.demo === true && DEMO_UNLOCKED_FEATURES.has(featureKey)) return true;
 
   const rank = PLAN_RANK[planId];
   if (rank === undefined || rank < 0) return false;
@@ -642,6 +665,9 @@ export default {
   CUSTOM_ADDONS,
   CUSTOM_ENTERPRISE_BASE,
   ANNUAL_DISCOUNT,
+  DEMO_ORG_SLUG,
+  DEMO_UNLOCKED_FEATURES,
+  isDemoOrg,
   canAccessFeature,
   getPlanLimits,
   getPlan,

@@ -237,55 +237,9 @@ async function main() {
         console.log(`✅ Project: ${project.name} (5 tasks)`);
     }
 
-    // ── Team Intelligence lookups ──────────────────────────────────────────
-
-    const knowledgeSeeds = [
-        {
-            orgSlug: "nebula-custom",
-            title: "Launch freeze policy",
-            content: "No production deploys between December 15 and January 5. Customer-facing changes are frozen; bug fixes and security patches still ship.",
-            sourceType: "DECISION",
-            tags: ["policy", "launch", "freeze"],
-        },
-        {
-            orgSlug: "nebula-custom",
-            title: "Why we standardized on TypeScript for new services",
-            content: "After the 2025 incidents, the platform team agreed new services must be TypeScript with strict mode. Gives us type safety on the event pipeline and cuts integration bugs.",
-            sourceType: "DECISION",
-            tags: ["typescript", "architecture", "decision"],
-        },
-        {
-            orgSlug: "acme-pro",
-            title: "Sprint cadence decision",
-            content: "Team adopted two-week sprints starting Monday, with review on the last Thursday. Standups moved to async in the #product channel.",
-            sourceType: "DECISION",
-            tags: ["sprint", "cadence", "workflow"],
-        },
-    ];
-
-    for (const seed of knowledgeSeeds) {
-        const orgRow = await prisma.organization.findUnique({ where: { slug: seed.orgSlug } });
-        if (!orgRow) continue;
-        const workspaceRow = seed.orgSlug === "acme-pro" ? proWorkspace : null;
-        await prisma.knowledgeEntry.upsert({
-            where: {
-                // No natural unique key — scope by title+organization.
-                id: `k-${seed.orgSlug}-${seed.title.toLowerCase().replace(/\s+/g, "-")}`,
-            },
-            update: {},
-            create: {
-                organizationId: orgRow.id,
-                workspaceId: workspaceRow?.id || null,
-                createdById: user.id,
-                title: seed.title,
-                content: seed.content,
-                sourceType: seed.sourceType,
-                tags: seed.tags,
-            },
-        });
-    }
-
-    console.log("✅ Knowledge entries (Team Intelligence)");
+    // Decision memory is intentionally NOT seeded with canned answers — Team
+    // Intelligence must answer from real workspace work (tasks, activity,
+    // members) and any knowledge a user records themselves.
 
     // ── Audit events & usage snapshot ──────────────────────────────────────
     await prisma.auditEvent.createMany({

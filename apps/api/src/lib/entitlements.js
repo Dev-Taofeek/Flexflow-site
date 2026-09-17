@@ -1,4 +1,4 @@
-import { canAccessFeature, getPlanLimits, FEATURES } from "@flexflow/plans";
+import { canAccessFeature, getPlanLimits, isDemoOrg, FEATURES } from "@flexflow/plans";
 import { prisma } from "./prisma.js";
 import { errorResponse } from "../utils/api-response.js";
 
@@ -34,17 +34,22 @@ export function normalizeAddOns(org) {
 export function getOrgEntitlements(org) {
     const planId = effectivePlanId(org);
     const addOns = normalizeAddOns(org);
+    const demo = isDemoOrg(org);
+    const limits = demo
+        ? { ...getPlanLimits(planId, addOns), teamIntelligenceQueriesPerDay: Infinity }
+        : getPlanLimits(planId, addOns);
     return {
         planId,
         addOns,
-        limits: getPlanLimits(planId, addOns),
+        limits,
+        demo,
     };
 }
 
 export async function getOrgEntitlementsById(organizationId) {
     const org = await prisma.organization.findUnique({
         where: { id: organizationId },
-        select: { plan: true, subscriptionStatus: true, subscriptionEndAt: true, customAddOns: true },
+        select: { slug: true, plan: true, subscriptionStatus: true, subscriptionEndAt: true, customAddOns: true },
     });
     return org ? getOrgEntitlements(org) : null;
 }
@@ -89,7 +94,7 @@ export async function enforceFeature(req, res, organizationId, feature) {
         if (!res.headersSent) res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
         return null;
     }
-    if (!canAccessFeature(entitlements.planId, entitlements.addOns, feature)) {
+    if (!canAccessFeature(entitlements.planId, entitlements.addOns, feature, { demo: entitlements.demo })) {
         if (!res.headersSent) planBlockedResponse(res, feature, entitlements.planId, entitlements.addOns);
         return null;
     }

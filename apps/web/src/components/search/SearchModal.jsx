@@ -128,7 +128,11 @@ export function SearchModal({ open, onClose }) {
                         <div className="mb-1">
                             <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-(--text-muted) uppercase">{t("shell.search.people")}</p>
                             {results.members.map((m) => (
-                                <div key={m.id} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm">
+                                <button
+                                    key={m.id}
+                                    onClick={() => navigate(`/profile/${m.id}`)}
+                                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-left transition-colors hover:bg-(--bg-overlay)"
+                                >
                                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700 text-xs font-semibold">
                                         {m.name?.[0]?.toUpperCase() || <User2 className="h-3 w-3" />}
                                     </div>
@@ -136,7 +140,7 @@ export function SearchModal({ open, onClose }) {
                                         <p className="text-(--text-primary)">{m.name}</p>
                                         <p className="text-xs text-(--text-muted)">{m.email}</p>
                                     </div>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     )}

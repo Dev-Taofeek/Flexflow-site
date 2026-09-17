@@ -345,6 +345,7 @@ export function TopBar({ onMenuClick }) {
     const { currentOrg, currentWorkspace } = useApp();
     const { unreadCount } = useNotifications();
     const { isFree, planName } = useEntitlements();
+    const { isAdmin } = useRole();
     const label = getLabel(pathname, t);
 
     const [searchOpen, setSearchOpen] = useState(false);
@@ -402,20 +403,30 @@ export function TopBar({ onMenuClick }) {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1.5">
-                    {/* Plan */}
-                    <Link
-                        href={isFree ? "/pricing" : "/settings/billing"}
-                        className={[
-                            "hidden sm:flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors",
-                            isFree
-                                ? "border-brand-500/40 bg-brand-500/10 text-brand-500 hover:bg-brand-500/15"
-                                : "border-(--border) text-(--text-muted) hover:border-(--border-strong) hover:text-(--text-primary)",
-                        ].join(" ")}
-                        title={isFree ? t("shell.plan.explore") : t("shell.plan.manage")}
-                    >
-                        {isFree ? <Sparkles className="h-3.5 w-3.5" /> : <CreditCard className="h-3.5 w-3.5" />}
-                        {isFree ? t("shell.plan.upgrade") : planName}
-                    </Link>
+                    {/* Plan — owners/admins manage it in billing settings. */}
+                    {isAdmin ? (
+                        <Link
+                            href="/settings/billing"
+                            className={[
+                                "hidden sm:flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors",
+                                isFree
+                                    ? "border-brand-500/40 bg-brand-500/10 text-brand-500 hover:bg-brand-500/15"
+                                    : "border-(--border) text-(--text-muted) hover:border-(--border-strong) hover:text-(--text-primary)",
+                            ].join(" ")}
+                            title={isFree ? t("shell.plan.upgrade") : t("shell.plan.manage")}
+                        >
+                            {isFree ? <Sparkles className="h-3.5 w-3.5" /> : <CreditCard className="h-3.5 w-3.5" />}
+                            {isFree ? t("shell.plan.upgrade") : planName}
+                        </Link>
+                    ) : (
+                        <span
+                            className="hidden sm:flex h-8 items-center gap-1.5 rounded-lg border border-(--border) px-2.5 text-xs font-medium text-(--text-muted) opacity-70"
+                            title={t("shell.plan.adminOnly")}
+                        >
+                            {isFree ? <Sparkles className="h-3.5 w-3.5" /> : <CreditCard className="h-3.5 w-3.5" />}
+                            {isFree ? t("shell.plan.upgrade") : planName}
+                        </span>
+                    )}
 
                     {/* Search */}
                     <button

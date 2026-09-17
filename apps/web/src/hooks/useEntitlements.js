@@ -1,6 +1,6 @@
 "use client";
 
-import { canAccessFeature, getPlanLimits } from "@flexflow/plans";
+import { canAccessFeature, getPlanLimits, isDemoOrg } from "@flexflow/plans";
 import { useApp } from "@/contexts/AppContext";
 
 /**
@@ -17,8 +17,11 @@ export function useEntitlements() {
     // Until an org is loaded we don't want to flash locked states; treat as
     // open so the real entitlement applies as soon as the org has hydrated.
     const noOrg = !currentOrg;
-    const can = (feature) => (noOrg ? true : canAccessFeature(planId, addOns, feature));
-    const limits = getPlanLimits(planId, addOns);
+    const demo = isDemoOrg(currentOrg);
+    const can = (feature) => (noOrg ? true : canAccessFeature(planId, addOns, feature, { demo }));
+    const limits = demo
+        ? { ...getPlanLimits(planId, addOns), teamIntelligenceQueriesPerDay: Infinity }
+        : getPlanLimits(planId, addOns);
 
     return {
         can,

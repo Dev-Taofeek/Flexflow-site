@@ -31,7 +31,11 @@ function RegisterForm() {
     const errors = {};
     if (!form.name.trim()) errors.name = t("auth.error.fullNameRequired");
     if (!form.email.includes("@")) errors.email = t("auth.error.validEmailRequired");
-    if (form.password.length < 8) errors.password = t("auth.error.passwordMin");
+    const pw = form.password;
+    if (pw.length < 8) errors.password = t("auth.error.passwordMin");
+    else if (!/[A-Z]/.test(pw)) errors.password = t("auth.error.passwordUppercase");
+    else if (!/[a-z]/.test(pw)) errors.password = t("auth.error.passwordLowercase");
+    else if (!/[0-9]/.test(pw)) errors.password = t("auth.error.passwordNumber");
     return errors;
   }
 

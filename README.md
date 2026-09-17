@@ -332,6 +332,18 @@ All protected routes require `Authorization: Bearer <access_token>`. Internal se
 | `GET`  | `/analytics?workspaceId=`  | Velocity, workload, cycle time, summary  |
 | `GET`  | `/dashboard?workspaceId=`  | My tasks, activity, progress, deadlines  |
 
+### Profile — `/api/profile`
+
+| Method   | Path                | Description                                              |
+| -------- | ------------------- | -------------------------------------------------------- |
+| `GET`    | `/`                 | Current user profile                                     |
+| `PATCH`  | `/`                 | Update name, bio, avatar, timezone                        |
+| `GET`    | `/:userId`          | Teammate-visible profile + roles in shared organizations  |
+| `PATCH`  | `/password`         | Change password                                          |
+| `POST`   | `/2fa/setup`        | Generate TOTP secret + QR code                           |
+| `POST`   | `/2fa/verify`       | Enable 2FA                                               |
+| `DELETE` | `/2fa`              | Disable 2FA                                              |
+
 ### Support routes
 
 | Method | Path                      | Description                                   |
@@ -366,6 +378,8 @@ All protected routes require `Authorization: Bearer <access_token>`. Internal se
 | `/team`                         | Protected | Members + invite                 |
 | `/analytics`                    | Protected | Charts and metrics               |
 | `/intelligence`                 | Protected | AI insights                      |
+| `/profile`                      | Protected | Your public profile + roles      |
+| `/profile/[userId]`             | Protected | Teammate profile + shared roles  |
 | `/settings/profile`             | Protected | User profile                     |
 | `/settings/organization`        | Protected | Org settings + member management |
 | `/settings/workspace`           | Protected | Workspace settings               |

@@ -12,6 +12,8 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
+const ORG_WIDE_ROLES = new Set(["OWNER", "ADMIN"]);
+
 const router = Router();
 router.use(authenticate);
 
@@ -147,6 +149,72 @@ router.post("/2fa/verify", async (req, res) => {
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to enable 2FA"));
+    }
+});
+
+// GET /api/profile/:userId — a teammate-visible public profile. Returns the
+// target user's profile plus their roles in organizations/workspaces shared
+// with the viewer (or all orgs when the viewer is the target themself).
+router.get("/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        if (!userId || userId.length < 5) {
+            return res.status(404).json(errorResponse("NOT_FOUND", "Profile not found"));
+        }
+
+        const target = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, name: true, email: true, avatarUrl: true, bio: true, timezone: true },
+        });
+        if (!target) return res.status(404).json(errorResponse("NOT_FOUND", "User not found"));
+
+        const [targetMemberships, viewerMemberships] = await Promise.all([
+            prisma.organizationMember.findMany({
+                where: { userId },
+                include: {
+                    organization: {
+                        include: {
+                            workspaces: {
+                                include: { members: { where: { userId }, select: { role: true } } },
+                                orderBy: { createdAt: "asc" },
+                            },
+                        },
+                    },
+                },
+                orderBy: { createdAt: "asc" },
+            }),
+            prisma.organizationMember.findMany({
+                where: { userId: req.user.id },
+                select: { organizationId: true },
+            }),
+        ]);
+
+        const viewerOrgIds = new Set(viewerMemberships.map((m) => m.organizationId));
+        const isSelf = userId === req.user.id;
+        const organizations = targetMemberships
+            .filter((m) => isSelf || viewerOrgIds.has(m.organizationId))
+            .map((m) => {
+                const workspaces = m.organization.workspaces
+                    .filter((ws) => ORG_WIDE_ROLES.has(m.role) || (ws.members?.length ?? 0) > 0)
+                    .map((ws) => ({ id: ws.id, name: ws.name, role: ws.members?.[0]?.role || m.role }));
+                return {
+                    id: m.organization.id,
+                    name: m.organization.name,
+                    logoUrl: m.organization.logoUrl,
+                    role: m.role,
+                    memberId: m.id,
+                    workspaces,
+                };
+            });
+
+        if (organizations.length === 0 && !isSelf) {
+            return res.status(403).json(errorResponse("FORBIDDEN", "You don't share an organization with this user"));
+        }
+
+        return res.status(200).json(successResponse({ user: target, organizations }));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch profile"));
     }
 });
 

@@ -20,6 +20,7 @@ import {
   Settings,
   Sparkles,
   Users,
+  User,
   Check,
   ChevronsUpDown,
 } from "lucide-react";
@@ -350,11 +351,18 @@ function UserMenu({ collapsed }) {
             <p className="text-xs text-(--text-muted)">{user?.email}</p>
           </div>
           <Link
+            href="/profile"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 text-sm text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
+          >
+            <User className="h-4 w-4" /> {t("shell.menu.profile")}
+          </Link>
+          <Link
             href="/settings/profile"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2.5 px-3 py-2 text-sm text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
           >
-            <Settings className="h-4 w-4" /> {t("shell.menu.profile")}
+            <Settings className="h-4 w-4" /> {t("shell.nav.settings")}
           </Link>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}

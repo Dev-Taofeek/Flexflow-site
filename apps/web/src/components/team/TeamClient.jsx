@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Mail, Send, Trash2, UserMinus, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -281,22 +282,24 @@ export function TeamClient({
         <div className="divide-y divide-(--border)">
           {members.map((member) => (
             <div key={member.memberId || member.id} className="flex items-center gap-3 px-5 py-3.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-brand-500 to-violet-500 text-xs font-semibold text-white">
-                {member.avatarUrl ? (
-                  <Image
-                    src={member.avatarUrl}
-                    alt={member.name}
-                    className="h-8 w-8 rounded-full object-cover"
-                  />
-                ) : (
-                  getInitials(member.name)
-                )}
-              </div>
+              <Link href={`/profile/${member.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-brand-500 to-violet-500 text-xs font-semibold text-white">
+                  {member.avatarUrl ? (
+                    <Image
+                      src={member.avatarUrl}
+                      alt={member.name}
+                      className="h-8 w-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    getInitials(member.name)
+                  )}
+                </div>
 
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-(--text-primary)">{member.name}</p>
-                <p className="truncate text-xs text-(--text-muted)">{member.email}</p>
-              </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-(--text-primary)">{member.name}</p>
+                  <p className="truncate text-xs text-(--text-muted)">{member.email}</p>
+                </div>
+              </Link>
 
               <span
                 className={[

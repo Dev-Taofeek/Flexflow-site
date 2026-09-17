@@ -90,14 +90,15 @@ await update({ name });
         }
     }
 
-    async function changePassword(e) {
+async function changePassword(e) {
         e.preventDefault();
-        if (newPw.length < 8) { setPwMsg({ ok: false, text: t("settings.profile.passwordMinLengthError") }); return; }
+        const pwErrors = validatePassword(newPw);
+        if (pwErrors.length) { setPwMsg({ ok: false, text: pwErrors[0] }); return; }
         setPwLoading(true);
         setPwMsg({ ok: true, text: "" });
         try {
             await apiRequest("/profile/password", { method: "PATCH", token: accessToken, body: { currentPassword: curPw, newPassword: newPw } });
-setCurPw(""); setNewPw("");
+            setCurPw(""); setNewPw("");
             setPwMsg({ ok: true, text: t("settings.profile.passwordUpdated") });
             addToast(t("settings.profile.passwordUpdated"), "success");
         } catch (err) {
@@ -106,6 +107,15 @@ setCurPw(""); setNewPw("");
         } finally {
             setPwLoading(false);
         }
+    }
+
+    function validatePassword(pw) {
+        const errors = [];
+        if (pw.length < 8) errors.push(t("settings.profile.passwordMinLengthError"));
+        else if (!/[A-Z]/.test(pw)) errors.push(t("settings.profile.passwordUppercaseError"));
+        else if (!/[a-z]/.test(pw)) errors.push(t("settings.profile.passwordLowercaseError"));
+        else if (!/[0-9]/.test(pw)) errors.push(t("settings.profile.passwordNumberError"));
+        return errors;
     }
 
     async function setup2FA() {

@@ -224,8 +224,6 @@ export default function IntegrationsSettingsPage() {
                 ...(secretKey === "webhookSigningSecret" ? { webhookSigningSecret: secret } : {}),
                 ...(secretKey === "webhookPasscode" ? { webhookPasscode: secret } : {}),
             });
-            setTokens((s) => ({ ...s, [provider]: "" }));
-            setSecrets((s) => ({ ...s, [provider]: "" }));
             setConnections((prev) => {
                 const rest = prev.filter((c) => c.provider !== provider);
                 return [...rest, data.connection];
@@ -234,6 +232,8 @@ export default function IntegrationsSettingsPage() {
         } catch (err) {
             addToast(err.message, "error");
         } finally {
+            setTokens((s) => ({ ...s, [provider]: "" }));
+            setSecrets((s) => ({ ...s, [provider]: "" }));
             setBusy((s) => ({ ...s, [`connect:${provider}`]: false }));
         }
     }

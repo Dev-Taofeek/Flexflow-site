@@ -114,7 +114,7 @@ async function buildCorpus({ organizationId, workspaceId, user, queryTokens }) {
           }
         : { organizationId, workspaceId };
 
-    const [projects, tasks, comments, activities, knowledge] = await Promise.all([
+    const [projects, tasks, comments, activities, knowledge, members] = await Promise.all([
         prisma.project.findMany({
             where: { workspaceId },
             select: { id: true, workspaceId: true, name: true, description: true },
@@ -148,6 +148,10 @@ async function buildCorpus({ organizationId, workspaceId, user, queryTokens }) {
         prisma.knowledgeEntry.findMany({
             where: knowledgeWhere,
             select: { id: true, workspaceId: true, title: true, content: true, sourceType: true, tags: true, createdAt: true },
+        }),
+        prisma.workspaceMember.findMany({
+            where: { workspaceId },
+            select: { role: true, user: { select: { id: true, name: true, email: true } } },
         }),
     ]);
 
@@ -238,7 +242,7 @@ async function buildCorpus({ organizationId, workspaceId, user, queryTokens }) {
     }
 
     corpus.sort((a, b) => b.score - a.score);
-    return { ok: true, workspace: access.workspace, canSeeAll: access.canSeeAll, projects, tasks, comments, activities, knowledge, corpus };
+    return { ok: true, workspace: access.workspace, canSeeAll: access.canSeeAll, projects, tasks, comments, activities, knowledge, members, corpus };
 }
 
 /** Deterministic, metric-anchored answer. Numbers here are authoritative. */
@@ -386,7 +390,7 @@ router.post("/query", async (req, res) => {
         if (!built.ok) {
             return res.status(403).json(errorResponse("FORBIDDEN", "You don't have access to this workspace's intelligence"));
         }
-        const { workspace, projects, tasks, comments, activities, knowledge, corpus } = built;
+        const { workspace, projects, tasks, comments, activities, knowledge, members, corpus } = built;
 
         // ── Analytics: computed over ALL task/project data the caller can see. ──
         const at = new Date();
@@ -415,6 +419,45 @@ router.post("/query", async (req, res) => {
         const memoryRange = orgMemoryRange(workspace.organization.createdAt, at);
         const intent = classifyIntent(query);
 
+        // Full workspace digest handed to the synthesizer as untrusted data so it
+        // can answer questions about tasks, activity, and members — not just the
+        // keyword-matched sources. Numbers still come from backend metrics.
+        const context = {
+            workspace: workspace.name,
+            counts: {
+                tasks: metrics.totalTasks,
+                projects: metrics.projectCount,
+                members: members.length,
+                completed: metrics.productivity.completed,
+                blocked: metrics.blocked.total,
+                overdue: metrics.overdue.length,
+            },
+            members: members.map((m) => ({
+                name: m.user?.name || "Unnamed member",
+                email: m.user?.email || null,
+                role: m.role,
+            })),
+            tasks: tasks.slice(0, 80).map((task) => ({
+                key: task.key || null,
+                title: task.title,
+                status: task.status,
+                assignee: task.assignee?.name || null,
+                dueDate: task.dueDate ? task.dueDate.toISOString().slice(0, 10) : null,
+            })),
+            recentActivity: metrics.recent.map((a) => ({
+                actor: a.user?.name || "Someone",
+                action: a.action,
+                at: a.createdAt,
+            })),
+            comments: comments.slice(0, 15).map((c) => ({
+                author: c.author?.name || "Someone",
+                content: c.content.slice(0, 200),
+                at: c.createdAt,
+            })),
+            projects: projects.map((p) => ({ name: p.name, description: p.description || null })),
+            knowledge: knowledge.slice(0, 5).map((k) => ({ title: k.title, content: k.content.slice(0, 400) })),
+        };
+
         const deterministicAnswer = buildDeterministicAnswer({
             intent,
             workspace,
@@ -438,6 +481,7 @@ router.post("/query", async (req, res) => {
             query: query.trim(),
             deterministicAnswer,
             sources,
+            context,
             groqApiKey: env.GROQ_API_KEY,
             history,
             intent,
@@ -523,7 +567,10 @@ router.get("/:orgId/snapshot", async (req, res) => {
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId is required"));
 
-        const entitlements = await enforceFeature(req, res, req.params.orgId, "team_intelligence_full");
+        // The snapshot is part of the standard (PRO) intelligence dashboard, not
+        // the CUSTOM-only decision memory — gate it on the limited entitlement so
+        // PRO orgs aren't wrongly 403'd.
+        const entitlements = await enforceFeature(req, res, req.params.orgId, "team_intelligence_limited");
         if (!entitlements) return;
 
         const access = await resolveWorkspaceAccess({

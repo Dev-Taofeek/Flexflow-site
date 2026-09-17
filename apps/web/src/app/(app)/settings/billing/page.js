@@ -144,41 +144,11 @@ export default function BillingSettingsPage() {
                 },
                 toast: false,
             });
-            waitForConfirm(res.url);
+            // Hand off to the provider's hosted checkout. Our own /billing/confirm
+            // page is where the mock provider (and real-provider returns) finalize.
+            window.location.assign(res.url);
         } catch (err) {
             addToast(err.message, "error");
-            setCheckoutLoading(false);
-        }
-    }
-
-    // The mock provider returns an internal URL we can drive directly for a
-    // zero-dependency demo checkout. Real providers hand off to their hosted UI.
-    function waitForConfirm(url) {
-        const parsed = new URL(url);
-        if (parsed.pathname.endsWith("/billing/confirm")) {
-            const params = parsed.searchParams;
-            confirmMockCheckout(params);
-        } else {
-            window.location.assign(url);
-        }
-    }
-
-    async function confirmMockCheckout(params) {
-        try {
-            const body = {
-                sessionId: params.get("session_id"),
-                organizationId: params.get("orgId") || orgId,
-                plan: params.get("plan") || "pro",
-                billingCycle: params.get("billingCycle") || cycle,
-                addOns: JSON.parse(params.get("addOns") || "[]"),
-            };
-            await apiRequest("/billing/confirm", { method: "POST", token: accessToken, body, toast: false });
-            addToast(t("settings.billing.planUpgraded"), "success");
-            await refreshOrganizations();
-            await load(orgId);
-        } catch (err) {
-            addToast(err.message, "error");
-        } finally {
             setCheckoutLoading(false);
         }
     }
