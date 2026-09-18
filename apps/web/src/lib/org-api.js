@@ -4,8 +4,13 @@ export async function fetchOrganization(orgId, token) {
     return apiRequest(`/organizations/${orgId}`, { token });
 }
 
-export async function updateOrganization(orgId, data, token) {
-    return apiRequest(`/organizations/${orgId}`, { token, method: "PATCH", body: data });
+export async function updateOrganization(orgId, data, token, code) {
+    return apiRequest(`/organizations/${orgId}`, {
+        token,
+        method: "PATCH",
+        body: data,
+        headers: code ? { "x-2fa-code": code } : {},
+    });
 }
 
 export async function deleteOrganization(orgId, token) {
@@ -28,8 +33,14 @@ export async function removeMember(orgId, userId, token) {
     return apiRequest(`/organizations/${orgId}/members/${userId}`, { token, method: "DELETE" });
 }
 
-export async function inviteToOrg(orgId, email, role, token) {
-    return apiRequest(`/organizations/${orgId}/invite`, { token, method: "POST", body: { email, role }, toast: false });
+export async function inviteToOrg(orgId, email, role, token, code) {
+    return apiRequest(`/organizations/${orgId}/invite`, {
+        token,
+        method: "POST",
+        body: { email, role },
+        headers: code ? { "x-2fa-code": code } : {},
+        toast: false,
+    });
 }
 
 export async function cancelOrgInvite(orgId, inviteId, token) {

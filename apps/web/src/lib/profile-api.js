@@ -14,3 +14,10 @@ export const verify2FA = (code, token) =>
 
 export const disable2FA = (code, token) =>
     apiRequest("/profile/2fa", { method: "DELETE", body: { code }, token });
+
+export const regenerateRecoveryCodes = (token, code) =>
+    apiRequest("/profile/2fa/recovery-codes", {
+        method: "POST",
+        token,
+        headers: code ? { "x-2fa-code": code } : {},
+    });

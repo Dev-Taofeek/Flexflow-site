@@ -1,15 +1,21 @@
-import { createRequire } from "module";
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import QRCode from "qrcode";
 
-// otplib v13 exposes a functional API (generateSecret, generateURI, verifySync).
-// Load via CJS for stable interop across runtimes.
-const require = createRequire(import.meta.url);
-const { generateSecret, generateURI, verifySync } = require("otplib");
-
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { twoFactorRateLimiter } from "../middleware/rate-limit.middleware.js";
+import { requireTwoFactorStepUp } from "../middleware/stepup-2fa.middleware.js";
+import {
+    createTotpSecret,
+    otpAuthUri,
+    verifyTotp,
+    readTotpSecret,
+    storeTotpSecret,
+    generateRecoveryCodes,
+    hashRecoveryCode,
+    matchRecoveryCode,
+} from "../lib/twofa.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const ORG_WIDE_ROLES = new Set(["OWNER", "ADMIN"]);
@@ -22,10 +28,15 @@ router.get("/", async (req, res) => {
     try {
         const user = await prisma.user.findUnique({
             where: { id: req.user.id },
-            select: { id: true, name: true, email: true, avatarUrl: true, bio: true, timezone: true, twoFactorEnabled: true },
+            select: {
+                id: true, name: true, email: true, avatarUrl: true, bio: true, timezone: true,
+                twoFactorEnabled: true,
+                _count: { select: { recoveryCodes: { where: { usedAt: null } } } },
+            },
         });
         if (!user) return res.status(404).json(errorResponse("NOT_FOUND", "User not found"));
-        return res.status(200).json(successResponse(user));
+        const { _count, ...rest } = user;
+        return res.status(200).json(successResponse({ ...rest, recoveryCodesRemaining: _count?.recoveryCodes ?? 0 }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to fetch profile"));
@@ -58,7 +69,7 @@ router.patch("/", async (req, res) => {
 });
 
 // PATCH /api/profile/password — change password
-router.patch("/password", async (req, res) => {
+router.patch("/password", requireTwoFactorStepUp, async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
         if (!currentPassword || !newPassword) {
@@ -92,7 +103,7 @@ router.patch("/password", async (req, res) => {
 });
 
 // POST /api/profile/2fa/setup — generate TOTP secret + QR code
-router.post("/2fa/setup", async (req, res) => {
+router.post("/2fa/setup", twoFactorRateLimiter, async (req, res) => {
     try {
         const user = await prisma.user.findUnique({
             where: { id: req.user.id },
@@ -103,14 +114,14 @@ router.post("/2fa/setup", async (req, res) => {
             return res.status(400).json(errorResponse("ALREADY_ENABLED", "2FA is already enabled"));
         }
 
-        const secret = generateSecret();
-        const otpauth = generateURI({ issuer: "FlexFlow", label: user.email, secret });
+        const secret = createTotpSecret();
+        const otpauth = otpAuthUri(user.email, secret);
         const qrCode = await QRCode.toDataURL(otpauth);
 
-        // Store the pending secret so verify can use it
+        // Store the pending secret (encrypted at rest) so verify can use it
         await prisma.user.update({
             where: { id: req.user.id },
-            data: { twoFactorSecret: secret },
+            data: { twoFactorSecret: storeTotpSecret(secret) },
         });
 
         return res.status(200).json(successResponse({ secret, qrCode }));
@@ -121,7 +132,7 @@ router.post("/2fa/setup", async (req, res) => {
 });
 
 // POST /api/profile/2fa/verify — confirm TOTP code and enable 2FA
-router.post("/2fa/verify", async (req, res) => {
+router.post("/2fa/verify", twoFactorRateLimiter, async (req, res) => {
     try {
         const { code } = req.body;
         if (!code) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Code is required"));
@@ -135,20 +146,55 @@ router.post("/2fa/verify", async (req, res) => {
             return res.status(400).json(errorResponse("NOT_SETUP", "Run /2fa/setup first"));
         }
 
-        const valid = verifySync({ token: code, secret: user.twoFactorSecret });
-        if (!valid?.valid) {
+        if (!verifyTotp(readTotpSecret(user.twoFactorSecret), code)) {
             return res.status(401).json(errorResponse("INVALID_CODE", "Invalid or expired code — try again"));
         }
 
-        await prisma.user.update({
-            where: { id: req.user.id },
-            data: { twoFactorEnabled: true },
-        });
+        // Enrol + issue a fresh set of single-use recovery codes. Old codes are
+        // discarded so a previous batch can never be replayed.
+        const recoveryCodes = generateRecoveryCodes();
+        const hashed = await Promise.all(recoveryCodes.map((value) => hashRecoveryCode(value)));
 
-        return res.status(200).json(successResponse({ enabled: true }));
+        await prisma.$transaction([
+            prisma.recoveryCode.deleteMany({ where: { userId: req.user.id } }),
+            prisma.recoveryCode.createMany({
+                data: hashed.map((hashedCode) => ({ userId: req.user.id, hashedCode })),
+            }),
+            prisma.user.update({ where: { id: req.user.id }, data: { twoFactorEnabled: true } }),
+        ]);
+
+        return res.status(200).json(successResponse({ enabled: true, recoveryCodes }));
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to enable 2FA"));
+    }
+});
+
+// POST /api/profile/2fa/recovery-codes — regenerate recovery codes (step-up required)
+router.post("/2fa/recovery-codes", twoFactorRateLimiter, requireTwoFactorStepUp, async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: { twoFactorEnabled: true },
+        });
+        if (!user?.twoFactorEnabled) {
+            return res.status(400).json(errorResponse("NOT_ENABLED", "2FA is not enabled"));
+        }
+
+        const recoveryCodes = generateRecoveryCodes();
+        const hashed = await Promise.all(recoveryCodes.map((value) => hashRecoveryCode(value)));
+
+        await prisma.$transaction([
+            prisma.recoveryCode.deleteMany({ where: { userId: req.user.id } }),
+            prisma.recoveryCode.createMany({
+                data: hashed.map((hashedCode) => ({ userId: req.user.id, hashedCode })),
+            }),
+        ]);
+
+        return res.status(200).json(successResponse({ recoveryCodes }));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to regenerate recovery codes"));
     }
 });
 
@@ -218,8 +264,8 @@ router.get("/:userId", async (req, res) => {
     }
 });
 
-// DELETE /api/profile/2fa — disable 2FA (requires valid TOTP code)
-router.delete("/2fa", async (req, res) => {
+// DELETE /api/profile/2fa — disable 2FA (requires a valid TOTP or recovery code)
+router.delete("/2fa", twoFactorRateLimiter, async (req, res) => {
     try {
         const { code } = req.body;
         const user = await prisma.user.findUnique({
@@ -231,15 +277,29 @@ router.delete("/2fa", async (req, res) => {
             return res.status(400).json(errorResponse("NOT_ENABLED", "2FA is not currently enabled"));
         }
 
-        const valid = verifySync({ token: code, secret: user.twoFactorSecret });
-        if (!valid?.valid) {
+        let accepted = verifyTotp(readTotpSecret(user.twoFactorSecret), code);
+        if (!accepted && code) {
+            const codes = await prisma.recoveryCode.findMany({
+                where: { userId: req.user.id, usedAt: null },
+                select: { id: true, hashedCode: true, usedAt: true },
+            });
+            const matchedId = await matchRecoveryCode(code, codes);
+            if (matchedId) {
+                await prisma.recoveryCode.update({ where: { id: matchedId }, data: { usedAt: new Date() } });
+                accepted = true;
+            }
+        }
+        if (!accepted) {
             return res.status(401).json(errorResponse("INVALID_CODE", "Invalid code"));
         }
 
-        await prisma.user.update({
-            where: { id: req.user.id },
-            data: { twoFactorEnabled: false, twoFactorSecret: null },
-        });
+        await prisma.$transaction([
+            prisma.recoveryCode.deleteMany({ where: { userId: req.user.id } }),
+            prisma.user.update({
+                where: { id: req.user.id },
+                data: { twoFactorEnabled: false, twoFactorSecret: null },
+            }),
+        ]);
 
         return res.status(200).json(successResponse({ disabled: true }));
     } catch (error) {

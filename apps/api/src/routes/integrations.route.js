@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { trackApiUsage } from "../middleware/usage.middleware.js";
 import { requireOrgRole } from "../lib/permissions.js";
+import { requireTwoFactorStepUp } from "../middleware/stepup-2fa.middleware.js";
+import { OAUTH_PROVIDERS, oauthConfigured } from "../lib/integration-oauth.js";
 import { encryptSecret, decryptSecret } from "../lib/crypto.js";
 import { recordAudit, clientIpFrom } from "../lib/audit.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
@@ -17,16 +19,25 @@ const SUPPORTED_PROVIDERS = {
         label: "GitHub",
         apiBase: "https://api.github.com",
         validatePath: "/user",
+        description: "Link repositories to projects, sync issues, and open PRs from tasks.",
+        tokenHelpUrl: "https://github.com/settings/tokens",
+        tokenScopes: "repo, read:user",
     },
     slack: {
         label: "Slack",
         apiBase: "https://slack.com/api",
         validatePath: "/auth.test",
+        description: "Mirror task updates into channels and create tasks from messages.",
+        tokenHelpUrl: "https://api.slack.com/apps",
+        tokenScopes: "channels:read, chat:write, team:read, users:read",
     },
     figma: {
         label: "Figma",
         apiBase: "https://api.figma.com",
         validatePath: "/v1/me",
+        description: "Attach design files to projects and link frames to tasks.",
+        tokenHelpUrl: "https://www.figma.com/developers/api#access-tokens",
+        tokenScopes: "current_user:read, file_content:read",
     },
 };
 
@@ -47,6 +58,7 @@ function publicConnection(conn) {
         config: {
             account: config.account || null,
             ...(config.last4 ? { last4: config.last4 } : {}),
+            ...(config.via ? { via: config.via } : {}),
         },
         connectedBy: conn.connectedBy
             ? { id: conn.connectedBy.id, name: conn.connectedBy.name, email: conn.connectedBy.email }
@@ -74,6 +86,20 @@ router.get("/", requireOrgRole("OWNER", "ADMIN", "MEMBER"), async (req, res) => 
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to list integrations"));
     }
+});
+
+// GET /api/integrations/providers — guided-connect metadata for the UI. This
+// drives the step-by-step cards and decides whether to offer OAuth.
+router.get("/providers", async (_req, res) => {
+    const providers = Object.entries(SUPPORTED_PROVIDERS).map(([id, info]) => ({
+        id,
+        label: info.label,
+        description: info.description,
+        tokenHelpUrl: info.tokenHelpUrl,
+        tokenScopes: info.tokenScopes,
+        oauthAvailable: Boolean(OAUTH_PROVIDERS[id]) && oauthConfigured(id),
+    }));
+    return res.status(200).json(successResponse({ providers }));
 });
 
 async function validateProviderToken(provider, token) {
@@ -115,8 +141,8 @@ async function validateProviderToken(provider, token) {
     };
 }
 
-// POST /api/integrations — connect a GitHub or Slack account
-router.post("/", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
+// POST /api/integrations — connect a GitHub, Slack or Figma account
+router.post("/", requireOrgRole("OWNER", "ADMIN"), requireTwoFactorStepUp, async (req, res) => {
     try {
         const { orgId, provider, token, webhookSecret, webhookSigningSecret, webhookPasscode } = req.body;
         if (!orgId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "orgId is required"));
@@ -234,7 +260,7 @@ router.post("/:id/test", async (req, res) => {
 });
 
 // DELETE /api/integrations/:id — disconnect (remove token + connection)
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireTwoFactorStepUp, async (req, res) => {
     try {
         const connection = await prisma.integrationConnection.findUnique({ where: { id: req.params.id } });
         if (!connection) return res.status(404).json(errorResponse("NOT_FOUND", "Integration not found"));

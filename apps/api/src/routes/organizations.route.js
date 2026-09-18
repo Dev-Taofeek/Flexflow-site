@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { trackApiUsage } from "../middleware/usage.middleware.js";
 import { requireOrgRole } from "../lib/permissions.js";
+import { isStepUpSatisfied, requireTwoFactorStepUp } from "../middleware/stepup-2fa.middleware.js";
 import { effectivePlanId, getOrgEntitlements, planInfoForOrg } from "../lib/entitlements.js";
 import { getEmailConfigStatus, isEmailConfigured, sendTransactionalEmail } from "../services/email.service.js";
 import { notifyUser } from "../services/notification.service.js";
@@ -228,13 +229,30 @@ router.get("/:orgId", async (req, res) => {
 
 router.patch("/:orgId", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
     try {
-        const { name, description, logoUrl } = req.body;
+        const { name, description, logoUrl, requireTwoFactor } = req.body;
+
+        // Org-wide 2FA enforcement is security-sensitive: OWNER only, and a
+        // fresh step-up code is required when toggling it on or off.
+        if (requireTwoFactor !== undefined) {
+            if (req.organizationMember.role !== "OWNER") {
+                return res.status(403).json(errorResponse("FORBIDDEN", "Only the organization owner can change 2FA enforcement"));
+            }
+            const stepUpOk = await isStepUpSatisfied(req, req.user.id);
+            if (!stepUpOk) {
+                return res.status(401).json({
+                    ...errorResponse("TWO_FACTOR_REQUIRED", "Enter your two-factor authentication code to continue."),
+                    requiresTwoFactor: true,
+                });
+            }
+        }
+
         const org = await prisma.organization.update({
             where: { id: req.params.orgId },
             data: {
                 ...(name && { name: name.trim() }),
                 ...(description !== undefined && { description: description?.trim() || null }),
                 ...(logoUrl !== undefined && { logoUrl }),
+                ...(requireTwoFactor !== undefined && { requireTwoFactor: Boolean(requireTwoFactor) }),
             },
         });
 
@@ -405,7 +423,7 @@ router.delete("/:orgId/members/:userId", requireOrgRole("OWNER", "ADMIN"), async
     }
 });
 
-router.post("/:orgId/invite", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
+router.post("/:orgId/invite", requireOrgRole("OWNER", "ADMIN"), requireTwoFactorStepUp, async (req, res) => {
     try {
         const { email, role = "MEMBER" } = req.body;
         const normalizedEmail = email?.trim().toLowerCase();

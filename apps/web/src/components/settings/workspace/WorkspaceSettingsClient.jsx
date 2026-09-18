@@ -12,7 +12,6 @@ import { useRole } from "@/hooks/useRole";
 import { imageFileToLogoDataUrl } from "@/lib/image-upload";
 import { fetchWorkspace, updateWorkspace } from "@/lib/org-api";
 import { apiRequest } from "@/lib/api-client";
-import Link from "next/link";
 import { useI18n } from "@/i18n";
 
 const LABEL_COLORS = [
@@ -293,79 +292,7 @@ export function WorkspaceSettingsClient() {
         )}
       </section>
 
-      {/* ── Integrations ─────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-(--border) bg-(--bg-elevated) p-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-(--bg-overlay) text-brand-500">
-            <svg
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.7}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="14.5" y="2" width="4" height="8" rx="2" />
-              <path d="M18.5 6H3" />
-              <rect x="2" y="14.5" width="8" height="4" rx="2" />
-              <path d="M6 18.5V3" />
-              <rect x="14.5" y="14.5" width="4" height="4" rx="2" />
-              <rect x="2" y="2" width="4" height="4" rx="2" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-(--text-primary)">{t("settings.workspace.integrationsTitle")}</h2>
-            <p className="mt-1 text-sm text-(--text-secondary)">
-              {t("settings.workspace.integrationsDescription")}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-6 rounded-xl border border-(--border) bg-(--bg) p-5">
-          <div className="flex items-center gap-3">
-            <svg
-              className="h-5 w-5 shrink-0 text-brand-500"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.7}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="14.5" y="2" width="4" height="8" rx="2" />
-              <path d="M18.5 6H3" />
-              <rect x="2" y="14.5" width="8" height="4" rx="2" />
-              <path d="M6 18.5V3" />
-              <rect x="14.5" y="14.5" width="4" height="4" rx="2" />
-              <rect x="2" y="2" width="4" height="4" rx="2" />
-            </svg>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-(--text-primary)">{t("settings.workspace.slackWebhooks")}</p>
-                <span className="rounded-full border border-(--border) px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-(--text-tertiary)">
-                  {t("settings.common.planned")}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-(--text-tertiary)">
-                {t("settings.workspace.slackWebhooksDescription")}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <p className="mt-4 text-xs leading-relaxed text-(--text-tertiary)">
-          {t("settings.workspace.roadmapLine1")}{" "}
-          <Link href="/roadmap" className="font-medium text-brand-500 hover:text-brand-400">
-            {t("settings.workspace.roadmap")}
-          </Link>{". "}
-          {t("settings.workspace.roadmapLine2")}{" "}
-          <Link href="/contact" className="font-medium text-brand-500 hover:text-brand-400">
-            {t("settings.workspace.tellUs")}
-          </Link>{" "}
-          {t("settings.workspace.roadmapLine3")}
-        </p>
-      </section>
+      {/* Integration connections now live on the dedicated Integrations page. */}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { apiRequest } from "@/lib/api-client";
 import { useApp } from "@/contexts/AppContext";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useToast } from "@/contexts/ToastContext";
+import { useStepUp } from "@/contexts/StepUpContext";
 import { useRole } from "@/hooks/useRole";
 import { useI18n } from "@/i18n";
 
@@ -79,6 +80,7 @@ export default function BillingSettingsPage() {
     const searchParams = useSearchParams();
     const { addToast } = useToast();
     const { t, locale } = useI18n();
+    const { runWithStepUp } = useStepUp();
     const { currentOrg, accessToken, refreshOrganizations } = useApp();
     const { isFree, isPro, isCustom, planName, planInfo, limits, can } = useEntitlements();
     const { isOwner } = useRole();
@@ -133,22 +135,25 @@ export default function BillingSettingsPage() {
         if (!orgId || !accessToken) return;
         setCheckoutLoading(true);
         try {
-            const res = await apiRequest("/billing/checkout", {
-                method: "POST",
-                token: accessToken,
-                body: {
-                    organizationId: orgId,
-                    plan: targetPlan.toUpperCase(),
-                    billingCycle: cycle,
-                    addOns: targetPlan === "custom" ? selectedAddOns : [],
-                },
-                toast: false,
-            });
+            const res = await runWithStepUp(({ code }) =>
+                apiRequest("/billing/checkout", {
+                    method: "POST",
+                    token: accessToken,
+                    headers: code ? { "x-2fa-code": code } : {},
+                    body: {
+                        organizationId: orgId,
+                        plan: targetPlan.toUpperCase(),
+                        billingCycle: cycle,
+                        addOns: targetPlan === "custom" ? selectedAddOns : [],
+                    },
+                    toast: false,
+                }),
+            );
             // Hand off to the provider's hosted checkout. Our own /billing/confirm
             // page is where the mock provider (and real-provider returns) finalize.
             window.location.assign(res.url);
         } catch (err) {
-            addToast(err.message, "error");
+            if (!err?.cancelled) addToast(err.message, "error");
             setCheckoutLoading(false);
         }
     }
@@ -166,19 +171,6 @@ export default function BillingSettingsPage() {
             addToast(err.message, "error");
         } finally {
             setCancelLoading(false);
-        }
-    }
-
-    async function handleDowngrade() {
-        if (!orgId || !accessToken) return;
-        if (!window.confirm(t("settings.billing.downgradeConfirm"))) return;
-        try {
-            await apiRequest(`/billing/downgrade/${orgId}`, { method: "POST", token: accessToken, toast: false });
-            addToast(t("settings.billing.downgradedToFree"), "success");
-            await refreshOrganizations();
-            await load(orgId);
-        } catch (err) {
-            addToast(err.message, "error");
         }
     }
 
@@ -226,15 +218,6 @@ export default function BillingSettingsPage() {
                             className="rounded-lg border border-(--border) px-4 py-2 text-sm font-medium text-(--text-secondary) transition-colors hover:border-(--border-strong) hover:text-(--text-primary) disabled:opacity-60"
                         >
                             {cancelLoading ? t("settings.common.processing") : t("settings.billing.cancelSubscription")}
-                        </button>
-                    )}
-                    {!isFree && (
-                        <button
-                            type="button"
-                            onClick={handleDowngrade}
-                            className="rounded-lg border border-(--border) px-4 py-2 text-sm font-medium text-(--text-secondary) transition-colors hover:border-(--border-strong) hover:text-(--text-primary)"
-                        >
-                            {t("settings.billing.downgradeToFreeTest")}
                         </button>
                     )}
                 </div>
@@ -304,6 +287,21 @@ export default function BillingSettingsPage() {
                         ))}
                     </div>
                 </div>
+
+                {isFree && data?.firstMonthFreeEligible ? (
+                    <div className="mt-5 flex items-start gap-3 rounded-xl border border-brand-500/30 bg-brand-500/5 px-4 py-3">
+                        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
+                        <div>
+                            <p className="text-sm font-medium text-(--text-primary)">{t("settings.billing.firstMonthFree")}</p>
+                            <p className="mt-0.5 text-xs text-(--text-muted)">{t("settings.billing.firstMonthFreeDescription")}</p>
+                        </div>
+                    </div>
+                ) : null}
+                {!isFree ? (
+                    <p className="mt-5 rounded-xl border border-(--border) bg-(--bg-sunken) px-4 py-3 text-xs leading-relaxed text-(--text-muted)">
+                        {t("settings.billing.upgradeOnlyNote")}
+                    </p>
+                ) : null}
 
                 <div className="mt-6 grid gap-4 lg:grid-cols-2">
                     {/* Pro card */}

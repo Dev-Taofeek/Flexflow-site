@@ -1,10 +1,11 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { AlertTriangle, Building2, Check, ChevronRight, Copy, ImagePlus, Loader2, Sparkles, Trash2, UserPlus } from "lucide-react";
+import { AlertTriangle, Building2, Check, ChevronRight, Copy, ImagePlus, Loader2, ShieldCheck, Sparkles, Trash2, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
+import { useStepUp } from "@/contexts/StepUpContext";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { apiRequest } from "@/lib/api-client";
 import { imageFileToLogoDataUrl } from "@/lib/image-upload";
@@ -117,6 +118,7 @@ function MemberTag({ member, canEdit, onSave }) {
 export default function OrganizationSettingsPage() {
   const { currentOrg, accessToken, isReady, refreshOrganizations } = useApp();
   const { addToast } = useToast();
+  const { runWithStepUp } = useStepUp();
   const router = useRouter();
   const { t, locale } = useI18n();
   const [org, setOrg] = useState(null);
@@ -124,6 +126,8 @@ export default function OrganizationSettingsPage() {
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [requireTwoFactor, setRequireTwoFactor] = useState(false);
+  const [twoFactorSaving, setTwoFactorSaving] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
@@ -164,6 +168,7 @@ export default function OrganizationSettingsPage() {
         setName(orgData.name || "");
         setDescription(orgData.description || "");
         setLogoUrl(orgData.logoUrl || "");
+        setRequireTwoFactor(Boolean(orgData.requireTwoFactor));
         setMembers(memberData.members || []);
         setInvites(memberData.invites || []);
         setBillingData(billing || null);
@@ -230,7 +235,9 @@ export default function OrganizationSettingsPage() {
     if (!inviteEmail.includes("@")) return;
     setInviting(true);
     try {
-      const invite = await inviteToOrg(currentOrg.id, inviteEmail, inviteRole, accessToken);
+      const invite = await runWithStepUp(({ code }) =>
+        inviteToOrg(currentOrg.id, inviteEmail, inviteRole, accessToken, code),
+      );
       setInvites((prev) => [
         invite,
         ...prev.filter((inv) => inv.id !== invite.id && inv.email?.toLowerCase() !== invite.email?.toLowerCase()),
@@ -243,10 +250,32 @@ export default function OrganizationSettingsPage() {
         addToast(`${t("settings.organization.inviteLinkNoEmail")}${missing}`, "info");
       }
     } catch (err) {
-      setError(err.message);
-      addToast(err.message, "error");
+      if (!err?.cancelled) {
+        setError(err.message);
+        addToast(err.message, "error");
+      }
     } finally {
       setInviting(false);
+    }
+  }
+
+  async function handleToggleRequire2FA(next) {
+    setTwoFactorSaving(true);
+    try {
+      const updated = await runWithStepUp(({ code }) =>
+        updateOrganization(currentOrg.id, { requireTwoFactor: next }, accessToken, code),
+      );
+      setRequireTwoFactor(Boolean(updated?.requireTwoFactor));
+      addToast(
+        next
+          ? t("settings.organization.requireTwoFactorEnabledToast")
+          : t("settings.organization.requireTwoFactorDisabledToast"),
+        "success",
+      );
+    } catch (err) {
+      if (!err?.cancelled) addToast(err.message, "error");
+    } finally {
+      setTwoFactorSaving(false);
     }
   }
 
@@ -611,6 +640,41 @@ export default function OrganizationSettingsPage() {
           </div>
         </section>
       )}
+
+      {/* Security */}
+      <section className="rounded-xl border border-(--border) bg-(--bg-elevated) p-5">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+          <h2 className="text-sm font-semibold text-(--text-primary)">{t("settings.organization.securityTitle")}</h2>
+        </div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-(--text-primary)">{t("settings.organization.requireTwoFactor")}</p>
+            <p className="mt-0.5 text-xs text-(--text-muted)">{t("settings.organization.requireTwoFactorDescription")}</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={requireTwoFactor}
+            aria-label={t("settings.organization.requireTwoFactor")}
+            disabled={twoFactorSaving || currentOrg?.role !== "OWNER"}
+            onClick={() => handleToggleRequire2FA(!requireTwoFactor)}
+            className={[
+              "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+              requireTwoFactor ? "bg-brand-600" : "bg-(--border)",
+            ].join(" ")}
+          >
+            <span
+              className={[
+                "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
+                requireTwoFactor ? "translate-x-5" : "translate-x-0.5",
+              ].join(" ")}
+            />
+          </button>
+        </div>
+      </section>
 
       {/* Danger zone — Owner only */}
       {currentOrg?.role === "OWNER" && (

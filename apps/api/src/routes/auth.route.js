@@ -1,19 +1,15 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { createRequire } from "module";
 import { Router } from "express";
-
-// otplib v13 exposes a functional API (generateSecret, generateURI, verifySync).
-// Load via CJS for stable interop across runtimes.
-const require = createRequire(import.meta.url);
-const { verifySync } = require("otplib");
 
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { planInfoForOrg } from "../lib/entitlements.js";
 import { secureEqual } from "../lib/secure-compare.js";
+import { verifyTotp, matchRecoveryCode, readTotpSecret } from "../lib/twofa.js";
 import { authRateLimiter } from "../middleware/rate-limit.middleware.js";
+import { signEnrollmentToken } from "../middleware/enrollment.middleware.js";
 import { sendTransactionalEmail } from "../services/email.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
@@ -23,14 +19,20 @@ const router = Router();
 // not exist (avoids using a timing side-channel to enumerate accounts).
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync(`dummy-${env.JWT_ACCESS_SECRET.slice(0, 8)}`, 12);
 
+const ACCESS_TOKEN_TTL = "24h";
+const REMEMBERED_SESSION_TTL = "30d";
+const DEFAULT_SESSION_TTL = "1d";
+
 function signAccessToken(userId) {
-    return jwt.sign({ userId }, env.JWT_ACCESS_SECRET, { algorithm: "HS256", expiresIn: "24h" });
+    return jwt.sign({ userId }, env.JWT_ACCESS_SECRET, { algorithm: "HS256", expiresIn: ACCESS_TOKEN_TTL });
 }
 
-function signRefreshToken(userId) {
-    return jwt.sign({ userId }, env.JWT_REFRESH_SECRET, {
+// `remember` is embedded in the token so refresh rotation preserves the
+// chosen session length (30 days when remembered, otherwise 1 day).
+function signRefreshToken(userId, remember = false) {
+    return jwt.sign({ userId, remember: Boolean(remember) }, env.JWT_REFRESH_SECRET, {
         algorithm: "HS256",
-        expiresIn: "30d",
+        expiresIn: remember ? REMEMBERED_SESSION_TTL : DEFAULT_SESSION_TTL,
         jwtid: crypto.randomBytes(16).toString("hex"),
     });
 }
@@ -210,7 +212,7 @@ router.post("/register", authRateLimiter, async (req, res) => {
 
 router.post("/login", authRateLimiter, async (req, res) => {
     try {
-        const { email, password, code } = req.body;
+        const { email, password, code, recoveryCode, rememberMe } = req.body;
 
         if (!email || !password) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Email and password are required"));
@@ -245,16 +247,28 @@ router.post("/login", authRateLimiter, async (req, res) => {
         delete safeUser.passwordHash;
         delete safeUser.twoFactorSecret;
 
-        // 2FA enforcement — a valid TOTP code is required before any tokens are issued
+        // 2FA enforcement — a valid TOTP or recovery code is required before
+        // any tokens are issued.
         if (user.twoFactorEnabled) {
-            if (!code) {
+            if (!code && !recoveryCode) {
                 return res.status(200).json(successResponse({
                     requiresTwoFactor: true,
                     user: safeUser,
                 }));
             }
 
-            const codeValid = user.twoFactorSecret && verifySync({ token: code, secret: user.twoFactorSecret }).valid;
+            let codeValid = verifyTotp(readTotpSecret(user.twoFactorSecret), code);
+            if (!codeValid && recoveryCode) {
+                const stored = await prisma.recoveryCode.findMany({
+                    where: { userId: user.id, usedAt: null },
+                    select: { id: true, hashedCode: true, usedAt: true },
+                });
+                const matchedId = await matchRecoveryCode(recoveryCode, stored);
+                if (matchedId) {
+                    await prisma.recoveryCode.update({ where: { id: matchedId }, data: { usedAt: new Date() } });
+                    codeValid = true;
+                }
+            }
             if (!codeValid) {
                 return res.status(401).json(errorResponse("INVALID_CODE", "Invalid or expired code — try again"));
             }
@@ -275,8 +289,26 @@ router.post("/login", authRateLimiter, async (req, res) => {
             orderBy: { createdAt: "asc" },
         });
 
+        // Organization-enforced 2FA: members must enrol before a full session
+        // is granted. We hand back a short-lived enrolment token so the client
+        // can complete setup + verification without exposing the app.
+        if (!user.twoFactorEnabled) {
+            const enforcing = organizations.filter((m) => m.organization.requireTwoFactor);
+            if (enforcing.length > 0) {
+                return res.status(403).json({
+                    ...errorResponse(
+                        "TWO_FACTOR_SETUP_REQUIRED",
+                        "Your organization requires two-factor authentication. Enable it to continue.",
+                    ),
+                    requiresTwoFactorSetup: true,
+                    enrollmentToken: signEnrollmentToken(user.id),
+                    organizations: enforcing.map((m) => ({ id: m.organization.id, name: m.organization.name })),
+                });
+            }
+        }
+
         const accessToken = signAccessToken(user.id);
-        const refreshToken = signRefreshToken(user.id);
+        const refreshToken = signRefreshToken(user.id, rememberMe);
 
         await prisma.user.update({ where: { id: user.id }, data: { refreshToken } }).catch((e) => {
             console.warn("refreshToken save skipped (run prisma migrate):", e.message);
@@ -313,11 +345,12 @@ router.post("/refresh", authRateLimiter, async (req, res) => {
                 return res.status(401).json(errorResponse("UNAUTHORIZED", "Invalid session"));
             }
 
-            jwt.verify(user.refreshToken, env.JWT_REFRESH_SECRET);
+            const decoded = jwt.verify(user.refreshToken, env.JWT_REFRESH_SECRET);
             const accessToken = signAccessToken(user.id);
 
-            // Rotate the refresh token so the 30-day session slides forward on activity
-            const newRefreshToken = signRefreshToken(user.id);
+            // Rotate the refresh token so the session slides forward on
+            // activity, preserving the user's "remember me" choice.
+            const newRefreshToken = signRefreshToken(user.id, decoded.remember);
             await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefreshToken } }).catch(() => {});
 
             return res.status(200).json(successResponse({ accessToken }));
@@ -342,7 +375,7 @@ router.post("/refresh", authRateLimiter, async (req, res) => {
         const accessToken = signAccessToken(user.id);
 
         // Rotate the refresh token so an absorbed token cannot be replayed.
-        const newRefreshToken = signRefreshToken(user.id);
+        const newRefreshToken = signRefreshToken(user.id, decoded.remember);
         await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefreshToken } }).catch(() => {});
 
         return res.status(200).json(successResponse({ accessToken, refreshToken: newRefreshToken }));
@@ -471,4 +504,4 @@ router.post("/reset-password", authRateLimiter, async (req, res) => {
     }
 });
 
-export { router as authRouter };
+export { router as authRouter, signAccessToken, signRefreshToken, shapeOrganizations };

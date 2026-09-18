@@ -40,6 +40,18 @@ const envSchema = z.object({
     GH_APP_WEBHOOK_SECRET: z.string().optional(),
     SLACK_SIGNING_SECRET: z.string().optional(),
     FIGMA_WEBHOOK_PASSCODE: z.string().optional(),
+
+    // ── Integration OAuth apps (optional) ─────────────────────────────────────
+    // When a provider's client id/secret are present, the guided Integrations
+    // UI additionally offers a one-click OAuth connect flow.
+    GITHUB_CLIENT_ID: z.string().optional(),
+    GITHUB_CLIENT_SECRET: z.string().optional(),
+    SLACK_CLIENT_ID: z.string().optional(),
+    SLACK_CLIENT_SECRET: z.string().optional(),
+    FIGMA_CLIENT_ID: z.string().optional(),
+    FIGMA_CLIENT_SECRET: z.string().optional(),
+    // Public base URL of this API, used to build OAuth redirect URIs.
+    API_PUBLIC_URL: z.string().url().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

@@ -7,6 +7,7 @@ import { CheckCircle2, CircleAlert, Loader2 } from "lucide-react";
 
 import { apiRequest } from "@/lib/api-client";
 import { useApp } from "@/contexts/AppContext";
+import { useStepUp } from "@/contexts/StepUpContext";
 import { useI18n } from "@/i18n";
 
 /**
@@ -34,9 +35,11 @@ function BillingConfirmContent() {
     const searchParams = useSearchParams();
     const { accessToken, refreshOrganizations } = useApp();
     const { t } = useI18n();
+    const { runWithStepUp } = useStepUp();
 
     const [state, setState] = useState("working");
     const [message, setMessage] = useState("");
+    const [firstMonthFree, setFirstMonthFree] = useState(false);
     const startedRef = useRef(false);
 
     const orgId = searchParams.get("orgId") || searchParams.get("org");
@@ -69,19 +72,23 @@ function BillingConfirmContent() {
                 addOns = [];
             }
 
-            await apiRequest("/billing/confirm", {
-                method: "POST",
-                token: accessToken,
-                toast: false,
-                body: {
-                    sessionId: sessionIdParam,
-                    organizationId: orgId,
-                    plan,
-                    billingCycle,
-                    addOns,
-                },
-            });
+            const result = await runWithStepUp(({ code }) =>
+                apiRequest("/billing/confirm", {
+                    method: "POST",
+                    token: accessToken,
+                    toast: false,
+                    headers: code ? { "x-2fa-code": code } : {},
+                    body: {
+                        sessionId: sessionIdParam,
+                        organizationId: orgId,
+                        plan,
+                        billingCycle,
+                        addOns,
+                    },
+                }),
+            );
 
+            if (result?.firstMonthFree) setFirstMonthFree(true);
             await refreshOrganizations();
             setState("done");
             const target = `/settings/billing${orgId ? `?orgId=${orgId}` : ""}`;
@@ -90,7 +97,7 @@ function BillingConfirmContent() {
             setState("error");
             setMessage(err.message || t("settings.billing.confirmError"));
         }
-    }, [accessToken, orgId, provider, searchParams, refreshOrganizations, router, t]);
+    }, [accessToken, orgId, provider, searchParams, refreshOrganizations, router, t, runWithStepUp]);
 
     useEffect(() => {
         const timer = setTimeout(() => { run(); }, 0);
@@ -120,6 +127,11 @@ function BillingConfirmContent() {
                 {state === "done" && t("settings.billing.confirmSuccess")}
                 {state === "error" && message}
             </p>
+            {state === "done" && firstMonthFree ? (
+                <p className="mt-2 rounded-full bg-brand-500/10 px-3 py-1 text-sm font-medium text-brand-600">
+                    {t("settings.billing.firstMonthFreeApplied")}
+                </p>
+            ) : null}
 
             {(state === "done" || state === "error") && (
                 <Link

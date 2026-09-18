@@ -6,10 +6,12 @@ import { authRouter } from "./auth.route.js";
 import { billingRouter } from "./billing.route.js";
 import { intelligenceRouter } from "./intelligence.route.js";
 import { integrationsRouter } from "./integrations.route.js";
+import { integrationsOauthRouter } from "./integrations-oauth.route.js";
 import { integrationsWebhooksRouter } from "./integrations-webhooks.route.js";
 import { automationsRouter } from "./automations.route.js";
 import { tasksRouter } from "./tasks.route.js";
 import { dashboardRouter } from "./dashboard.route.js";
+import { enrollmentRouter } from "./enrollment.route.js";
 import { healthRouter } from "./health.route.js";
 import { notificationsRouter } from "./notifications.route.js";
 import { organizationsRouter } from "./organizations.route.js";
@@ -24,6 +26,7 @@ const router = Router();
 
 router.use("/health", healthRouter);
 router.use("/auth", authRouter);
+router.use("/enrollment", enrollmentRouter);
 router.use("/profile", profileRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/search", searchRouter);
@@ -39,6 +42,7 @@ router.use("/audit", auditRouter);
 router.use("/billing", billingRouter);
 router.use("/intelligence", intelligenceRouter);
 router.use("/integrations/webhooks", integrationsWebhooksRouter);
+router.use("/integrations/oauth", integrationsOauthRouter);
 router.use("/integrations", automationsRouter);
 router.use("/integrations", integrationsRouter);
 

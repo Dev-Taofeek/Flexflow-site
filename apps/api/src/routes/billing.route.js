@@ -3,7 +3,8 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requireOrgRole } from "../lib/permissions.js";
-import { enforceFeature, getOrgEntitlements, planInfoForOrg } from "../lib/entitlements.js";
+import { requireTwoFactorStepUp } from "../middleware/stepup-2fa.middleware.js";
+import { assessPlanChange, hasUsedFirstMonthFree } from "../lib/billing-policy.js";import { enforceFeature, getOrgEntitlements, planInfoForOrg } from "../lib/entitlements.js";
 import { getApiUsage, getIntelligenceUsage } from "../lib/usage.js";
 import { recordAudit, clientIpFrom } from "../lib/audit.js";
 import { notifyUser } from "../services/notification.service.js";
@@ -52,7 +53,7 @@ router.get("/current/:orgId", requireOrgRole("OWNER", "ADMIN", "MEMBER", "VIEWER
         if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
 
         const entitlements = getOrgEntitlements(org);
-        const [apiUsage, intelligenceUsage, billingEvents, openAuditEvents] = await Promise.all([
+        const [apiUsage, intelligenceUsage, billingEvents, openAuditEvents, firstMonthFreeUsed] = await Promise.all([
             getApiUsage(org.id),
             getIntelligenceUsage(org.id),
             prisma.billingEvent.findMany({
@@ -61,11 +62,13 @@ router.get("/current/:orgId", requireOrgRole("OWNER", "ADMIN", "MEMBER", "VIEWER
                 take: 25,
             }),
             prisma.auditEvent.count({ where: { organizationId: org.id } }),
+            hasUsedFirstMonthFree(prisma, org.id),
         ]);
 
         return res.status(200).json(successResponse({
             organizationId: org.id,
             planInfo: planInfoForOrg(org),
+            firstMonthFreeEligible: !firstMonthFreeUsed,
             entitlements: {
                 planId: entitlements.planId,
                 unavailableFeatures: [],
@@ -104,7 +107,9 @@ router.post("/preview", async (req, res) => {
 });
 
 // POST /api/billing/checkout — start a checkout for the chosen configuration.
-router.post("/checkout", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
+// Plan changes are upgrade-only while a paid subscription is live; step-up 2FA
+// is required for users who have 2FA enabled.
+router.post("/checkout", requireOrgRole("OWNER", "ADMIN"), requireTwoFactorStepUp, async (req, res) => {
     try {
         const { plan = "PRO", billingCycle = "MONTHLY", addOns = [], successUrl, cancelUrl } = req.body;
         const orgId = req.body.organizationId || req.params.orgId;
@@ -112,6 +117,14 @@ router.post("/checkout", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
 
         const org = await prisma.organization.findUnique({ where: { id: orgId } });
         if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
+
+        const assessment = assessPlanChange(org, { planId: plan, billingCycle });
+        if (!assessment.allowed) {
+            return res.status(409).json({
+                ...errorResponse(assessment.code, "Your current subscription cannot be changed to a lower plan while it is active."),
+                data: { code: assessment.code, upgradeOnly: true },
+            });
+        }
 
         const checkout = await createCheckout({
             organization: org,
@@ -142,7 +155,7 @@ router.post("/checkout", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
 // POST /api/billing/confirm — mock-provider completion (Stripe goes through the
 // webhook below). Only reachable when the mock provider is active, so a real
 // payment provider can never grant entitlements through this self-service path.
-router.post("/confirm", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
+router.post("/confirm", requireOrgRole("OWNER", "ADMIN"), requireTwoFactorStepUp, async (req, res) => {
     try {
         if (getProvider() !== "mock") {
             return res.status(403).json(errorResponse("FORBIDDEN", "Checkout confirmation is only available with the mock provider"));
@@ -152,7 +165,18 @@ router.post("/confirm", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
         const orgId = organizationId || req.params.orgId || req.body.orgId;
         if (!orgId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "organizationId is required"));
 
-        const { organization } = await finalizeSubscription({
+        const org = await prisma.organization.findUnique({ where: { id: orgId } });
+        if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
+
+        const assessment = assessPlanChange(org, { planId: plan, billingCycle });
+        if (!assessment.allowed) {
+            return res.status(409).json({
+                ...errorResponse(assessment.code, "Your current subscription cannot be changed to a lower plan while it is active."),
+                data: { code: assessment.code, upgradeOnly: true },
+            });
+        }
+
+        const { organization, firstMonthFree } = await finalizeSubscription({
             organizationId: orgId,
             planId: plan.toLowerCase(),
             billingCycle,
@@ -164,19 +188,22 @@ router.post("/confirm", requireOrgRole("OWNER", "ADMIN"), async (req, res) => {
             actorId: req.user.id,
             action: "billing.checkout_confirmed",
             resource: "billing",
-            metadata: { sessionId, plan, billingCycle, addOns },
+            metadata: { sessionId, plan, billingCycle, addOns, firstMonthFree },
             ipAddress: clientIpFrom(req),
         });
 
         await notifyUser(req.user.id, {
             title: "Plan upgraded",
-            message: `${organization.name} is now on the ${plan === "PRO" ? "Pro" : "Custom"} plan.`,
+            message: firstMonthFree
+                ? `${organization.name} is now on the ${plan === "PRO" ? "Pro" : "Custom"} plan — your first month is free.`
+                : `${organization.name} is now on the ${plan === "PRO" ? "Pro" : "Custom"} plan.`,
             type: "SYSTEM",
         });
 
         return res.status(200).json(successResponse({
             organization: { ...organization, planInfo: planInfoForOrg(organization) },
             entitlements: getOrgEntitlements(organization),
+            firstMonthFree,
         }));
     } catch (error) {
         console.error(error);

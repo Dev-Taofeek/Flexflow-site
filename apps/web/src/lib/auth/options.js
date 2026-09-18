@@ -116,6 +116,7 @@ async function authorize(credentials) {
                 email: parsed.data.email,
                 password: parsed.data.password,
                 ...(parsed.data.code ? { code: parsed.data.code } : {}),
+                ...(parsed.data.rememberMe ? { rememberMe: true } : {}),
             }),
         });
 

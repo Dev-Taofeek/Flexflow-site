@@ -3,9 +3,10 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { CheckCircle2, Loader2, QrCode, ShieldCheck, ShieldOff } from "lucide-react";
+import { CheckCircle2, Copy, KeyRound, Loader2, QrCode, ShieldCheck, ShieldOff } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
+import { useStepUp } from "@/contexts/StepUpContext";
 import { apiRequest } from "@/lib/api-client";
 import { useI18n } from "@/i18n";
 
@@ -32,6 +33,7 @@ export function ProfileSettingsClient() {
     const { accessToken } = useApp();
     const { addToast } = useToast();
     const { t } = useI18n();
+    const { runWithStepUp } = useStepUp();
 
     const user = session?.user;
     const avatarRef = useRef(null);
@@ -50,12 +52,16 @@ export function ProfileSettingsClient() {
     const [twoFA, setTwoFA] = useState({ enabled: false, qrCode: "", secret: "", code: "", loading: false, msg: { ok: true, text: "" } });
     const [disableArmed, setDisableArmed] = useState(false);
     const [disableCode, setDisableCode] = useState("");
+    const [recoveryCodes, setRecoveryCodes] = useState([]);
+    const [recoveryRemaining, setRecoveryRemaining] = useState(null);
+    const [recoveryBusy, setRecoveryBusy] = useState(false);
 
     useEffect(() => {
         if (!accessToken) return;
         apiRequest("/profile", { token: accessToken })
             .then((data) => {
                 setTwoFA((s) => ({ ...s, enabled: data.twoFactorEnabled || false }));
+                setRecoveryRemaining(typeof data.recoveryCodesRemaining === "number" ? data.recoveryCodesRemaining : null);
                 if (data.bio) setBio(data.bio);
             })
             .catch(() => {});
@@ -97,13 +103,22 @@ async function changePassword(e) {
         setPwLoading(true);
         setPwMsg({ ok: true, text: "" });
         try {
-            await apiRequest("/profile/password", { method: "PATCH", token: accessToken, body: { currentPassword: curPw, newPassword: newPw } });
+            await runWithStepUp(({ code }) =>
+                apiRequest("/profile/password", {
+                    method: "PATCH",
+                    token: accessToken,
+                    headers: code ? { "x-2fa-code": code } : {},
+                    body: { currentPassword: curPw, newPassword: newPw },
+                }),
+            );
             setCurPw(""); setNewPw("");
             setPwMsg({ ok: true, text: t("settings.profile.passwordUpdated") });
             addToast(t("settings.profile.passwordUpdated"), "success");
         } catch (err) {
-            setPwMsg({ ok: false, text: err.message });
-            addToast(err.message, "error");
+            if (!err?.cancelled) {
+                setPwMsg({ ok: false, text: err.message });
+                addToast(err.message, "error");
+            }
         } finally {
             setPwLoading(false);
         }
@@ -134,8 +149,12 @@ setTwoFA((s) => ({ ...s, loading: false, qrCode: data.qrCode, secret: data.secre
         e.preventDefault();
         setTwoFA((s) => ({ ...s, loading: true }));
         try {
-            await apiRequest("/profile/2fa/verify", { method: "POST", token: accessToken, body: { code: twoFA.code } });
-setTwoFA((s) => ({ ...s, loading: false, enabled: true, qrCode: "", secret: "", code: "", msg: { ok: true, text: t("settings.profile.twoFactorEnabledStatus") } }));
+            const data = await apiRequest("/profile/2fa/verify", { method: "POST", token: accessToken, body: { code: twoFA.code } });
+            setTwoFA((s) => ({ ...s, loading: false, enabled: true, qrCode: "", secret: "", code: "", msg: { ok: true, text: t("settings.profile.twoFactorEnabledStatus") } }));
+            if (Array.isArray(data.recoveryCodes) && data.recoveryCodes.length) {
+                setRecoveryCodes(data.recoveryCodes);
+                setRecoveryRemaining(data.recoveryCodes.length);
+            }
             addToast(t("settings.profile.twoFactorEnabledToast"), "success");
         } catch (err) {
             setTwoFA((s) => ({ ...s, loading: false, msg: { ok: false, text: err.message } }));
@@ -143,15 +162,47 @@ setTwoFA((s) => ({ ...s, loading: false, enabled: true, qrCode: "", secret: "", 
         }
     }
 
+    async function regenerateCodes() {
+        setRecoveryBusy(true);
+        try {
+            const data = await runWithStepUp(({ code }) =>
+                apiRequest("/profile/2fa/recovery-codes", {
+                    method: "POST",
+                    token: accessToken,
+                    headers: code ? { "x-2fa-code": code } : {},
+                }),
+            );
+            const codes = Array.isArray(data.recoveryCodes) ? data.recoveryCodes : [];
+            setRecoveryCodes(codes);
+            setRecoveryRemaining(codes.length);
+            addToast(t("settings.profile.recoveryCodesRegenerated"), "success");
+        } catch (err) {
+            if (!err?.cancelled) addToast(err.message, "error");
+        } finally {
+            setRecoveryBusy(false);
+        }
+    }
+
+    async function copyRecoveryCodes() {
+        try {
+            await navigator.clipboard.writeText(recoveryCodes.join("\n"));
+            addToast(t("settings.profile.recoveryCodesCopied"), "success");
+        } catch {
+            addToast(t("settings.profile.recoveryCodesCopied"), "error");
+        }
+    }
+
 async function disable2FA(e) {
         e.preventDefault();
-        if (disableCode.length !== 6) return;
+        if (disableCode.trim().length < 6) return;
         setTwoFA((s) => ({ ...s, loading: true }));
         try {
-            await apiRequest("/profile/2fa", { method: "DELETE", token: accessToken, body: { code: disableCode } });
+            await apiRequest("/profile/2fa", { method: "DELETE", token: accessToken, body: { code: disableCode.trim() } });
             setTwoFA((s) => ({ ...s, loading: false, enabled: false, msg: { ok: true, text: t("settings.profile.twoFactorDisabled") } }));
             setDisableArmed(false);
             setDisableCode("");
+            setRecoveryCodes([]);
+            setRecoveryRemaining(null);
             addToast(t("settings.profile.twoFactorDisabled"), "success");
         } catch (err) {
             setTwoFA((s) => ({ ...s, loading: false, msg: { ok: false, text: err.message } }));
@@ -256,22 +307,23 @@ async function disable2FA(e) {
 
                 <div className="mt-5">
                     {twoFA.enabled ? (
-                        disableArmed ? (
+                        <div className="space-y-4">
+                        {disableArmed ? (
                             <form onSubmit={disable2FA} className="flex flex-wrap items-center gap-2">
                                 <input
                                     type="text"
-                                    inputMode="numeric"
+                                    inputMode="text"
                                     autoComplete="one-time-code"
-                                    maxLength={6}
+                                    maxLength={12}
                                     placeholder="000000"
                                     value={disableCode}
-                                    onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ""))}
+                                    onChange={(e) => setDisableCode(e.target.value.replace(/[^a-zA-Z0-9-]/g, ""))}
                                     autoFocus
-                                    className="w-32 rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-center text-sm tracking-widest focus:border-brand-500 focus:outline-none"
+                                    className="w-40 rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-center text-sm tracking-widest focus:border-brand-500 focus:outline-none"
                                 />
                                 <button
                                     type="submit"
-                                    disabled={twoFA.loading || disableCode.length !== 6}
+                                    disabled={twoFA.loading || disableCode.trim().length < 6}
                                     className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                     {twoFA.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldOff className="h-4 w-4" />}
@@ -296,7 +348,54 @@ async function disable2FA(e) {
                             >
                                 <ShieldOff className="h-4 w-4" /> {t("settings.profile.disable2FA")}
                             </button>
-                        )
+                        )}
+                        <div className="rounded-xl border border-(--border) bg-(--bg) p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <p className="flex items-center gap-1.5 text-sm font-medium text-(--text-primary)">
+                                        <KeyRound className="h-4 w-4 text-(--text-muted)" />
+                                        {t("settings.profile.recoveryCodesTitle")}
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-(--text-muted)">
+                                        {recoveryRemaining === null
+                                            ? t("settings.profile.recoveryCodesDescription")
+                                            : recoveryRemaining === 0
+                                              ? t("settings.profile.recoveryCodesNone")
+                                              : recoveryRemaining === 1
+                                                ? t("settings.profile.recoveryCodesRemainingOne", { count: recoveryRemaining })
+                                                : t("settings.profile.recoveryCodesRemaining", { count: recoveryRemaining })}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={regenerateCodes}
+                                    disabled={recoveryBusy}
+                                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-(--border) bg-(--bg) px-3 py-1.5 text-sm font-medium text-(--text-secondary) transition-colors hover:bg-(--bg-overlay) disabled:opacity-50"
+                                >
+                                    {recoveryBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                                    {t("settings.profile.regenerateRecoveryCodes")}
+                                </button>
+                            </div>
+                            {recoveryCodes.length ? (
+                                <div className="mt-3">
+                                    <p className="text-xs font-medium text-amber-700">{t("settings.profile.saveRecoveryCodesHint")}</p>
+                                    <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-lg bg-(--bg-overlay) p-3 font-mono text-xs text-(--text-secondary)">
+                                        {recoveryCodes.map((c) => (
+                                            <span key={c}>{c}</span>
+                                        ))}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={copyRecoveryCodes}
+                                        className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-500"
+                                    >
+                                        <Copy className="h-3 w-3" />
+                                        {t("settings.profile.recoveryCodesCopy")}
+                                    </button>
+                                </div>
+                            ) : null}
+                        </div>
+                        </div>
                     ) : twoFA.qrCode ? (
                         <div className="space-y-4">
                             <p className="text-sm text-(--text-secondary)">{t("settings.profile.scanQrHint")}</p>

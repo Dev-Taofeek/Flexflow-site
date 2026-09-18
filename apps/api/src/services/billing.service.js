@@ -6,6 +6,7 @@ import { createHmac } from "node:crypto";
 import {
     expiryWarningDedupeKey,
     requiredLifecycleTransition,
+    hasUsedFirstMonthFree,
 } from "../lib/billing-policy.js";
 import { notifyUser } from "./notification.service.js";
 
@@ -214,12 +215,17 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
     }
 
     const now = new Date();
+    const DAY_MS = 24 * 60 * 60 * 1000;
 
     // Renewals extend from the current paid-through date instead of resetting
     // the clock, so a duplicate/mid-cycle webhook never shortens coverage.
     const current = await prisma.organization.findUnique({
         where: { id: organizationId },
-        select: { subscriptionEndAt: true, subscriptionStatus: true, subscriptionStartAt: true },
+        select: {
+            subscriptionEndAt: true,
+            subscriptionStatus: true,
+            subscriptionStartAt: true,
+        },
     });
     const base =
         current?.subscriptionStatus === "ACTIVE" &&
@@ -228,10 +234,16 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
             ? new Date(current.subscriptionEndAt)
             : now;
 
-    const endAt =
-        billingCycle === "ANNUAL"
-            ? new Date(base.getTime() + 365 * 24 * 60 * 60 * 1000)
-            : new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
+    // One-time "first month free": only for orgs that have never completed a
+    // paid checkout. The bonus is stacked on top of the paid term (+30 days).
+    const usedFreeMonth = current?.subscriptionStartAt
+        ? true
+        : await hasUsedFirstMonthFree(prisma, organizationId);
+    const firstMonthFree = !usedFreeMonth;
+
+    const periodMs = billingCycle === "ANNUAL" ? 365 * DAY_MS : 30 * DAY_MS;
+    let endAt = new Date(base.getTime() + periodMs);
+    if (firstMonthFree) endAt = new Date(endAt.getTime() + 30 * DAY_MS);
 
     const org = await prisma.organization.update({
         where: { id: organizationId },
@@ -253,11 +265,17 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
             provider: getProvider(),
             eventType: "checkout.completed",
             status: "ACTIVE",
-            raw: { planId: normalizedPlanId, billingCycle, addOns, amountMonthly: PLANS[normalizedPlanId].priceMonthly },
+            raw: {
+                planId: normalizedPlanId,
+                billingCycle,
+                addOns,
+                amountMonthly: PLANS[normalizedPlanId].priceMonthly,
+                firstMonthFree,
+            },
         },
     });
 
-    return { organization: org };
+    return { organization: org, firstMonthFree };
 }
 
 /** Cancel a subscription — paid access continues until the end of the window. */

@@ -4,10 +4,19 @@ export function fetchIntegrations(orgId, token) {
   return apiRequest("/integrations", { token, params: { orgId }, toast: false });
 }
 
-export function connectIntegration({ orgId, provider, token, webhookSecret, webhookSigningSecret, webhookPasscode }) {
+export function fetchIntegrationProviders(token) {
+  return apiRequest("/integrations/providers", { token, toast: false });
+}
+
+export function startIntegrationOAuth(provider, orgId, token) {
+  return apiRequest(`/integrations/oauth/${provider}/start`, { token, params: { orgId }, toast: false });
+}
+
+export function connectIntegration({ orgId, provider, token, webhookSecret, webhookSigningSecret, webhookPasscode, code }) {
   return apiRequest("/integrations", {
     method: "POST",
     token,
+    headers: code ? { "x-2fa-code": code } : {},
     body: {
       orgId,
       provider,
@@ -32,10 +41,11 @@ export function testIntegration(id, token) {
   return apiRequest(`/integrations/${id}/test`, { method: "POST", token });
 }
 
-export function disconnectIntegration(id, token) {
+export function disconnectIntegration(id, token, code) {
   return apiRequest(`/integrations/${id}`, {
     method: "DELETE",
     token,
+    headers: code ? { "x-2fa-code": code } : {},
     successMessage: "Integration disconnected.",
   });
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     CheckCircle2,
     Copy,
+    ExternalLink,
     Link2,
     Loader2,
     Plug,
@@ -16,6 +17,7 @@ import {
 
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
+import { useStepUp } from "@/contexts/StepUpContext";
 import { useI18n, dictionaries } from "@/i18n";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import {
@@ -26,8 +28,10 @@ import {
     deleteMapping,
     disconnectIntegration,
     fetchAutomations,
+    fetchIntegrationProviders,
     fetchIntegrations,
     fetchMappings,
+    startIntegrationOAuth,
     testIntegration,
     toggleIntegration,
     updateAutomation,
@@ -115,6 +119,7 @@ export default function IntegrationsSettingsPage() {
     const { addToast } = useToast();
     const { t, locale } = useI18n();
     const { can } = useEntitlements();
+    const { runWithStepUp } = useStepUp();
 
     const [connections, setConnections] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -122,6 +127,9 @@ export default function IntegrationsSettingsPage() {
     const [busy, setBusy] = useState({});
     const [tokens, setTokens] = useState({ github: "", slack: "", figma: "" });
     const [secrets, setSecrets] = useState({ github: "", slack: "", figma: "" });
+    const [providerMeta, setProviderMeta] = useState({});
+    const [oauthBusy, setOauthBusy] = useState({});
+    const oauthHandled = useRef(false);
 
     const [automations, setAutomations] = useState([]);
     const [mappings, setMappings] = useState([]);
@@ -152,6 +160,45 @@ export default function IntegrationsSettingsPage() {
         })();
         return () => { cancelled = true; };
     }, [isReady, orgId, accessToken]);
+
+    useEffect(() => {
+        if (!accessToken) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const data = await fetchIntegrationProviders(accessToken);
+                if (cancelled) return;
+                const map = {};
+                for (const p of data?.providers || []) map[p.id] = p;
+                setProviderMeta(map);
+            } catch {
+                if (!cancelled) setProviderMeta({});
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [accessToken]);
+
+    useEffect(() => {
+        if (!isReady || !orgId || !accessToken || typeof window === "undefined") return;
+        if (oauthHandled.current) return;
+        const params = new URLSearchParams(window.location.search);
+        const outcome = params.get("integration");
+        if (!outcome) return;
+        oauthHandled.current = true;
+        const provider = params.get("provider");
+        const providerLabel = provider
+            ? t(PROVIDERS[provider]?.labelKey || provider)
+            : "";
+        if (outcome === "connected") {
+            addToast(t("settings.integrations.oauthConnectedToast", { provider: providerLabel }), "success");
+            fetchIntegrations(orgId, accessToken)
+                .then((data) => setConnections(data.connections || []))
+                .catch(() => {});
+        } else if (outcome === "error") {
+            addToast(t("settings.integrations.oauthFailedToast", { provider: providerLabel }), "error");
+        }
+        window.history.replaceState({}, "", window.location.pathname);
+    }, [isReady, orgId, accessToken, t, addToast]);
 
     useEffect(() => {
         if (!isReady || !orgId || !workspaceId || !accessToken) return;
@@ -216,25 +263,43 @@ export default function IntegrationsSettingsPage() {
         const secret = (secrets[provider] || "").trim();
         setBusy((s) => ({ ...s, [`connect:${provider}`]: true }));
         try {
-            const data = await connectIntegration({
-                orgId,
-                provider,
-                token,
-                ...(secretKey === "webhookSecret" ? { webhookSecret: secret } : {}),
-                ...(secretKey === "webhookSigningSecret" ? { webhookSigningSecret: secret } : {}),
-                ...(secretKey === "webhookPasscode" ? { webhookPasscode: secret } : {}),
-            });
+            const data = await runWithStepUp(({ code }) =>
+                connectIntegration({
+                    orgId,
+                    provider,
+                    token,
+                    code,
+                    ...(secretKey === "webhookSecret" ? { webhookSecret: secret } : {}),
+                    ...(secretKey === "webhookSigningSecret" ? { webhookSigningSecret: secret } : {}),
+                    ...(secretKey === "webhookPasscode" ? { webhookPasscode: secret } : {}),
+                }),
+            );
             setConnections((prev) => {
                 const rest = prev.filter((c) => c.provider !== provider);
                 return [...rest, data.connection];
             });
             addToast(t("settings.integrations.connectedToast", { provider: t(meta.labelKey) }), "success");
         } catch (err) {
-            addToast(err.message, "error");
+            if (!err?.cancelled) addToast(err.message, "error");
         } finally {
             setTokens((s) => ({ ...s, [provider]: "" }));
             setSecrets((s) => ({ ...s, [provider]: "" }));
             setBusy((s) => ({ ...s, [`connect:${provider}`]: false }));
+        }
+    }
+
+    async function handleOAuth(provider) {
+        setOauthBusy((s) => ({ ...s, [provider]: true }));
+        try {
+            const data = await startIntegrationOAuth(provider, orgId, accessToken);
+            if (data?.url) {
+                window.location.href = data.url;
+                return;
+            }
+            throw new Error("OAuth is unavailable.");
+        } catch (err) {
+            addToast(err.message, "error");
+            setOauthBusy((s) => ({ ...s, [provider]: false }));
         }
     }
 
@@ -270,10 +335,10 @@ export default function IntegrationsSettingsPage() {
     async function handleDisconnect(conn) {
         setBusy((s) => ({ ...s, [`disconnect:${conn.id}`]: true }));
         try {
-            await disconnectIntegration(conn.id, accessToken);
+            await runWithStepUp(({ code }) => disconnectIntegration(conn.id, accessToken, code));
             setConnections((prev) => prev.filter((c) => c.id !== conn.id));
         } catch (err) {
-            addToast(err.message, "error");
+            if (!err?.cancelled) addToast(err.message, "error");
         } finally {
             setBusy((s) => ({ ...s, [`disconnect:${conn.id}`]: false }));
         }
@@ -451,6 +516,11 @@ export default function IntegrationsSettingsPage() {
                                                         {t("settings.integrations.paused")}
                                                     </span>
                                                 ) : null}
+                                                {conn?.config?.via === "oauth" ? (
+                                                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                                                        {t("settings.integrations.viaOauth")}
+                                                    </span>
+                                                ) : null}
                                             </div>
                                             <p className="mt-1 text-sm text-(--text-muted)">{t(meta.descKey)}</p>
                                         </div>
@@ -459,6 +529,28 @@ export default function IntegrationsSettingsPage() {
                                     <div className="mt-5">
                                         {!conn ? (
                                             <div className="flex flex-col gap-3">
+                                                {providerMeta[provider]?.oauthAvailable && canFeature ? (
+                                                    <div className="flex flex-col gap-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOAuth(provider)}
+                                                            disabled={oauthBusy[provider] || !providerMeta[provider]?.oauthAvailable}
+                                                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-(--border) bg-(--bg) px-4 py-2.5 text-sm font-medium text-(--text-primary) transition-colors hover:bg-(--bg-overlay) disabled:cursor-not-allowed disabled:opacity-40"
+                                                        >
+                                                            {oauthBusy[provider] ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <Icon className="h-4 w-4" />
+                                                            )}
+                                                            {oauthBusy[provider]
+                                                                ? t("settings.integrations.oauthPreparing")
+                                                                : t("settings.integrations.connectWithOauth", { provider: t(meta.labelKey) })}
+                                                        </button>
+                                                        <p className="text-center text-xs text-(--text-muted)">
+                                                            {t("settings.integrations.orConnectWithToken")}
+                                                        </p>
+                                                    </div>
+                                                ) : null}
                                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                                                     <input
                                                         type="password"
@@ -493,6 +585,33 @@ export default function IntegrationsSettingsPage() {
                                                     className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none disabled:opacity-40"
                                                 />
                                                 <p className="text-xs text-(--text-muted)">{t(meta.webhookHintKey)}</p>
+                                                <details className="rounded-lg border border-(--border) bg-(--bg) p-3">
+                                                    <summary className="cursor-pointer text-xs font-medium text-(--text-secondary)">
+                                                        {t("settings.integrations.guidedTitle")}
+                                                    </summary>
+                                                    <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-(--text-muted)">
+                                                        <li>{t("settings.integrations.guidedStepToken", { provider: t(meta.labelKey) })}</li>
+                                                        {providerMeta[provider]?.tokenScopes ? (
+                                                            <li>
+                                                                {t("settings.integrations.guidedStepScopes", {
+                                                                    scopes: providerMeta[provider].tokenScopes,
+                                                                })}
+                                                            </li>
+                                                        ) : null}
+                                                        <li>{t("settings.integrations.guidedStepPaste")}</li>
+                                                    </ol>
+                                                    {providerMeta[provider]?.tokenHelpUrl ? (
+                                                        <a
+                                                            href={providerMeta[provider].tokenHelpUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-500"
+                                                        >
+                                                            {t("settings.integrations.createToken")}
+                                                            <ExternalLink className="h-3 w-3" />
+                                                        </a>
+                                                    ) : null}
+                                                </details>
                                             </div>
                                         ) : (
                                             <div className="space-y-4">

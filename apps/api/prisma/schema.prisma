@@ -99,6 +99,7 @@ model User {
   roleAssignments RoleAssignment[]
   sentInvites    Invite[]           @relation("InviteSender")
   pushSubscriptions PushSubscription[]
+  recoveryCodes  RecoveryCode[]
 
   createdProjects Project[]         @relation("CreatedProjects")
   createdTasks    Task[]            @relation("CreatedTasks")
@@ -127,6 +128,7 @@ model Organization {
   customAddOns        String[]            @default([])
   providerCustomerId      String?
   providerSubscriptionId  String?
+  requireTwoFactor        Boolean             @default(false)
 
   workspaces     Workspace[]
   members        OrganizationMember[]
@@ -500,6 +502,18 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RecoveryCode {
+  id          String    @id @default(cuid())
+  userId      String
+  hashedCode  String
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }

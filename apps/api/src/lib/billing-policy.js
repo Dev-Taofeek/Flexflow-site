@@ -77,3 +77,67 @@ export function expiryWarningDedupeKey(org) {
     if (!d) return null;
     return `subscription-expiring-${org?.id}-${d.endAt.toISOString().slice(0, 10)}`;
 }
+
+// ── Plan-change policy ───────────────────────────────────────────────────────
+// Ranked so changes can be classified as upgrades (allowed), lateral/renewals,
+// or downgrades (refused while a paid subscription is live).
+const PLAN_RANK = { free: 0, pro: 1, custom: 2 };
+const CYCLE_RANK = { MONTHLY: 0, ANNUAL: 1 };
+
+function normalizePlan(plan) {
+    const value = String(plan || "").toUpperCase();
+    if (value === "CUSTOM") return "custom";
+    if (value === "PRO") return "pro";
+    return "free";
+}
+
+function normalizeCycle(cycle) {
+    return String(cycle || "").toUpperCase() === "ANNUAL" ? "ANNUAL" : "MONTHLY";
+}
+
+/** True when the org currently holds a live, unexpired paid subscription. */
+export function isSubscriptionLive(org, now = new Date()) {
+    if (!isPaidPlan(org)) return false;
+    if (!isPaidStatus(org?.subscriptionStatus)) return false;
+    const endAt = org?.subscriptionEndAt ? new Date(org.subscriptionEndAt) : null;
+    return Boolean(endAt && endAt.getTime() > now.getTime());
+}
+
+/**
+ * Classifies a requested plan/cycle change against the org's current state.
+ * Returns `{ allowed, code }`. While a paid subscription is live:
+ *  - lower plan rank → refused (no downgrades),
+ *  - same plan, annual → monthly → refused,
+ *  - everything else (upgrades, monthly → annual, same-config renewals) allowed.
+ */
+export function assessPlanChange(org, { planId, billingCycle } = {}, now = new Date()) {
+    if (!isSubscriptionLive(org, now)) return { allowed: true, code: null };
+
+    const targetPlan = normalizePlan(planId);
+    const currentPlan = normalizePlan(org?.plan);
+    const targetCycle = normalizeCycle(billingCycle);
+    const currentCycle = normalizeCycle(org?.billingCycle);
+
+    if (PLAN_RANK[targetPlan] < PLAN_RANK[currentPlan]) {
+        return { allowed: false, code: "PLAN_DOWNGRADE_NOT_ALLOWED" };
+    }
+    if (PLAN_RANK[targetPlan] === PLAN_RANK[currentPlan] && CYCLE_RANK[targetCycle] < CYCLE_RANK[currentCycle]) {
+        return { allowed: false, code: "CYCLE_DOWNGRADE_NOT_ALLOWED" };
+    }
+    return { allowed: true, code: null };
+}
+
+/**
+ * Whether the org has never completed a paid checkout before — used to grant
+ * the one-time "first month free" bonus. Derived from billing events so it
+ * survives a later downgrade (which keeps the historical event).
+ */
+export async function hasUsedFirstMonthFree(prismaClient, organizationId) {
+    const priorPaid = await prismaClient.billingEvent.count({
+        where: {
+            organizationId,
+            eventType: { in: ["checkout.completed", "subscription.activated"] },
+        },
+    });
+    return priorPaid > 0;
+}
