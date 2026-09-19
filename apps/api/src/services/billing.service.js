@@ -282,14 +282,18 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
 export async function cancelSubscription(organizationId) {
     if (isProvider("paystack")) {
         // Best-effort remote cancel: disable any Paystack subscription tied to
-        // this org's email/transaction reference.
+        // this org via the stored provider references (subscription/customer
+        // code captured at checkout — the org has no direct billing email).
         try {
             const subscriptions = await paystackRequest(`subscription?perPage=50`);
-            const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+            const org = await prisma.organization.findUnique({
+                where: { id: organizationId },
+                select: { providerSubscriptionId: true, providerCustomerId: true },
+            });
             const orgSubscriptions = subscriptions.filter(
                 (sub) =>
-                    sub.customer?.email?.toLowerCase() === org?.billingEmail?.toLowerCase() ||
-                    sub.customer?.email?.toLowerCase() === "",
+                    (org?.providerSubscriptionId && sub.subscription_code === org.providerSubscriptionId) ||
+                    (org?.providerCustomerId && sub.customer?.customer_code === org.providerCustomerId),
             );
             await Promise.all(
                 orgSubscriptions.map((sub) =>
@@ -349,9 +353,16 @@ export async function downgradeToFree(organizationId) {
 /** Billing portal URL. Mock returns the billing settings page in the app. */
 export async function getBillingPortalUrl(organizationId) {
     if (isProvider("stripe")) {
+        const org = await prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: { providerCustomerId: true },
+        });
+        if (!org?.providerCustomerId) {
+            throw new Error("No Stripe customer is linked to this organization yet");
+        }
         const { default: Stripe } = await import("stripe");
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
-        const session = await stripe.billingPortal.sessions.create({ customer: organizationId });
+        const session = await stripe.billingPortal.sessions.create({ customer: org.providerCustomerId });
         return session.url;
     }
     return `${env.CLIENT_ORIGIN}/settings/billing?orgId=${organizationId}&from=portal`;
@@ -367,6 +378,27 @@ async function eventAlreadyProcessed(provider, providerEventId) {
     return Boolean(existing);
 }
 
+/** BillingEvent.status maps to the Prisma `SubscriptionStatus` enum. Provider
+ * payloads use their own vocabulary (Stripe: "complete"/"paid"/"active",
+ * Paystack: "success"), so anything that isn't a valid enum value must be
+ * dropped — otherwise the webhook insert throws P2009 and paid plans never
+ * activate. */
+const VALID_SUBSCRIPTION_STATUSES = new Set([
+    "ACTIVE",
+    "TRIALING",
+    "PAST_DUE",
+    "CANCELLED",
+    "EXPIRED",
+    "PAYMENT_FAILED",
+    "INCOMPLETE",
+]);
+
+function normalizeSubscriptionStatus(status) {
+    if (!status) return null;
+    const normalized = String(status).toUpperCase();
+    return VALID_SUBSCRIPTION_STATUSES.has(normalized) ? normalized : null;
+}
+
 /** Persists a billing event, tolerating a concurrent duplicate insert. */
 async function persistBillingEvent({ organizationId, provider, providerEventId, eventType, status, raw }) {
     if (await eventAlreadyProcessed(provider, providerEventId)) return null;
@@ -377,7 +409,7 @@ async function persistBillingEvent({ organizationId, provider, providerEventId, 
                 provider,
                 providerEventId: providerEventId || null,
                 eventType,
-                status: status || null,
+                status: normalizeSubscriptionStatus(status),
                 raw: raw || null,
             },
         });

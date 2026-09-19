@@ -506,6 +506,17 @@ router.post("/:orgId/invite", requireOrgRole("OWNER", "ADMIN"), requireTwoFactor
 
         const inviteUrl = `${process.env.CLIENT_ORIGIN}/join?token=${invite.token}`;
 
+        // Existing FlexFlow users get the invite in-app + push as well as email.
+        if (existingUser) {
+            await notifyUser(existingUser.id, {
+                title: "You've been invited to an organization",
+                message: `${req.user.name} invited you to join ${org.name} on FlexFlow as ${role}.`,
+                type: "INVITE",
+                url: inviteUrl,
+                dedupeKey: `invite.org.${invite.token}`,
+            });
+        }
+
         let emailSent = false;
         let emailError = null;
 

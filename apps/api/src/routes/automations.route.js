@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { trackApiUsage } from "../middleware/usage.middleware.js";
 import { requireWorkspaceRole } from "../lib/permissions.js";
+import { enforceFeature } from "../lib/entitlements.js";
 import { recordAudit, clientIpFrom } from "../lib/audit.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
@@ -20,20 +21,33 @@ function assertWorkspaceBelongsToOrg(workspaceId, organizationId) {
     });
 }
 
+// Resolve the owning organization from the workspace row so callers can never
+// point reads at an org they don't belong to via the query string.
+async function organizationForWorkspace(workspaceId) {
+    const ws = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { organizationId: true },
+    });
+    return ws?.organizationId || null;
+}
+
 // ── Automation rules ─────────────────────────────────────────────────────────
 
 router.get("/automations", async (req, res) => {
     try {
-        const { orgId, workspaceId } = req.query;
-        if (!orgId || !workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "orgId and workspaceId are required"));
+        const { workspaceId } = req.query;
+        if (!workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId is required"));
 
         const self = await prisma.workspaceMember.findUnique({
             where: { workspaceId_userId: { workspaceId, userId: req.user.id } },
         });
         if (!self) return res.status(403).json(errorResponse("FORBIDDEN", "Not a workspace member"));
 
+        const organizationId = await organizationForWorkspace(workspaceId);
+        if (!organizationId) return res.status(403).json(errorResponse("FORBIDDEN", "Workspace not found"));
+
         const rules = await prisma.automationRule.findMany({
-            where: { organizationId: orgId, workspaceId },
+            where: { organizationId, workspaceId },
             orderBy: { createdAt: "asc" },
         });
         return res.status(200).json(successResponse(rules));

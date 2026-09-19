@@ -32,7 +32,7 @@ router.get("/", async (req, res) => {
         const [allTasks, workspaceMembers] = await Promise.all([
             prisma.task.findMany({
                 where: { project: { workspaceId }, createdAt: { gte: sixWeeksAgo } },
-                select: { status: true, priority: true, createdAt: true, updatedAt: true, assigneeId: true },
+                select: { status: true, priority: true, createdAt: true, updatedAt: true, completedAt: true, assigneeId: true },
             }),
             prisma.workspaceMember.findMany({
                 where: { workspaceId },
@@ -82,15 +82,41 @@ router.get("/", async (req, res) => {
 
         const avgCycleTime = cycleTimes.length ? (cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length).toFixed(1) : "0";
 
+        // Burndown over the last 14 days: the sprint scope is every task created
+        // on or before the window start; remaining counts tasks not yet completed.
+        const DAY_MS = 24 * 60 * 60 * 1000;
+        const BURNDOWN_DAYS = 14;
+        const start = new Date(now.getTime() - (BURNDOWN_DAYS - 1) * DAY_MS);
+        start.setHours(0, 0, 0, 0);
+        const doneAt = (task) => (task.completedAt || task.updatedAt || task.createdAt).getTime();
+        const sprintTasks = allTasks.filter((task) => new Date(task.createdAt) <= start);
+        const burndown = Array.from({ length: BURNDOWN_DAYS }, (_, i) => {
+            const day = new Date(start.getTime() + i * DAY_MS);
+            const dayEnd = day.getTime() + DAY_MS;
+            const remaining = sprintTasks.filter(
+                (task) => !(task.status === "DONE" && doneAt(task) <= dayEnd),
+            ).length;
+            const ideal = sprintTasks.length
+                ? Math.round(sprintTasks.length * (1 - i / (BURNDOWN_DAYS - 1)))
+                : 0;
+            return { day: day.toISOString().slice(5, 10), ideal, remaining: Math.max(0, remaining) };
+        });
+
+        const sprintCompletion = allTasks.length
+            ? `${Math.round((doneTasks.length / allTasks.length) * 100)}%`
+            : "0%";
+
         return res.status(200).json(successResponse({
             velocity,
             workload,
             cycleTime,
+            burndown,
             summary: {
                 tasksClosed: doneTasks.length,
                 averageCycleTime: `${avgCycleTime}d`,
                 teamUtilization: workspaceMembers.length ? `${Math.round((workload.reduce((a, b) => a + b.inProgress, 0) / Math.max(workspaceMembers.length, 1)) * 10)}%` : "0%",
                 totalTasks: allTasks.length,
+                sprintCompletion,
             },
         }));
     } catch (error) {

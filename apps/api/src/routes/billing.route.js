@@ -4,7 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requireOrgRole } from "../lib/permissions.js";
 import { requireTwoFactorStepUp } from "../middleware/stepup-2fa.middleware.js";
-import { assessPlanChange, hasUsedFirstMonthFree } from "../lib/billing-policy.js";import { enforceFeature, getOrgEntitlements, planInfoForOrg } from "../lib/entitlements.js";
+import { assessPlanChange, hasUsedFirstMonthFree } from "../lib/billing-policy.js";
+import { getOrgEntitlements, planInfoForOrg } from "../lib/entitlements.js";
 import { getApiUsage, getIntelligenceUsage } from "../lib/usage.js";
 import { recordAudit, clientIpFrom } from "../lib/audit.js";
 import { notifyUser } from "../services/notification.service.js";
@@ -161,9 +162,18 @@ router.post("/confirm", requireOrgRole("OWNER", "ADMIN"), requireTwoFactorStepUp
             return res.status(403).json(errorResponse("FORBIDDEN", "Checkout confirmation is only available with the mock provider"));
         }
 
-        const { sessionId, plan = "PRO", billingCycle = "MONTHLY", addOns = [], organizationId } = req.body;
+        const { sessionId, plan = "PRO", billingCycle = "MONTHLY", addOns = [], organizationId, paymentConfirmed, paymentToken, cardLast4 } = req.body;
         const orgId = organizationId || req.params.orgId || req.body.orgId;
         if (!orgId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "organizationId is required"));
+
+        // No free upgrades: even in mock mode the plan can only activate after a
+        // payment step has been completed on the checkout page. This is the page
+        // the mock provider redirects to, and the user must "pay" there first.
+        // Real providers (Stripe/Paystack) enforce payment by construction and
+        // finalize through their signed webhook — never through this endpoint.
+        if (!(paymentConfirmed === true && typeof paymentToken === "string" && paymentToken.length >= 8)) {
+            return res.status(402).json(errorResponse("PAYMENT_REQUIRED", "Payment must be completed before the plan can be activated"));
+        }
 
         const org = await prisma.organization.findUnique({ where: { id: orgId } });
         if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
@@ -175,6 +185,24 @@ router.post("/confirm", requireOrgRole("OWNER", "ADMIN"), requireTwoFactorStepUp
                 data: { code: assessment.code, upgradeOnly: true },
             });
         }
+
+        // Record the payment that was just completed so the lifecycle journal
+        // reflects an actual charge, not an entitlement grant out of thin air.
+        await prisma.billingEvent.create({
+            data: {
+                organizationId: orgId,
+                provider: "mock",
+                eventType: "payment.succeeded",
+                status: "ACTIVE",
+                raw: {
+                    paymentToken,
+                    cardLast4: String(cardLast4 || "").replace(/\D/g, "").slice(-4) || null,
+                    plan,
+                    billingCycle,
+                    addOns,
+                },
+            },
+        });
 
         const { organization, firstMonthFree } = await finalizeSubscription({
             organizationId: orgId,
@@ -237,6 +265,8 @@ router.post("/cancel/:orgId", requireOrgRole("OWNER"), async (req, res) => {
             title: "Subscription cancelled",
             message: `${org.name} keeps paid access until ${org.subscriptionEndAt?.toISOString().slice(0, 10)}.`,
             type: "SYSTEM",
+            url: `/settings/billing?orgId=${req.params.orgId}`,
+            dedupeKey: `billing.cancel.${req.params.orgId}`,
         });
         return res.status(200).json(successResponse({ organization: org }));
     } catch (error) {

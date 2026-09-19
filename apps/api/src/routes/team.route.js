@@ -155,6 +155,19 @@ router.post("/invite", requireWorkspaceRole("OWNER", "ADMIN"), async (req, res) 
 
         const inviteUrl = `${process.env.CLIENT_ORIGIN}/join?token=${invite.token}`;
 
+        // Existing FlexFlow users get the invite everywhere: email (if configured)
+        // plus an in-app notification and a push notification. New users rely on
+        // the email link only, since they have no session yet.
+        if (existingUser) {
+            await notifyUser(existingUser.id, {
+                title: "You've been invited to a workspace",
+                message: `${req.user.name} invited you to join ${workspace.organization.name} on FlexFlow.`,
+                type: "INVITE",
+                url: inviteUrl,
+                dedupeKey: `invite.workspace.${invite.token}`,
+            });
+        }
+
         let emailSent = false;
         let emailError = null;
 

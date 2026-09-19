@@ -91,6 +91,7 @@ export default function BillingSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [checkoutLoading, setCheckoutLoading] = useState(false);
     const [cancelLoading, setCancelLoading] = useState(false);
+    const [confirmCancel, setConfirmCancel] = useState(false);
 
     // Upgrade builder state
     const [cycle, setCycle] = useState("MONTHLY");
@@ -160,11 +161,13 @@ export default function BillingSettingsPage() {
 
     async function handleCancel() {
         if (!orgId || !accessToken) return;
-        if (!window.confirm(t("settings.billing.cancelConfirm"))) return;
         setCancelLoading(true);
         try {
+            // The confirmation stays in-page (no hostile window.confirm) and the
+            // result arrives as an in-app notification via notifyUser on the API —
+            // the success/echo message no longer pops up a toast.
             await apiRequest(`/billing/cancel/${orgId}`, { method: "POST", token: accessToken, toast: false });
-            addToast(t("settings.billing.subscriptionCancelled"), "success");
+            setConfirmCancel(false);
             await refreshOrganizations();
             await load(orgId);
         } catch (err) {
@@ -210,16 +213,38 @@ export default function BillingSettingsPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                    {canManageBilling && (
-                        <button
-                            type="button"
-                            onClick={handleCancel}
-                            disabled={cancelLoading}
-                            className="rounded-lg border border-(--border) px-4 py-2 text-sm font-medium text-(--text-secondary) transition-colors hover:border-(--border-strong) hover:text-(--text-primary) disabled:opacity-60"
-                        >
-                            {cancelLoading ? t("settings.common.processing") : t("settings.billing.cancelSubscription")}
-                        </button>
-                    )}
+                    {canManageBilling &&
+                        (confirmCancel ? (
+                            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-danger-500/30 bg-danger-500/5 px-4 py-2.5">
+                                <p className="text-sm text-(--text-secondary)">{t("settings.billing.cancelConfirm")}</p>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleCancel}
+                                        disabled={cancelLoading}
+                                        className="rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-500 disabled:opacity-60"
+                                    >
+                                        {cancelLoading ? t("settings.common.processing") : t("settings.billing.cancelSubscription")}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setConfirmCancel(false)}
+                                        disabled={cancelLoading}
+                                        className="rounded-lg border border-(--border) px-3 py-1.5 text-xs font-medium text-(--text-secondary) transition-colors hover:text-(--text-primary) disabled:opacity-60"
+                                    >
+                                        {t("settings.common.cancel")}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmCancel(true)}
+                                className="rounded-lg border border-(--border) px-4 py-2 text-sm font-medium text-(--text-secondary) transition-colors hover:border-(--border-strong) hover:text-(--text-primary)"
+                            >
+                                {t("settings.billing.cancelSubscription")}
+                            </button>
+                        ))}
                 </div>
             </section>
 
@@ -438,7 +463,7 @@ export default function BillingSettingsPage() {
                         {checkoutLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
                         {checkoutLoading ? t("settings.common.redirecting") : isFree && targetPlan === "pro"
                             ? t("settings.billing.upgradeToPro", { price: `$${isAnnual ? Math.round(PLANS.pro.priceAnnual / 12) : PLANS.pro.priceMonthly}` })
-                            : t("settings.billing.continueToCheckout")}
+                            : t("settings.billing.upgradeNow")}
                         <ChevronRight className="h-4 w-4" />
                     </button>
                 </div>

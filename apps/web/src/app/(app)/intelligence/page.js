@@ -144,6 +144,7 @@ export default function IntelligencePage() {
                 body: JSON.stringify({
                     organizationId: currentOrg.id,
                     workspaceId: currentWorkspace?.id,
+                    allWorkspaces: role.isAdmin,
                     query,
                     history: history.slice(-10),
                 }),

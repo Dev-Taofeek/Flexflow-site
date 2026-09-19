@@ -24,15 +24,17 @@ export default function AnalyticsPage() {
     const { currentWorkspace, accessToken, isReady } = useApp();
     const { t } = useI18n();
     const { can } = useEntitlements();
+    // `allowed` is a plain boolean (stable between renders unless the org / plan
+    // changes), unlike the `can` function which is recreated on every render —
+    // putting `can` in an effect dependency array caused an endless refetch loop
+    // and flashing skeletons. See analytics.route.js for the data contract.
+    const allowed = can("advanced_analytics");
     const [analytics, setAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (!can("advanced_analytics")) {
-            return;
-        }
-        if (!isReady || !currentWorkspace?.id || !accessToken) return;
+        if (!allowed || !isReady || !currentWorkspace?.id || !accessToken) return;
         let cancelled = false;
         (async () => {
             setLoading(true);
@@ -46,9 +48,20 @@ export default function AnalyticsPage() {
             }
         })();
         return () => { cancelled = true; };
-    }, [currentWorkspace?.id, accessToken, isReady, can]);
+    }, [currentWorkspace?.id, accessToken, isReady, allowed]);
 
-    if (!can("advanced_analytics")) {
+    // Wait for hydration (isReady) before switching between the charging skeleton
+    // and the upgrade prompt — this keeps the server/render output stable and
+    // avoids the post-hydration tree swap that produced the visible glitch.
+    if (!isReady) {
+        return (
+            <div className="space-y-4">
+                {[1, 2].map((i) => <div key={i} className="h-56 animate-pulse rounded-xl bg-(--border)" />)}
+            </div>
+        );
+    }
+
+    if (!allowed) {
         return (
             <div className="space-y-6">
                 <UpgradePrompt
@@ -60,7 +73,7 @@ export default function AnalyticsPage() {
         );
     }
 
-    if (loading || !isReady) {
+    if (loading) {
         return (
             <div className="space-y-4">
                 {[1, 2].map((i) => <div key={i} className="h-56 animate-pulse rounded-xl bg-(--border)" />)}

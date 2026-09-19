@@ -11,9 +11,11 @@ import { notifyUser } from "../services/notification.service.js";
 import { runIntelligenceQuery } from "../services/intelligence.service.js";
 import {
     classifyIntent,
+    DONE,
     blockedTasks,
     overdueTasks,
     workloadByAssignee,
+    tasksByStatus,
     productivityMetrics,
     periodCompare,
     atRiskProjects,
@@ -103,24 +105,66 @@ async function resolveWorkspaceAccess({ organizationId, workspaceId, userId }) {
  * (already-visible) task/project set so analytics compute against ALL data the
  * caller is allowed to see — never just the keyword matches.
  */
-async function buildCorpus({ organizationId, workspaceId, user, queryTokens }) {
-    const access = await resolveWorkspaceAccess({ organizationId, workspaceId, userId: user.id });
-    if (!access.ok) return { ok: false, corpus: [], canSeeAll: false, workspace: null };
+async function buildCorpus({ organizationId, workspaceId, allWorkspaces, user, queryTokens }) {
+    let workspace;
+    let canSeeAll = false;
+    let orgRole = null;
 
-    const knowledgeWhere = access.canSeeAll
+    if (allWorkspaces) {
+        // Org-wide mode: OWNER/ADMIN may ask across every workspace. Membership
+        // is checked BEFORE any data is loaded so the org-wide lens never leaks
+        // to non-admins.
+        const orgMembership = await prisma.organizationMember.findUnique({
+            where: { organizationId_userId: { organizationId, userId: user.id } },
+        });
+        if (!orgMembership || !["OWNER", "ADMIN"].includes(orgMembership.role)) {
+            return { ok: false, corpus: [], canSeeAll: false, workspace: null };
+        }
+        const [orgMeta, wsList] = await Promise.all([
+            prisma.organization.findUnique({ where: { id: organizationId }, select: { createdAt: true } }),
+            prisma.workspace.findMany({ where: { organizationId }, select: { id: true, name: true } }),
+        ]);
+        workspace = {
+            id: "all",
+            name: wsList.length === 1 ? wsList[0].name : "your organization",
+            slug: "all",
+            workspaceId: "all",
+            organizationId,
+            organization: { id: organizationId, createdAt: orgMeta?.createdAt ?? new Date() },
+            workspaceIds: wsList.map((w) => w.id),
+            workspaceNames: wsList.map((w) => `"${w.name}"`),
+        };
+        canSeeAll = true;
+        orgRole = orgMembership.role;
+    } else {
+        const access = await resolveWorkspaceAccess({ organizationId, workspaceId, userId: user.id });
+        if (!access.ok) return { ok: false, corpus: [], canSeeAll: false, workspace: null };
+        workspace = {
+            ...access.workspace,
+            workspaceId: access.workspace.id,
+            workspaceIds: [access.workspace.id],
+            workspaceNames: [`"${access.workspace.name}"`],
+        };
+        canSeeAll = access.canSeeAll;
+        orgRole = access.orgRole;
+    }
+
+    const workspaceIds = workspace.workspaceIds;
+
+    const knowledgeWhere = canSeeAll
         ? {
               organizationId,
-              OR: [{ workspaceId }, { workspaceId: null }],
+              OR: [{ workspaceId: { in: workspaceIds } }, { workspaceId: null }],
           }
-        : { organizationId, workspaceId };
+        : { organizationId, workspaceId: { in: workspaceIds } };
 
     const [projects, tasks, comments, activities, knowledge, members] = await Promise.all([
         prisma.project.findMany({
-            where: { workspaceId },
+            where: { workspaceId: { in: workspaceIds } },
             select: { id: true, workspaceId: true, name: true, description: true },
         }),
         prisma.task.findMany({
-            where: { workspaceId },
+            where: { workspaceId: { in: workspaceIds } },
             select: {
                 id: true,
                 projectId: true,
@@ -138,21 +182,26 @@ async function buildCorpus({ organizationId, workspaceId, user, queryTokens }) {
             },
         }),
         prisma.comment.findMany({
-            where: { task: { workspaceId } },
+            where: { task: { workspaceId: { in: workspaceIds } } },
             select: { id: true, taskId: true, content: true, createdAt: true, author: { select: { name: true } } },
         }),
         prisma.activityLog.findMany({
-            where: { workspaceId },
+            where: { workspaceId: { in: workspaceIds } },
             select: { id: true, projectId: true, taskId: true, action: true, createdAt: true, user: { select: { name: true } } },
         }),
         prisma.knowledgeEntry.findMany({
             where: knowledgeWhere,
             select: { id: true, workspaceId: true, title: true, content: true, sourceType: true, tags: true, createdAt: true },
         }),
-        prisma.workspaceMember.findMany({
-            where: { workspaceId },
-            select: { role: true, user: { select: { id: true, name: true, email: true } } },
-        }),
+        allWorkspaces
+            ? prisma.organizationMember.findMany({
+                  where: { organizationId },
+                  select: { role: true, user: { select: { id: true, name: true, email: true } } },
+              })
+            : prisma.workspaceMember.findMany({
+                  where: { workspaceId: { in: workspaceIds } },
+                  select: { role: true, user: { select: { id: true, name: true, email: true } } },
+              }),
     ]);
 
     const corpus = [];
@@ -199,7 +248,7 @@ async function buildCorpus({ organizationId, workspaceId, user, queryTokens }) {
             corpus.push({
                 sourceType: "comment",
                 sourceId: comment.id,
-                workspaceId,
+                workspaceId: workspace.workspaceId,
                 title: `Comment by ${comment.author?.name || "team member"}`,
                 snippet: comment.content.length > 200 ? `${comment.content.slice(0, 200)}…` : comment.content,
                 score: Math.min(999, score + SOURCE_BOOST.comment),
@@ -215,7 +264,7 @@ async function buildCorpus({ organizationId, workspaceId, user, queryTokens }) {
             corpus.push({
                 sourceType: "activity",
                 sourceId: activity.id,
-                workspaceId,
+                workspaceId: workspace.workspaceId,
                 title: `${activity.user?.name || "Someone"} ${activity.action}`,
                 snippet: activity.action,
                 score: Math.min(999, score + SOURCE_BOOST.activity),
@@ -242,7 +291,7 @@ async function buildCorpus({ organizationId, workspaceId, user, queryTokens }) {
     }
 
     corpus.sort((a, b) => b.score - a.score);
-    return { ok: true, workspace: access.workspace, canSeeAll: access.canSeeAll, projects, tasks, comments, activities, knowledge, members, corpus };
+    return { ok: true, workspace, canSeeAll, orgRole, projects, tasks, comments, activities, knowledge, members, corpus };
 }
 
 /** Deterministic, metric-anchored answer. Numbers here are authoritative. */
@@ -263,18 +312,54 @@ function buildDeterministicAnswer({ intent, workspace, metrics }) {
                 : `Nothing is overdue in ${workspace.name} right now.`,
         );
     } else if (intent === "workload") {
-        if (workload.byUser.length) {
-            parts.push(`Open task workload in ${workspace.name}: ${workload.byUser.map((u) => `${u.name}: ${u.count}`).join("; ")}.`);
+        const assigned = workload.byUser.filter((u) => u.count > 0);
+        if (assigned.length) {
+            parts.push(`Open task workload in ${workspace.name}: ${assigned.map((u) => `${u.name}: ${u.count}`).join("; ")}.`);
+            if (workload.byUser.length >= 2) {
+                const busiest = assigned[0];
+                // The full-byUser array is sorted desc and includes members with
+                // zero open tasks, so the tail is the least/busy-now person.
+                const least = workload.byUser[workload.byUser.length - 1];
+                parts.push(`The busiest member right now is ${busiest.name} with ${busiest.count} open task${busiest.count === 1 ? "" : "s"}; ${least.name} is the least loaded right now with ${least.count} open task${least.count === 1 ? "" : "s"}.`);
+            }
             if (workload.imbalance) parts.push(`Workload imbalance ratio: ${workload.imbalance}x between busiest and least-assigned.`);
         } else {
-            parts.push(`There are no open assigned tasks in ${workspace.name} to report on.`);
+            parts.push(`No one in ${workspace.name} currently has open assigned tasks to report on.`);
         }
+        if (metrics.unassignedCount) parts.push(`${metrics.unassignedCount} open task${metrics.unassignedCount === 1 ? "" : "s"} are not yet assigned to anyone.`);
+        if (metrics.zeroWorkMembers.length) parts.push(`Members with no open tasks right now: ${metrics.zeroWorkMembers.slice(0, 6).join(", ")}${metrics.zeroWorkMembers.length > 6 ? ` and ${metrics.zeroWorkMembers.length - 6} more` : ""}.`);
+    } else if (intent === "count") {
+        parts.push(
+            `In ${workspace.name} there are ${metrics.totalTasks} task${metrics.totalTasks === 1 ? "" : "s"} in total (all history), ${metrics.open} open, ${productivity.completed} completed, ${blocked.total} blocked and ${overdue.length} overdue, spread across ${metrics.projectCount} project${metrics.projectCount === 1 ? "" : "s"}.`,
+        );
+        if (metrics.statusBreakdown.length) {
+            parts.push(`By status: ${metrics.statusBreakdown.map((s) => `${s.status}: ${s.count}`).join(", ")}.`);
+        }
+    } else if (intent === "statuses") {
+        if (metrics.statusBreakdown.length) {
+            parts.push(`Status breakdown in ${workspace.name}: ${metrics.statusBreakdown.map((s) => `${s.status}: ${s.count} task${s.count === 1 ? "" : "s"}`).join("; ")}.`);
+            const interesting = metrics.statusBreakdown.find((s) => s.status !== DONE) || metrics.statusBreakdown[0];
+            if (interesting) {
+                parts.push(`${interesting.status} tasks: ${interesting.titles.slice(0, 6).join(", ")}${interesting.count > 6 ? ` and ${interesting.count - 6} more` : ""}.`);
+            }
+        } else {
+            parts.push(`There are no tasks in ${workspace.name} yet.`);
+        }
+    } else if (intent === "assignees") {
+        if (metrics.openTaskSample.length) {
+            parts.push(
+                `Current task assignments in ${workspace.name}: ${metrics.openTaskSample.map((t) => `${t.title}${t.assignee ? ` — ${t.assignee}` : " — unassigned"} (${t.status})`).join("; ")}${metrics.openArrayTotal > metrics.openTaskSample.length ? ` and ${metrics.openArrayTotal - metrics.openTaskSample.length} more open tasks` : ""}.`,
+            );
+        } else {
+            parts.push(`There are no open tasks in ${workspace.name} to list assignments for.`);
+        }
+        if (metrics.unassignedCount) parts.push(`${metrics.unassignedCount} open task${metrics.unassignedCount === 1 ? "" : "s"} have no assignee yet.`);
     } else if (intent === "created" || intent === "completed" || intent === "compare" || intent === "productivity") {
         parts.push(
-            `${compare.created.current} task${compare.created.current === 1 ? "" : "s"} created this week vs ${compare.created.previous} last week${compare.created.pct !== null ? ` (${compare.created.pct >= 0 ? "+" : ""}${compare.created.pct}%)` : ""}.`,
+            `${metrics.createdTotal} task${metrics.createdTotal === 1 ? "" : "s"} created in total in ${workspace.name}; ${compare.created.current} this week vs ${compare.created.previous} last week${compare.created.pct !== null ? ` (${compare.created.pct >= 0 ? "+" : ""}${compare.created.pct}%)` : ""}.`,
         );
         parts.push(
-            `${compare.completed.current} task${compare.completed.current === 1 ? "" : "s"} completed this week vs ${compare.completed.previous} last week${compare.completed.pct !== null ? ` (${compare.completed.pct >= 0 ? "+" : ""}${compare.completed.pct}%)` : ""}.`,
+            `${productivity.completed} task${productivity.completed === 1 ? "" : "s"} completed in total; ${compare.completed.current} this week vs ${compare.completed.previous} last week${compare.completed.pct !== null ? ` (${compare.completed.pct >= 0 ? "+" : ""}${compare.completed.pct}%)` : ""}.`,
         );
         if (intent === "productivity") {
             parts.push(`Completion rate: ${productivity.completionRate}% of all ${productivity.total} tasks; ${productivity.blockedRate}% are blocked.`);
@@ -293,15 +378,15 @@ function buildDeterministicAnswer({ intent, workspace, metrics }) {
                 : `No recent activity recorded in ${workspace.name}.`,
         );
     } else if (intent === "knowledge") {
-        const entry = metrics.knowledge.find((k) => k) || null;
+        const entry = metrics.knowledge[0] || null;
         parts.push(
             entry
-                ? `From recorded decision memory: ${entry.title} — ${entry.content.slice(0, 220)}`
+                ? `From recorded decision memory: ${entry.title} — ${entry.snippet}`
                 : `No matching knowledge entry found; ask an OWNER/ADMIN to save one.`,
         );
     } else {
         parts.push(
-            `${metrics.totalTasks} task${metrics.totalTasks === 1 ? "" : "s"} in ${workspace.name}: ${productivity.completed} completed, ${productivity.blocked} blocked, ${overdue.length} overdue across ${metrics.projectCount} project${metrics.projectCount === 1 ? "" : "s"}.`,
+            `${metrics.totalTasks} task${metrics.totalTasks === 1 ? "" : "s"} in ${workspace.name}: ${metrics.open} open, ${productivity.completed} completed, ${blocked.total} blocked, ${overdue.length} overdue across ${metrics.projectCount} project${metrics.projectCount === 1 ? "" : "s"}.`,
         );
         parts.push(`${compare.created.current} created and ${compare.completed.current} completed this week.`);
     }
@@ -314,6 +399,9 @@ function metricSummaryFor(metrics, memoryStart) {
     return {
         memoryStart: memoryStart?.toISOString?.() || null,
         totalTasks: metrics.totalTasks,
+        createdTotal: metrics.createdTotal,
+        openTasks: metrics.open,
+        statusBreakdown: metrics.statusBreakdown,
         completedTasks: metrics.productivity.completed,
         blockedTasks: metrics.blocked.total,
         overdueTasks: metrics.overdue.length,
@@ -321,6 +409,7 @@ function metricSummaryFor(metrics, memoryStart) {
         createdThisWeek: metrics.compare.created.current,
         completedThisWeek: metrics.compare.completed.current,
         workload: metrics.workload.byUser.slice(0, 5),
+        unassigned: metrics.unassignedCount,
         atRisk: metrics.risk.slice(0, 5),
     };
 }
@@ -362,8 +451,11 @@ router.get("/:orgId", async (req, res) => {
 // Follow-ups: pass the conversation via `history: [{role, content}, ...]`.
 router.post("/query", async (req, res) => {
     try {
-        const { organizationId, workspaceId, query, history = [] } = req.body;
-        if (!organizationId || !workspaceId) {
+        const { organizationId, workspaceId, query, history = [], allWorkspaces } = req.body;
+        // FIELD OWNER/ADMIN can ask org-wide by omitting scope or requesting
+        // "all"; everyone else stays pinned to a single workspace.
+        const orgWide = allWorkspaces === true || workspaceId === "all";
+        if (!organizationId || (!workspaceId && !orgWide)) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "organizationId and workspaceId are required"));
         }
         if (!query?.trim()) return res.status(422).json(errorResponse("VALIDATION_ERROR", "A question is required"));
@@ -386,7 +478,7 @@ router.post("/query", async (req, res) => {
         }
 
         const queryTokens = tokenize(query);
-        const built = await buildCorpus({ organizationId, workspaceId, user: req.user, queryTokens });
+        const built = await buildCorpus({ organizationId, workspaceId, allWorkspaces: orgWide, user: req.user, queryTokens });
         if (!built.ok) {
             return res.status(403).json(errorResponse("FORBIDDEN", "You don't have access to this workspace's intelligence"));
         }
@@ -396,24 +488,53 @@ router.post("/query", async (req, res) => {
         const at = new Date();
         const currentWeek = weekRange(at);
         const previousWeek = previousWeekRange(at);
+        // Name lookup covers the FULL member roster (including members with no
+        // assigned tasks) so the workload ranking can report idle teammates —
+        // otherwise "who is the least working employee" could never find someone
+        // with zero open tasks.
         const userNameById = Object.fromEntries(
-            [...new Set(tasks.map((t) => t.assigneeId).filter(Boolean))].map((id) => {
-                const t = tasks.find((x) => x.assigneeId === id);
-                return [id, t?.assignee?.name || "Unassigned"];
-            }),
+            members.map((m) => [m.user?.id, m.user?.name || "Unnamed member"]).filter(([id]) => id),
         );
+        for (const t of tasks) {
+            if (t.assigneeId && !userNameById[t.assigneeId]) {
+                userNameById[t.assigneeId] = t.assignee?.name || "Unassigned";
+            }
+        }
+        const memberIds = members.map((m) => m.user?.id).filter(Boolean);
+
+        const openTasksList = tasks.filter((t) => t.status !== DONE);
+        const openAssignedIds = new Set(openTasksList.filter((t) => t.assigneeId).map((t) => t.assigneeId));
+        const zeroWorkMembers = members
+            .filter((m) => !openAssignedIds.has(m.user?.id))
+            .map((m) => m.user?.name || "Unnamed member");
 
         const metrics = {
             totalTasks: tasks.length,
+            createdTotal: tasks.length,
+            open: openTasksList.length,
             projectCount: projects.length,
             blocked: blockedTasks(tasks),
             overdue: overdueTasks(tasks, at),
             productivity: productivityMetrics(tasks),
-            workload: workloadByAssignee(tasks, userNameById),
+            workload: workloadByAssignee(tasks, userNameById, memberIds),
+            statusBreakdown: tasksByStatus(tasks),
+            unassignedCount: openTasksList.filter((t) => !t.assigneeId).length,
+            zeroWorkMembers,
+            openTaskSample: openTasksList
+                .slice()
+                .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+                .slice(0, 14)
+                .map((t) => ({
+                    key: t.key || null,
+                    title: t.title,
+                    status: t.status,
+                    assignee: t.assignee?.name || null,
+                })),
+            openArrayTotal: openTasksList.length,
             compare: periodCompare(tasks, { currentRange: currentWeek, previousRange: previousWeek }),
             risk: atRiskProjects(projects, tasks, at),
             recent: recentActivity(activities, 6),
-            knowledge: knowledge.slice(0, 3),
+            knowledge: corpus.filter((c) => c.sourceType === "knowledge").slice(0, 3),
         };
 
         const memoryRange = orgMemoryRange(workspace.organization.createdAt, at);
@@ -424,20 +545,27 @@ router.post("/query", async (req, res) => {
         // keyword-matched sources. Numbers still come from backend metrics.
         const context = {
             workspace: workspace.name,
+            workspaces: workspace.workspaceIds.length > 1 ? workspace.workspaceNames : undefined,
             counts: {
                 tasks: metrics.totalTasks,
+                createdTotal: metrics.createdTotal,
+                open: metrics.open,
                 projects: metrics.projectCount,
                 members: members.length,
                 completed: metrics.productivity.completed,
                 blocked: metrics.blocked.total,
                 overdue: metrics.overdue.length,
+                unassigned: metrics.unassignedCount,
             },
+            statusBreakdown: metrics.statusBreakdown,
             members: members.map((m) => ({
                 name: m.user?.name || "Unnamed member",
                 email: m.user?.email || null,
                 role: m.role,
             })),
-            tasks: tasks.slice(0, 80).map((task) => ({
+            workload: metrics.workload.byUser.map((u) => ({ name: u.name, openTasks: u.count })),
+            membersWithNoOpenWork: metrics.zeroWorkMembers,
+            tasks: tasks.slice(0, 100).map((task) => ({
                 key: task.key || null,
                 title: task.title,
                 status: task.status,
@@ -567,18 +695,20 @@ router.get("/:orgId/snapshot", async (req, res) => {
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspaceId is required"));
 
-        // The snapshot is part of the standard (PRO) intelligence dashboard, not
-        // the CUSTOM-only decision memory — gate it on the limited entitlement so
-        // PRO orgs aren't wrongly 403'd.
-        const entitlements = await enforceFeature(req, res, req.params.orgId, "team_intelligence_limited");
-        if (!entitlements) return;
-
+        // Membership is verified BEFORE the plan gate so the gate never leaks
+        // plan details to non-members (same ordering as the sibling routes).
         const access = await resolveWorkspaceAccess({
             organizationId: req.params.orgId,
             workspaceId,
             userId: req.user.id,
         });
         if (!access.ok) return res.status(403).json(errorResponse("FORBIDDEN", "You don't have access to this workspace"));
+
+        // The snapshot is part of the standard (PRO) intelligence dashboard, not
+        // the CUSTOM-only decision memory — gate it on the limited entitlement so
+        // PRO orgs aren't wrongly 403'd.
+        const entitlements = await enforceFeature(req, res, req.params.orgId, "team_intelligence_limited");
+        if (!entitlements) return;
 
         const { workspace } = access;
         const at = new Date();

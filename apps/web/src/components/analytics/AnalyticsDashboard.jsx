@@ -47,7 +47,13 @@ function ChartCard({ title, description, children }) {
 
 export function AnalyticsDashboard({ analytics }) {
   const { t } = useI18n();
-  const { velocity, burndown, workload, cycleTime, summary } = analytics;
+  const {
+    velocity = [],
+    burndown = [],
+    workload = [],
+    cycleTime = [],
+    summary = {},
+  } = analytics || {};
 
   return (
     <div className="space-y-6">
@@ -56,7 +62,7 @@ export function AnalyticsDashboard({ analytics }) {
           <Badge variant="secondary">{t("analytics.velocity")}</Badge>
 
           <p className="text-foreground dark:text-foreground-dark mt-4 text-3xl font-semibold">
-            {summary.tasksClosed}
+            {summary.tasksClosed ?? 0}
           </p>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
@@ -68,7 +74,7 @@ export function AnalyticsDashboard({ analytics }) {
           <Badge variant="secondary">{t("analytics.cycleTime")}</Badge>
 
           <p className="text-foreground dark:text-foreground-dark mt-4 text-3xl font-semibold">
-            {summary.averageCycleTime}
+            {summary.averageCycleTime ?? "—"}
           </p>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
@@ -80,7 +86,7 @@ export function AnalyticsDashboard({ analytics }) {
           <Badge variant="secondary">{t("analytics.utilization")}</Badge>
 
           <p className="text-foreground dark:text-foreground-dark mt-4 text-3xl font-semibold">
-            {summary.teamUtilization}
+            {summary.teamUtilization ?? "0%"}
           </p>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">
@@ -92,7 +98,7 @@ export function AnalyticsDashboard({ analytics }) {
           <Badge variant="secondary">{t("analytics.sprint")}</Badge>
 
           <p className="text-foreground dark:text-foreground-dark mt-4 text-3xl font-semibold">
-            {summary.sprintCompletion}
+            {summary.sprintCompletion ?? "0%"}
           </p>
 
           <p className="text-muted-foreground dark:text-muted-foreground-dark mt-1 text-sm">

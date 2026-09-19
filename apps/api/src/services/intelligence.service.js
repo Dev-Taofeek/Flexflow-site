@@ -49,7 +49,7 @@ function jsonFetchSafe(res) {
  */
 export async function synthesizeWithGroq({
     apiKey,
-    model = "openai/gpt-oss-20b",
+    model = process.env.GROQ_MODEL || "openai/gpt-oss-120b",
     baseUrl = process.env.GROQ_API_BASE || DEFAULT_GROQ_BASE,
     question,
     deterministicAnswer,
@@ -63,7 +63,7 @@ export async function synthesizeWithGroq({
         .slice(0, 8)
         .map((s, i) => `${i + 1}. [${s.sourceType}] ${s.title} — ${s.snippet}`)
         .join("\n");
-    const contextJson = context ? JSON.stringify(context).slice(0, 8000) : "";
+    const contextJson = context ? JSON.stringify(context).slice(0, 14000) : "";
     const dataParts = [];
     if (sourceFacts) dataParts.push(`Retrieved sources:\n${sourceFacts}`);
     if (contextJson) dataParts.push(`Workspace data (tasks, members, activity, projects, knowledge):\n${contextJson}`);
@@ -99,6 +99,15 @@ export async function synthesizeWithGroq({
     if (deterministicAnswer) {
         messages.push({ role: "system", content: `Deterministic backend answer to rephrase (numbers authoritative):\n${deterministicAnswer}` });
     }
+    // The RBAC-scoped workspace digest (task titles, statuses, assignees,
+    // members, activity, projects, knowledge) and retrieved sources MUST reach
+    // the model so it can answer specific questions like "how many tasks were
+    // created", "what is the status of X", "who owns Y", or "who is the least
+    // busy member". It is framed as <untrusted_data> so any instructions inside
+    // retrieved text are ignored (see system rule 5).
+    if (dataBlock) {
+        messages.push({ role: "system", content: dataBlock });
+    }
 
     let res;
     try {
@@ -111,7 +120,7 @@ export async function synthesizeWithGroq({
             body: JSON.stringify({
                 model,
                 temperature: 0.2,
-                max_tokens: 500,
+                max_tokens: 1500,
                 messages: [{ role: "system", content: system }, ...messages],
             }),
         });
@@ -126,12 +135,15 @@ export async function synthesizeWithGroq({
     // Anti-hallucination guard: the model may omit numbers, but it must never
     // introduce one that isn't present in the authoritative answer, the workspace
     // data, or the question. If it does, fall back to the deterministic answer.
+    // Every digit is checked (including 0-9) so a fabricated "3 tasks" when the
+    // backend says 0 is caught.
     const allowedNumbers = new Set([
         ...collectNumbers(deterministicAnswer),
         ...collectNumbers(question),
         ...collectNumbers(context ? JSON.stringify(context) : ""),
+        ...collectNumbers(dataBlock),
     ]);
-    const fabricated = collectNumbers(text).find((n) => n.length >= 2 && !allowedNumbers.has(n));
+    const fabricated = collectNumbers(text).find((n) => !allowedNumbers.has(n));
     if (fabricated) {
         return { text: deterministicAnswer, used: false, error: "Groq produced a number not present in the data — fell back" };
     }
@@ -139,7 +151,7 @@ export async function synthesizeWithGroq({
     return { text, used: true };
 }
 
-const INTENT_REQUIRES_CORPUS = new Set(["blocked", "overdue", "risk", "workload", "productivity", "health", "created", "completed", "compare", "general", "history", "activity", "knowledge"]);
+const INTENT_REQUIRES_CORPUS = new Set(["count", "statuses", "assignees", "blocked", "overdue", "risk", "workload", "productivity", "health", "created", "completed", "compare", "general", "history", "activity", "knowledge"]);
 
 /**
  * Run a single intelligence query. `corpus`, `sources`, and `deterministicAnswer`

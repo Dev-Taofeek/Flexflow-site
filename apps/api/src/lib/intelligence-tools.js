@@ -79,14 +79,29 @@ export function overdueTasks(tasks = [], at = new Date()) {
     );
 }
 
-// ── Workload per assignee ────────────────────────────────────────────────────
+// ── Workload per assignee (open work only) ───────────────────────────────────
 
-export function workloadByAssignee(tasks = [], userNameById = {}) {
+/**
+ * Count of OPEN (not completed) tasks per assignee — the honest proxy for
+ * current workload. Completed tasks are excluded so "least/busiest working
+ * member" reflects what still needs doing, not cumulative history.
+ *
+ * `memberIds` (optional) is the full roster of members the caller can see.
+ * Members with zero open tasks are included with count 0 so the "least busy
+ * / least working" member is always answered correctly instead of silently
+ * skipping idle teammates.
+ */
+export function workloadByAssignee(tasks = [], userNameById = {}, memberIds = []) {
     const counts = new Map(); // userId → open task count
     for (const t of tasks) {
-        if (t.assigneeId) counts.set(t.assigneeId, (counts.get(t.assigneeId) || 0) + 1);
+        if (!t.assigneeId || t.status === DONE) continue;
+        counts.set(t.assigneeId, (counts.get(t.assigneeId) || 0) + 1);
+    }
+    for (const id of memberIds) {
+        if (id && !counts.has(id)) counts.set(id, 0);
     }
     const byUser = [...counts.entries()]
+        .filter(([id]) => id)
         .map(([id, count]) => ({ id, name: userNameById[id] || "Unassigned", count }))
         .sort((a, b) => b.count - a.count);
 
@@ -97,6 +112,19 @@ export function workloadByAssignee(tasks = [], userNameById = {}) {
         if (min > 0) imbalance = (max / min).toFixed(1); // e.g. "3.5"
     }
     return { byUser, total: tasks.length, imbalance, busiest: byUser[0]?.name || null };
+}
+
+/** Per-status breakdown: { status, count, titles[] } sorted by count desc. */
+export function tasksByStatus(tasks = []) {
+    const byStatus = new Map();
+    for (const t of tasks) {
+        const key = t.status || "UNKNOWN";
+        if (!byStatus.has(key)) byStatus.set(key, { status: key, count: 0, titles: [] });
+        const entry = byStatus.get(key);
+        entry.count += 1;
+        if (entry.titles.length < 10) entry.titles.push(t.title);
+    }
+    return [...byStatus.values()].sort((a, b) => b.count - a.count);
 }
 
 // ── Created / completed per period with previous-period comparison ────────────
@@ -173,6 +201,11 @@ export function recentActivity(items = [], limit = 6) {
 // ---------------------------------------------------------------------------
 
 const INTENT_RULES = [
+    // Specific phrasings must be matched before the generic ones below.
+    [/least work|underutil|most idle|barely working|not working|fewest tasks|least assigned|least tasks/, "workload"],
+    [/how many|how much|how big|number of|count\b|total\b|in total|altogether|sum of|overall/, "count"],
+    [/\bstatus/, "statuses"],
+    [/assignee|assigned to|who (is|'s|se)? ?(working on|owns?|handles?|responsible|reviewing)|w+hose|by whom|list.*task/i, "assignees"],
     [/created|since|new tasks?/, "created"],
     [/complet(ed|ion)/, "completed"],
     [/block(ed|ing)?|stuck/, "blocked"],
@@ -183,7 +216,7 @@ const INTENT_RULES = [
     [/compar|vs\.?|versus|last (month|week)/, "compare"],
     [/hist|recent|activit/, "history"],
     [/knowledge|decision|remember|tribal/, "knowledge"],
-    [/general|anything|how are we/, "general"],
+    [/general|anything|how are we|list|show|tell me about/, "general"],
 ];
 
 export function classifyIntent(query = "") {
