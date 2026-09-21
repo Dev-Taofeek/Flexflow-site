@@ -219,7 +219,7 @@ router.post("/login", authRateLimiter, async (req, res) => {
         }
 
         const user = await prisma.user.findUnique({
-            where: { email },
+            where: { email: email.trim().toLowerCase() },
             select: {
                 id: true, name: true, email: true, avatarUrl: true,
                 passwordHash: true, onboarded: true, status: true,

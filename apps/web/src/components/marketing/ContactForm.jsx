@@ -21,7 +21,7 @@ export function ContactForm() {
     const subject = form.get("subject");
     const message = form.get("message");
 
-    const mailto = `mailto:hello@flexflow.app?subject=${encodeURIComponent(
+    const mailto = `mailto:obayomitaofeek7@gmail.com?subject=${encodeURIComponent(
       `[${subject || "Contact"}] from ${name || "a visitor"}`,
     )}&body=${encodeURIComponent(`${message}\n\n— ${name} (${email})`)}`;
 
@@ -37,7 +37,7 @@ export function ContactForm() {
         </p>
         <p className="mt-1">
           <Translated>If it didn&apos;t, email us directly at </Translated>
-          <a href="mailto:hello@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+          <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
             hello@flexflow.app
           </a>
           <Translated>. We usually reply within one business day.</Translated>

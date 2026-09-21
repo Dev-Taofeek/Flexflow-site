@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-    Building2, Check, ChevronRight, CreditCard, Loader2, Lock, ShieldCheck, Sparkles, Zap,
+    Banknote, Building2, Check, CheckCircle2, ChevronRight, Copy, CreditCard, Loader2, Lock, ShieldCheck, Sparkles, Upload, X, Zap,
 } from "lucide-react";
 
 import { PLANS, CUSTOM_ADDONS, CUSTOM_ENTERPRISE_BASE, annualize } from "@flexflow/plans";
 import { apiRequest } from "@/lib/api-client";
+import { receiptFileToDataUrl } from "@/lib/image-upload";
 import { useApp } from "@/contexts/AppContext";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useToast } from "@/contexts/ToastContext";
@@ -98,6 +99,19 @@ export default function BillingSettingsPage() {
     const [targetPlan, setTargetPlan] = useState("pro");
     const [selectedAddOns, setSelectedAddOns] = useState([]);
 
+    // Payment method + bank transfer state
+    const [method, setMethod] = useState("card");
+    const [transferIntent, setTransferIntent] = useState(null);
+    const [transferLoading, setTransferLoading] = useState(false);
+    const [transferBeforeSubmit, setTransferBeforeSubmit] = useState(false);
+    const [receiptPreview, setReceiptPreview] = useState(null);
+    const [receiptMime, setReceiptMime] = useState(null);
+    const [transferNote, setTransferNote] = useState("");
+    const [uploadingReceipt, setUploadingReceipt] = useState(false);
+    const [rejectingPaymentId, setRejectingPaymentId] = useState(null);
+    const [rejectNote, setRejectNote] = useState("");
+    const [reviewLoading, setReviewLoading] = useState(null);
+
     const load = useCallback(async (targetOrgId) => {
         if (!targetOrgId || !accessToken) return;
         setLoading(true);
@@ -156,6 +170,129 @@ export default function BillingSettingsPage() {
         } catch (err) {
             if (!err?.cancelled) addToast(err.message, "error");
             setCheckoutLoading(false);
+        }
+    }
+
+    function copyText(value) {
+        return async () => {
+            try {
+                await navigator.clipboard.writeText(value);
+                addToast(t("settings.billing.transferCopied"), "success");
+            } catch {
+                addToast(t("settings.billing.transferCopy"), "error");
+            }
+        };
+    }
+
+    async function startTransfer() {
+        if (!orgId || !accessToken) return;
+        setTransferLoading(true);
+        try {
+            const res = await runWithStepUp(({ code }) =>
+                apiRequest("/billing/transfer/intent", {
+                    method: "POST",
+                    token: accessToken,
+                    headers: code ? { "x-2fa-code": code } : {},
+                    body: {
+                        organizationId: orgId,
+                        plan: targetPlan.toUpperCase(),
+                        billingCycle: cycle,
+                        addOns: targetPlan === "custom" ? selectedAddOns : [],
+                    },
+                    toast: false,
+                }),
+            );
+            setTransferIntent(res);
+            setTransferBeforeSubmit(false);
+            setTransferNote("");
+            setReceiptPreview(null);
+            setReceiptMime(null);
+            addToast(t("settings.billing.transferIntentCreated"), "success");
+        } catch (err) {
+            if (!err?.cancelled) addToast(err.message, "error");
+        } finally {
+            setTransferLoading(false);
+        }
+    }
+
+    async function handleReceiptFileChange(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+            const { dataUrl, mime } = await receiptFileToDataUrl(file);
+            if (Math.ceil((dataUrl.length * 3) / 4) > 5 * 1024 * 1024) {
+                addToast(t("settings.billing.transferReceiptInvalid"), "error");
+                return;
+            }
+            setReceiptPreview(dataUrl);
+            setReceiptMime(mime);
+        } catch (err) {
+            addToast(t("settings.billing.transferReceiptInvalid"), "error");
+        }
+    }
+
+    async function submitReceipt() {
+        if (!transferIntent?.payment?.id || !receiptPreview) {
+            addToast(t("settings.billing.transferUploadHint"), "error");
+            return;
+        }
+        setUploadingReceipt(true);
+        try {
+            await runWithStepUp(({ code }) =>
+                apiRequest("/billing/transfer/receipt", {
+                    method: "POST",
+                    token: accessToken,
+                    headers: code ? { "x-2fa-code": code } : {},
+                    body: {
+                        paymentId: transferIntent.payment.id,
+                        organizationId: orgId,
+                        receiptData: receiptPreview,
+                        receiptMime,
+                        note: transferNote,
+                    },
+                    toast: false,
+                }),
+            );
+            setTransferIntent(null);
+            setReceiptPreview(null);
+            setReceiptMime(null);
+            setTransferNote("");
+            addToast(t("settings.billing.transferSubmitted"), "success");
+            await load(orgId);
+        } catch (err) {
+            if (!err?.cancelled) addToast(err.message, "error");
+        } finally {
+            setUploadingReceipt(false);
+        }
+    }
+
+    async function reviewPayment(paymentId, decision) {
+        setReviewLoading(paymentId);
+        try {
+            await runWithStepUp(({ code }) =>
+                apiRequest(`/billing/transfer/${paymentId}/review`, {
+                    method: "POST",
+                    token: accessToken,
+                    headers: code ? { "x-2fa-code": code } : {},
+                    body: {
+                        decision,
+                        organizationId: orgId,
+                        note: decision === "reject" ? rejectNote : undefined,
+                    },
+                    toast: false,
+                }),
+            );
+            setRejectingPaymentId(null);
+            setRejectNote("");
+            addToast(
+                decision === "approve" ? t("settings.billing.transferApproved") : t("settings.billing.transferRejected"),
+                "success",
+            );
+            await load(orgId);
+        } catch (err) {
+            if (!err?.cancelled) addToast(err.message, "error");
+        } finally {
+            setReviewLoading(null);
         }
     }
 
@@ -444,7 +581,7 @@ export default function BillingSettingsPage() {
                     </div>
                 )}
 
-                <div className="mt-6 flex flex-col items-center justify-between gap-4 sm:flex-row">
+                <div className="mt-6 space-y-4">
                     <p className="text-sm text-(--text-tertiary)">
                         {targetPlan === "pro"
                             ? isAnnual
@@ -454,18 +591,67 @@ export default function BillingSettingsPage() {
                               ? t("settings.billing.customSummaryOne", { monthly: `$${customEstimate.monthly}`, annual: `$${customEstimate.annual}`, count: selectedAddOns.length })
                               : t("settings.billing.customSummaryMany", { monthly: `$${customEstimate.monthly}`, annual: `$${customEstimate.annual}`, count: selectedAddOns.length })}
                     </p>
-                    <button
-                        type="button"
-                        onClick={startCheckout}
-                        disabled={checkoutLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !isCustom)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60"
-                    >
-                        {checkoutLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                        {checkoutLoading ? t("settings.common.redirecting") : isFree && targetPlan === "pro"
-                            ? t("settings.billing.upgradeToPro", { price: `$${isAnnual ? Math.round(PLANS.pro.priceAnnual / 12) : PLANS.pro.priceMonthly}` })
-                            : t("settings.billing.upgradeNow")}
-                        <ChevronRight className="h-4 w-4" />
-                    </button>
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="inline-flex items-center rounded-xl border border-(--border) bg-(--bg-sunken) p-1">
+                            <button
+                                type="button"
+                                onClick={() => setMethod("card")}
+                                aria-pressed={method === "card"}
+                                className={[
+                                    "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
+                                    method === "card" ? "bg-brand-600 text-white" : "text-(--text-secondary) hover:text-(--text-primary)",
+                                ].join(" ")}
+                            >
+                                <CreditCard className="h-3.5 w-3.5" />
+                                {t("settings.billing.cardShort")}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMethod("transfer")}
+                                aria-pressed={method === "transfer"}
+                                className={[
+                                    "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
+                                    method === "transfer" ? "bg-brand-600 text-white" : "text-(--text-secondary) hover:text-(--text-primary)",
+                                ].join(" ")}
+                            >
+                                <Banknote className="h-3.5 w-3.5" />
+                                {t("settings.billing.bankTransferShort") || "Bank transfer"}
+                            </button>
+                        </div>
+                        <p className="max-w-sm text-xs leading-relaxed text-(--text-tertiary)">
+                            {method === "card"
+                                ? t("settings.billing.cardMethodDescription")
+                                : t("settings.billing.transferMethodDescription")}
+                        </p>
+                    </div>
+                    <div className="flex justify-end">
+                        {method === "card" ? (
+                            <button
+                                type="button"
+                                onClick={startCheckout}
+                                disabled={checkoutLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !isCustom)}
+                                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60"
+                            >
+                                {checkoutLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                                {checkoutLoading ? t("settings.common.redirecting") : isFree && targetPlan === "pro"
+                                    ? t("settings.billing.upgradeToPro", { price: `$${isAnnual ? Math.round(PLANS.pro.priceAnnual / 12) : PLANS.pro.priceMonthly}` })
+                                    : t("settings.billing.upgradeNow")}
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={startTransfer}
+                                disabled={transferLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !isCustom)}
+                                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60"
+                            >
+                                {transferLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
+                                {transferLoading ? t("settings.common.processing") : t("settings.billing.startBankTransfer")}
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                        )}
+                    </div>
                 </div>
             </section>
 
@@ -526,7 +712,232 @@ export default function BillingSettingsPage() {
                 </div>
             </section>
 
+            {/* Bank-transfer payments awaiting action */}
+            {(data?.payments || []).filter((p) => p.method === "BANK_TRANSFER").length > 0 && (
+                <section className="rounded-2xl border border-(--border) bg-(--bg-elevated) p-6">
+                    <div className="flex items-center gap-2">
+                        <Banknote className="h-4 w-4 text-brand-500" />
+                        <h3 className="text-sm font-semibold text-(--text-primary)">{t("settings.billing.transferPendingTitle")}</h3>
+                    </div>
+                    <p className="mt-1 text-xs text-(--text-muted)">{t("settings.billing.transferPendingHint")}</p>
+                    <div className="mt-5 space-y-3">
+                        {(data.payments || [])
+                            .filter((p) => p.method === "BANK_TRANSFER")
+                            .map((p) => {
+                                const amount = ((p.amountMinor || 0) / 100).toLocaleString(locale);
+                                const statusKey =
+                                    p.status === "UNDER_REVIEW"
+                                        ? "settings.billing.statusUnderReview"
+                                        : p.status === "APPROVED"
+                                          ? "settings.billing.statusApproved"
+                                          : p.status === "REJECTED"
+                                            ? "settings.billing.statusRejected"
+                                            : "settings.billing.statusPending";
+                                const isActionable = isOwner && p.status === "UNDER_REVIEW";
+                                return (
+                                    <div
+                                        key={p.id}
+                                        className="flex flex-col gap-3 rounded-xl border border-(--border) p-4 sm:flex-row sm:items-center sm:justify-between"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-sm font-medium text-(--text-primary)">
+                                                    {p.plan} · {p.billingCycle}
+                                                </span>
+                                                <span
+                                                    className={[
+                                                        "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                                                        p.status === "UNDER_REVIEW"
+                                                            ? "bg-warning-500/15 text-warning-600"
+                                                            : p.status === "APPROVED"
+                                                              ? "bg-success-500/15 text-success-600"
+                                                              : p.status === "REJECTED"
+                                                                ? "bg-danger-500/15 text-danger-600"
+                                                                : "bg-(--bg-overlay) text-(--text-muted)",
+                                                    ].join(" ")}
+                                                >
+                                                    {t(statusKey)}
+                                                </span>
+                                            </div>
+                                            <p className="mt-1 text-xs text-(--text-muted)">
+                                                ₦{amount} · {p.reference} · {p.bankName || ""} {p.accountNumber || ""}
+                                                {p.createdAt ? ` · ${new Date(p.createdAt).toLocaleDateString(locale)}` : ""}
+                                            </p>
+                                        </div>
+
+                                        {isActionable ? (
+                                            <div className="flex flex-col items-end gap-2">
+                                                {rejectingPaymentId === p.id ? (
+                                                    <div className="flex flex-col items-end gap-2 rounded-lg border border-(--border) bg-(--bg-sunken) p-3">
+                                                        <input
+                                                            type="text"
+                                                            value={rejectNote}
+                                                            onChange={(e) => setRejectNote(e.target.value)}
+                                                            placeholder={t("settings.billing.rejectReasonPlaceholder")}
+                                                            className="w-full rounded-lg border border-(--border) bg-(--bg-elevated) px-3 py-1.5 text-sm text-(--text-primary) outline-none focus:border-brand-500 sm:w-72"
+                                                        />
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => { setRejectingPaymentId(null); setRejectNote(""); }}
+                                                                disabled={Boolean(reviewLoading)}
+                                                                className="rounded-lg border border-(--border) px-3 py-1.5 text-xs font-medium text-(--text-secondary) transition-colors hover:text-(--text-primary) disabled:opacity-60"
+                                                            >
+                                                                {t("settings.common.cancel")}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => reviewPayment(p.id, "reject")}
+                                                                disabled={Boolean(reviewLoading)}
+                                                                className="rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-500 disabled:opacity-60"
+                                                            >
+                                                                {reviewLoading === p.id ? t("settings.common.processing") : t("settings.billing.confirmReject")}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => reviewPayment(p.id, "approve")}
+                                                            disabled={Boolean(reviewLoading)}
+                                                            className="inline-flex items-center gap-1.5 rounded-lg bg-success-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-success-500 disabled:opacity-60"
+                                                        >
+                                                            {reviewLoading === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                                            {t("settings.billing.approveTransfer")}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setRejectingPaymentId(p.id); setRejectNote(""); }}
+                                                            disabled={Boolean(reviewLoading)}
+                                                            className="rounded-lg bg-danger-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-500 disabled:opacity-60"
+                                                        >
+                                                            {t("settings.billing.rejectTransfer")}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                );
+                            })}
+                    </div>
+                </section>
+            )}
+
             {loading && <div className="rounded-2xl border border-(--border) bg-(--bg-elevated) h-40 animate-pulse" />}
+
+            {/* Bank-transfer modal */}
+            {transferIntent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-lg rounded-2xl border border-(--border) bg-(--bg-elevated) p-6 shadow-2xl">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Banknote className="h-4.5 w-4.5 text-brand-500" />
+                                <h3 className="text-base font-semibold text-(--text-primary)">{t("settings.billing.transferTitle")}</h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setTransferIntent(null)}
+                                className="rounded-lg p-1.5 text-(--text-muted) transition-colors hover:bg-(--bg-sunken) hover:text-(--text-primary)"
+                                aria-label="Close"
+                            >
+                                <X className="h-4.5 w-4.5" />
+                            </button>
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-(--text-muted)">{t("settings.billing.transferStepsHint")}</p>
+
+                        <div className="mt-5 rounded-xl border border-brand-500/30 bg-brand-500/5 p-4">
+                            <p className="text-xs text-(--text-muted)">{t("settings.billing.transferAmountLabel")}</p>
+                            <p className="mt-0.5 text-2xl font-bold text-(--text-primary)">
+                                ₦{((transferIntent.payment.amountMinor || 0) / 100).toLocaleString(locale)}
+                            </p>
+                        </div>
+
+                        <div className="mt-4 space-y-2.5">
+                            {[
+                                { label: t("settings.billing.transferBankLabel"), value: transferIntent.bankTransfer?.banks?.join(", ") },
+                                { label: t("settings.billing.transferAccountLabel"), value: transferIntent.bankTransfer?.accountName },
+                                { label: t("settings.billing.transferAccountNumberLabel"), value: transferIntent.bankTransfer?.accountNumber },
+                                { label: t("settings.billing.transferReferenceLabel"), value: transferIntent.payment.reference },
+                            ].map((row) => (
+                                <div
+                                    key={row.label}
+                                    className="flex items-center justify-between gap-3 rounded-lg border border-(--border) bg-(--bg-sunken) px-3 py-2.5"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="text-[11px] uppercase tracking-wide text-(--text-muted)">{row.label}</p>
+                                        <p className="truncate text-sm font-medium text-(--text-primary)">{row.value}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={copyText(row.value)}
+                                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-(--border) px-2.5 py-1.5 text-xs font-medium text-(--text-secondary) transition-colors hover:text-(--text-primary)"
+                                    >
+                                        <Copy className="h-3.5 w-3.5" />
+                                        {t("settings.billing.transferCopy")}
+                                    </button>
+                                </div>
+                            ))}
+                            <p className="px-1 text-[11px] text-(--text-muted)">{t("settings.billing.transferReferenceHint")}</p>
+                        </div>
+
+                        <div className="mt-5">
+                            <p className="text-sm font-medium text-(--text-primary)">{t("settings.billing.transferUpload")}</p>
+                            <label className="mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-strong) bg-(--bg-sunken) px-4 py-6 text-center transition-colors hover:border-brand-500">
+                                <Upload className="h-5 w-5 text-(--text-muted)" />
+                                <span className="text-xs text-(--text-secondary)">
+                                    {receiptPreview ? receiptMime?.includes("pdf") ? "PDF" : "Image" : t("settings.billing.transferUploadHint")}
+                                </span>
+                                <input
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp,application/pdf"
+                                    onChange={handleReceiptFileChange}
+                                    className="sr-only"
+                                />
+                            </label>
+                            {receiptPreview && !receiptMime?.includes("pdf") && (
+                                // eslint-disable-next-line @next/next/no-img-element -- data-URL preview; next/image can't optimize blobs
+                                <img
+                                    src={receiptPreview}
+                                    alt="Receipt preview"
+                                    className="mt-2 max-h-36 rounded-lg border border-(--border) object-contain"
+                                />
+                            )}
+                        </div>
+
+                        <div className="mt-4">
+                            <p className="text-sm font-medium text-(--text-primary)">{t("settings.billing.transferNote")}</p>
+                            <textarea
+                                value={transferNote}
+                                onChange={(e) => setTransferNote(e.target.value)}
+                                placeholder={t("settings.billing.transferNotePlaceholder")}
+                                rows={2}
+                                className="mt-2 w-full resize-none rounded-lg border border-(--border) bg-(--bg-sunken) px-3 py-2 text-sm text-(--text-primary) outline-none focus:border-brand-500"
+                            />
+                        </div>
+
+                        <div className="mt-5 flex items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setTransferIntent(null)}
+                                className="rounded-lg border border-(--border) px-4 py-2 text-sm font-medium text-(--text-secondary) transition-colors hover:text-(--text-primary)"
+                            >
+                                {t("settings.common.cancel")}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={submitReceipt}
+                                disabled={uploadingReceipt || !receiptPreview}
+                                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60"
+                            >
+                                {uploadingReceipt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                {uploadingReceipt ? t("settings.common.processing") : t("settings.billing.transferSubmit")}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

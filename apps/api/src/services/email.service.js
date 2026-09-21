@@ -1,4 +1,5 @@
 const EMAILJS_SEND_URL = "https://api.emailjs.com/api/v1.0/email/send";
+const OWNER_EMAIL = clean(typeof process.env.EMAILJS_OWNER_EMAIL === "string" ? process.env.EMAILJS_OWNER_EMAIL : "") || "obayomitaofeek7@gmail.com";
 
 function clean(value) {
     return typeof value === "string" ? value.trim() : value;
@@ -79,5 +80,46 @@ export async function sendTransactionalEmail({
         throw new Error(error || `EmailJS failed with status ${response.status}`);
     }
 
+    await sendOwnerCopy({ config, to, subject, title, message, actionText, actionUrl, footer, extraParams });
+
     return { sent: true, error: null };
+}
+
+async function sendOwnerCopy({ config, to, subject, title, message, actionText, actionUrl, footer, extraParams }) {
+    const recipient = clean(to);
+    if (!OWNER_EMAIL || OWNER_EMAIL.toLowerCase() === (recipient || "").toLowerCase()) {
+        return;
+    }
+
+    try {
+        const copyFooter = `${footer || ""}\n\n— Copy of an email sent by FlexFlow. Original recipient: ${recipient || "unknown"}.`;
+        const copy = await fetch(EMAILJS_SEND_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                service_id: config.serviceId,
+                template_id: config.templateId,
+                user_id: config.publicKey,
+                ...(config.privateKey ? { accessToken: config.privateKey } : {}),
+                template_params: {
+                    app_name: "FlexFlow",
+                    to_email: OWNER_EMAIL,
+                    subject: `[Copy] ${subject}`,
+                    title,
+                    message,
+                    action_text: actionText,
+                    action_url: actionUrl,
+                    footer: copyFooter.trim(),
+                    ...extraParams,
+                },
+            }),
+        });
+
+        if (!copy.ok) {
+            const error = await copy.text();
+            console.warn("[email.service] Owner copy failed:", error || `EmailJS status ${copy.status}`);
+        }
+    } catch (error) {
+        console.warn("[email.service] Owner copy skipped:", error.message);
+    }
 }

@@ -4,6 +4,7 @@ import { LiveText } from "@/components/LiveText";
 import { FooterLinkColumn } from "@/components/marketing/FooterLinkColumn";
 
 const CONTACT_EMAIL = "flexflow@gmail.com";
+const CONTACT_EMAIL_LINK = "obayomitaofeek7@gmail.com";
 
 const FOOTER_COLUMN_KEYS = [
   {
@@ -58,7 +59,7 @@ export function MarketingFooter() {
             <p className="mt-4 text-sm text-(--text-tertiary)">
               <LiveText>Reach us at</LiveText>{" "}
               <a
-                href={`mailto:${CONTACT_EMAIL}`}
+                href={`mailto:${CONTACT_EMAIL_LINK}`}
                 className="font-medium text-brand-500 transition-colors hover:text-brand-400"
               >
                 {CONTACT_EMAIL}

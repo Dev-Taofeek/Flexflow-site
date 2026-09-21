@@ -33,7 +33,7 @@ export default function ContactPage() {
                 <LiveText>help center</LiveText>
               </a>
               <LiveText>, or email</LiveText>{" "}
-              <a href="mailto:support@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+              <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
                 support@flexflow.app
               </a>
               .
@@ -55,7 +55,7 @@ export default function ContactPage() {
               </strong>{" "}
               <LiveText> talk through custom
               roles, SSO, and audit requirements by emailing</LiveText>{" "}
-              <a href="mailto:enterprise@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+              <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
                 enterprise@flexflow.app
               </a>
               .

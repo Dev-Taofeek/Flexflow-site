@@ -68,7 +68,7 @@ export default function CookiesPage() {
         <p>
           <LiveText>If we change how we use cookies, we&apos;ll update this page. Questions about cookies or
           your data? Email</LiveText>{" "}
-          <a href="mailto:privacy@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+          <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
             privacy@flexflow.app
           </a>{" "}
           <LiveText>or read our</LiveText>{" "}

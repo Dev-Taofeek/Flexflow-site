@@ -134,6 +134,10 @@ export default function IntelligencePage() {
     async function runQuery() {
         const query = question.trim();
         if (!query || !currentOrg?.id || !token || running) return;
+        if (!currentWorkspace?.id && !role.isAdmin) {
+            setError(t("intelligence.selectWorkspace"));
+            return;
+        }
         setRunning(true);
         setError("");
         setResult(null);
@@ -162,7 +166,7 @@ export default function IntelligencePage() {
                 return;
             }
             setStatus((s) => ({ ...s, queryCount: json.data.usage?.queryCount ?? s.queryCount, remaining: json.data.usage?.remaining ?? s.remaining }));
-            setResult({ question: json.data.question, answer: json.data.answer, sources: json.data.sources || [] });
+            setResult({ question: json.data.question, answer: json.data.answer, sources: json.data.sources || [], usedGroq: json.data.usedGroq === true });
             setHistory((h) => [...h, { role: "user", content: query }, { role: "assistant", content: json.data.answer }].slice(-10));
         } catch (err) {
             setError(err.message);
@@ -428,7 +432,22 @@ export default function IntelligencePage() {
                                 {running ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Bot className="h-4.5 w-4.5" />}
                             </div>
                             <div className="min-w-0 flex-1">
-                                <p className="text-xs font-medium uppercase tracking-wide text-(--text-tertiary)">{t("intelligence.answer")}</p>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-xs font-medium uppercase tracking-wide text-(--text-tertiary)">{t("intelligence.answer")}</p>
+                                    {typeof result.usedGroq === "boolean" && (
+                                        <span
+                                            className={[
+                                                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                                                result.usedGroq
+                                                    ? "border-brand-500/30 bg-brand-500/10 text-brand-500"
+                                                    : "border-(--border) bg-(--bg-overlay) text-(--text-tertiary)",
+                                            ].join(" ")}
+                                        >
+                                            {result.usedGroq ? <Sparkles className="h-3 w-3" /> : <Search className="h-3 w-3" />}
+                                            {result.usedGroq ? t("intelligence.aiGenerated") : t("intelligence.computed")}
+                                        </span>
+                                    )}
+                                </div>
                                 <p className="mt-2 text-sm leading-relaxed text-(--text-primary)"><Translated>{result.answer}</Translated></p>
                             </div>
                         </div>

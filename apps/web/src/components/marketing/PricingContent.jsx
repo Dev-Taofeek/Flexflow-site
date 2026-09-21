@@ -41,7 +41,12 @@ const FAQS = [
   {
     question: "Can I switch plans after I sign up?",
     answer:
-      "Yes. Upgrade to Pro or Custom anytime and entitlements activate immediately after checkout. Cancel and paid access continues until the end of your billing window, then the organization returns to the Free plan.",
+      "Yes. Upgrade to Pro or Custom anytime and entitlements activate once your payment is confirmed via card or bank transfer. Cancel and paid access continues until the end of your billing window, then the organization returns to the Free plan.",
+  },
+  {
+    question: "What payment methods do you accept?",
+    answer:
+      "Pay by card securely through Paystack, or pay by bank transfer to our OPay or PalmPay account and upload your receipt of payment. Card details are tokenized by Paystack and never touch our servers. Transfers are verified before your plan activates.",
   },
   {
     question: "Is billing per member?",

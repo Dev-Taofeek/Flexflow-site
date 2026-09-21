@@ -132,13 +132,13 @@ const features = [
   {
     title: "Role-based access control",
     description:
-      "Owner, Admin, Member, and Viewer roles with a permission matrix you can read at a glance. Fine-grained control per workspace, project, and task.",
+      "Owner, Admin, Member, and Viewer roles enforced on the server for every call. Fine-grained control per workspace, project, and task.",
     icon: ShieldCheck,
   },
   {
     title: "Kanban boards",
     description:
-      "Drag work across To Do, In Progress, In Review, and Done on a board that stays in sync for every teammate.",
+      "Drag work across To Do, In Progress, In Review, and Done on a board that stays in sync for every teammate, on every device.",
     icon: LayoutGrid,
   },
   {
@@ -148,9 +148,9 @@ const features = [
     icon: GitPullRequest,
   },
   {
-    title: "Live collaboration",
+    title: "Real-time collaboration",
     description:
-      "Socket-powered real-time updates keep boards, tasks, and notifications current the moment anything changes.",
+      "Socket-powered live updates keep boards, tasks, comments, and notifications current the moment anything changes no refresh needed.",
     icon: Users,
   },
   {
@@ -160,9 +160,9 @@ const features = [
     icon: BarChart3,
   },
   {
-    title: "Fast search",
+    title: "Instant search",
     description:
-      "Find any task or project across your workspace in milliseconds, filtered to what you can actually see.",
+      "Find any task, project, or decision across your workspace in milliseconds, filtered to what you can actually see.",
     icon: Search,
   },
 ];
@@ -217,6 +217,8 @@ const securityPoints = [
   "Organization 2FA on Pro",
   "SSO / SAML on Custom",
   "Advanced audit logs on Custom",
+  "Card data tokenized by Paystack never stored on our servers",
+  "Signed webhook verification and constant-time comparisons",
 ];
 
 const faqs = [
@@ -243,7 +245,12 @@ const faqs = [
   {
     question: "Can I change plans later?",
     answer:
-      "Anytime. Upgrade to Pro or Custom for immediate entitlements, or cancel and keep paid access until the end of your billing window.",
+      "Anytime. Upgrade to Pro or Custom for immediate entitlements, or cancel and keep paid access until the end of your billing window. You always get a receipt.",
+  },
+  {
+    question: "How do payments work?",
+    answer:
+      "Pay by card securely through Paystack, or pay by bank transfer to our OPay or PalmPay account and upload your receipt. Transfers are verified and your plan activates once the payment is confirmed. Card details are handled by Paystack and never touch our servers.",
   },
 ];
 
@@ -1053,7 +1060,7 @@ export function LandingPageClient() {
                     <Translated>see pricing</Translated>
                   </Link>{" "}
                   <Translated>or email</Translated>{" "}
-                  <a href="mailto:sales@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+                  <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
                     sales@flexflow.app
                   </a>
                 </p>
@@ -1064,7 +1071,7 @@ export function LandingPageClient() {
                     <Translated>help center</Translated>
                   </Link>{" "}
                   <Translated>or email</Translated>{" "}
-                  <a href="mailto:support@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+                  <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
                     support@flexflow.app
                   </a>
                 </p>

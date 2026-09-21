@@ -28,7 +28,7 @@ export default function TermsPage() {
           <LiveText>You&apos;re responsible for maintaining the confidentiality of your credentials and for
           all activity under your account. Enable two-factor authentication to help keep your
           account secure. Notify us promptly at</LiveText>{" "}
-          <a href="mailto:support@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+          <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
             support@flexflow.app
           </a>{" "}
           <LiveText>if you believe your account has been compromised.</LiveText>

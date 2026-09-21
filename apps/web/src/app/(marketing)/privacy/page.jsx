@@ -59,7 +59,7 @@ export default function PrivacyPage() {
         <p>
           <LiveText>Subject to applicable law, you can request access to, correction of, or deletion of your
           personal data, and you can object to or restrict certain processing. Contact us at</LiveText>{" "}
-          <a href="mailto:privacy@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+          <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
             privacy@flexflow.app
           </a>{" "}
           <LiveText>to exercise these rights.</LiveText>

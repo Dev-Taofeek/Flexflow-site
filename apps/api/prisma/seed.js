@@ -105,15 +105,21 @@ async function main() {
         create: { workspaceId: proWorkspace.id, userId: user.id, role: "OWNER" },
     });
 
-    await prisma.billingEvent.create({
-        data: {
-            organizationId: proOrg.id,
-            provider: "mock",
-            eventType: "checkout.completed",
-            status: "ACTIVE",
-            raw: { planId: "pro", billingCycle: "MONTHLY", seed: true },
-        },
+    const existingBillingEvent = await prisma.billingEvent.findFirst({
+        where: { organizationId: proOrg.id, eventType: "checkout.completed" },
     });
+
+    if (!existingBillingEvent) {
+        await prisma.billingEvent.create({
+            data: {
+                organizationId: proOrg.id,
+                provider: "mock",
+                eventType: "checkout.completed",
+                status: "ACTIVE",
+                raw: { planId: "pro", billingCycle: "MONTHLY", seed: true },
+            },
+        });
+    }
 
     console.log(`✅ Organization: ${proOrg.name} (PRO)`);
 
@@ -183,6 +189,13 @@ async function main() {
     }
 
     // ── Projects & tasks ───────────────────────────────────────────────────
+    const existingTasks = await prisma.task.count({
+        where: { project: { workspaceId: workspace.id } },
+    });
+
+    if (existingTasks > 0) {
+        console.log(`✅ Skip sample data: ${existingTasks} tasks already exist for ${workspace.name}`);
+    } else {
     const projectData = [
         { name: "Core Platform", description: "RBAC, authentication, and API foundation.", color: "#6366f1" },
         { name: "Growth", description: "Onboarding flows, invite system, and activation.", color: "#8b5cf6" },
@@ -236,12 +249,24 @@ async function main() {
 
         console.log(`✅ Project: ${project.name} (5 tasks)`);
     }
+    }
 
     // Decision memory is intentionally NOT seeded with canned answers — Team
     // Intelligence must answer from real workspace work (tasks, activity,
     // members) and any knowledge a user records themselves.
 
     // ── Audit events & usage snapshot ──────────────────────────────────────
+    const seededAudits = await prisma.auditEvent.count({
+        where: {
+            actorId: user.id,
+            OR: [
+                { metadata: { path: ["seed"], equals: true } },
+                { metadata: { path: ["sample"], equals: true } },
+            ],
+        },
+    });
+
+    if (seededAudits === 0) {
     await prisma.auditEvent.createMany({
         data: [
             {
@@ -268,6 +293,7 @@ async function main() {
         ],
         skipDuplicates: true,
     });
+    }
 
     await prisma.apiUsage.upsert({
         where: { organizationId_month: { organizationId: proOrg.id, month: new Date().toISOString().slice(0, 7) } },

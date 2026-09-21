@@ -57,7 +57,7 @@ export default function DpaPage() {
           <LiveText>To the extent required by law, we&apos;ll help you respond to requests from data subjects
           exercising their rights (access, rectification, erasure, restriction, portability).
           You can reach us at</LiveText>{" "}
-          <a href="mailto:privacy@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+          <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
             privacy@flexflow.app
           </a>
           .

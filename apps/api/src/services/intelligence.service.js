@@ -49,7 +49,7 @@ function jsonFetchSafe(res) {
  */
 export async function synthesizeWithGroq({
     apiKey,
-    model = process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+    model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
     baseUrl = process.env.GROQ_API_BASE || DEFAULT_GROQ_BASE,
     question,
     deterministicAnswer,

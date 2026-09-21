@@ -50,7 +50,7 @@ export default function SecurityPage() {
         <ProseH2><LiveText>Responsible disclosure</LiveText></ProseH2>
         <p>
           <LiveText>Found a vulnerability? Report it privately to</LiveText>{" "}
-          <a href="mailto:security@flexflow.app" className="font-medium text-brand-500 hover:text-brand-400">
+          <a href="mailto:obayomitaofeek7@gmail.com" className="font-medium text-brand-500 hover:text-brand-400">
             security@flexflow.app
           </a>
           <LiveText>. Please don&apos;t publicly disclose until we&apos;ve had a chance to respond we reply

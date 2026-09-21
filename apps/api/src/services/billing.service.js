@@ -109,6 +109,254 @@ export function previewPricing({ plan = "free", billingCycle = "MONTHLY", addOns
 }
 
 /**
+ * Bank-transfer settlement details, environment-tunable. Defaults target the
+ * FlexFlow OPay/PalmPay account; real deployments should pin the env vars.
+ * Account/amounts are display-only — entitlements are granted only after an
+ * OWNER approves the uploaded receipt.
+ */
+export function getBankTransferConfig() {
+    const accountNumber = String(process.env.BANK_TRANSFER_ACCOUNT_NUMBER || "7048578739").replace(/\D/g, "").slice(0, 20);
+    const accountName = String(process.env.BANK_TRANSFER_ACCOUNT_NAME || "FlexFlow").slice(0, 120);
+    const banks = String(process.env.BANK_TRANSFER_BANKS || "OPay,PalmPay")
+        .split(",")
+        .map((bank) => bank.trim())
+        .filter(Boolean);
+    return { accountNumber, accountName, banks, currency: "NGN" };
+}
+
+/** Due amount (local + minor units) for a target plan/cycle/add-ons. */
+export function transferAmountMinor({ plan = "PRO", billingCycle = "MONTHLY", addOns = [] }) {
+    const pricing = previewPricing({ plan, billingCycle, addOns });
+    const periodAmount = billingCycle === "ANNUAL" ? pricing.priceAnnual : pricing.priceMonthly;
+    const rate = Number(process.env.PAYSTACK_TO_LOCAL_RATE) || 1;
+    return {
+        pricing,
+        amountLocal: Math.round(periodAmount * rate),
+        amountMinor: Math.round(periodAmount * rate * 100),
+    };
+}
+
+/**
+ * Opens a bank-transfer intent for an upgrade. Reuses an open PENDING or
+ * UNDER_REVIEW intent for the same plan config so re-submits never stack.
+ * No entitlement is granted here — that only happens after OWNER review.
+ */
+export async function createTransferIntent({ organizationId, userId, plan = "PRO", billingCycle = "MONTHLY", addOns = [] }) {
+    const planId = toPlanId(plan);
+    if (planId !== "pro" && planId !== "custom") {
+        const err = new Error("Bank transfer is only available for Pro and Custom plans");
+        err.statusCode = 422;
+        throw err;
+    }
+    const normalizedCycle = billingCycle === "ANNUAL" ? "ANNUAL" : "MONTHLY";
+
+    const existing = await prisma.payment.findFirst({
+        where: {
+            organizationId,
+            method: "BANK_TRANSFER",
+            plan: planId === "custom" ? "CUSTOM" : "PRO",
+            billingCycle: normalizedCycle,
+            status: { in: ["PENDING", "UNDER_REVIEW"] },
+        },
+        orderBy: { createdAt: "desc" },
+    });
+    if (existing) {
+        return { payment: existing, bankTransfer: getBankTransferConfig(), reused: true };
+    }
+
+    const { amountMinor } = transferAmountMinor({ plan, billingCycle: normalizedCycle, addOns });
+    const bank = getBankTransferConfig();
+    const reference = `FF-${Date.now().toString(36).toUpperCase().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const payment = await prisma.payment.create({
+        data: {
+            organizationId,
+            userId,
+            plan: planId === "custom" ? "CUSTOM" : "PRO",
+            billingCycle: normalizedCycle,
+            addOns: addOns || [],
+            amountMinor,
+            method: "BANK_TRANSFER",
+            provider: "manual",
+            status: "PENDING",
+            bankName: bank.banks[0] || "OPay",
+            accountNumber: bank.accountNumber,
+            accountName: bank.accountName,
+            reference,
+        },
+    });
+
+    return { payment, bankTransfer: bank, reused: false };
+}
+
+const ALLOWED_RECEIPT_MIMES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Attaches a receipt to an open bank-transfer intent and moves it UNDER_REVIEW,
+ * then alerts the organization's OWNER/ADMIN roles. The receipt is a validated
+ * data URL; size is capped so storage stays sane.
+ */
+export async function submitTransferReceipt({ paymentId, organizationId, receiptData, receiptMime, note }) {
+    const payment = await prisma.payment.findFirst({
+        where: { id: paymentId, organizationId, method: "BANK_TRANSFER" },
+        include: { organization: { select: { name: true } } },
+    });
+    if (!payment) {
+        const err = new Error("Payment not found");
+        err.statusCode = 404;
+        throw err;
+    }
+    if (!["PENDING", "UNDER_REVIEW"].includes(payment.status)) {
+        const err = new Error("This payment can no longer be updated");
+        err.statusCode = 409;
+        throw err;
+    }
+
+    const mime = String(receiptMime || "").toLowerCase();
+    if (!ALLOWED_RECEIPT_MIMES.has(mime)) {
+        const err = new Error("Receipt must be a PNG, JPG, WebP, or PDF file");
+        err.statusCode = 422;
+        throw err;
+    }
+    if (typeof receiptData !== "string" || !/^data:[a-z0-9./-]+;base64,[a-zA-Z0-9+/=]+$/.test(receiptData)) {
+        const err = new Error("Invalid receipt upload");
+        err.statusCode = 422;
+        throw err;
+    }
+    const decoded = Buffer.from(receiptData.split(",")[1], "base64");
+    if (!decoded.length || decoded.length > MAX_RECEIPT_BYTES) {
+        const err = new Error("Receipt file is too large");
+        err.statusCode = 422;
+        throw err;
+    }
+
+    const updated = await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+            status: "UNDER_REVIEW",
+            receiptImage: receiptData,
+            receiptMime: mime,
+            noteByUser: typeof note === "string" ? note.slice(0, 1000) : null,
+        },
+    });
+
+    const admins = await prisma.organizationMember.findMany({
+        where: { organizationId, role: { in: ["OWNER", "ADMIN"] } },
+        select: { userId: true },
+    });
+    await Promise.all(
+        admins.map((member) =>
+            notifyUser(member.userId, {
+                title: "Bank transfer payment submitted",
+                message: `${payment.organization.name} uploaded a transfer receipt (${payment.reference}) and it's awaiting your review.`,
+                type: "BILLING",
+                url: `/settings/billing?orgId=${organizationId}`,
+                dedupeKey: `billing.transfer.${payment.id}`,
+            }),
+        ),
+    );
+
+    return { payment: updated };
+}
+
+/**
+ * OWNER review of a bank-transfer payment. Approving finalizes the
+ * subscription (the only path that grants paid entitlements for transfers);
+ * rejecting leaves the org on its current plan. Only PENDING/UNDER_REVIEW
+ * intents can be reviewed once.
+ */
+export async function reviewTransferPayment({ paymentId, organizationId, reviewerId, decision, note }) {
+    const payment = await prisma.payment.findFirst({
+        where: { id: paymentId, organizationId, method: "BANK_TRANSFER" },
+    });
+    if (!payment) {
+        const err = new Error("Payment not found");
+        err.statusCode = 404;
+        throw err;
+    }
+    if (!["PENDING", "UNDER_REVIEW"].includes(payment.status)) {
+        const err = new Error("This payment has already been reviewed");
+        err.statusCode = 409;
+        throw err;
+    }
+
+    const approved = String(decision).toLowerCase() === "approve";
+    if (!approved && String(decision).toLowerCase() !== "reject") {
+        const err = new Error("decision must be approve or reject");
+        err.statusCode = 422;
+        throw err;
+    }
+
+    const now = new Date();
+    if (approved) {
+        const { organization, firstMonthFree } = await finalizeSubscription({
+            organizationId,
+            planId: payment.plan.toLowerCase(),
+            billingCycle: payment.billingCycle,
+            addOns: payment.addOns,
+            providerRefs: { providerSubscriptionId: payment.reference || null },
+        });
+
+        await prisma.payment.update({
+            where: { id: payment.id },
+            data: { status: "APPROVED", reviewedById: reviewerId, reviewedAt: now, approvedAt: now },
+        });
+
+        await prisma.billingEvent.create({
+            data: {
+                organizationId,
+                provider: "manual",
+                eventType: "payment.succeeded",
+                status: "ACTIVE",
+                raw: {
+                    paymentId: payment.id,
+                    reference: payment.reference,
+                    amountMinor: payment.amountMinor,
+                    currency: payment.currency,
+                    bankName: payment.bankName,
+                    accountNumber: payment.accountNumber,
+                    method: "BANK_TRANSFER",
+                    reviewedById: reviewerId,
+                },
+            },
+        });
+
+        return { payment: { ...payment, status: "APPROVED" }, organization, firstMonthFree, approved: true };
+    }
+
+    await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+            status: "REJECTED",
+            reviewedById: reviewerId,
+            reviewedAt: now,
+            noteByUser: typeof note === "string" ? note.slice(0, 1000) : payment.noteByUser,
+        },
+    });
+
+    await prisma.billingEvent.create({
+        data: {
+            organizationId,
+            provider: "manual",
+            eventType: "payment.failed",
+            status: "PAYMENT_FAILED",
+            raw: {
+                paymentId: payment.id,
+                reference: payment.reference,
+                method: "BANK_TRANSFER",
+                rejectedBy: reviewerId,
+                note: typeof note === "string" ? note.slice(0, 1000) : null,
+            },
+        },
+    });
+
+    const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
+
+    return { payment: { ...payment, status: "REJECTED" }, approved: false, organization: org || { name: "Your organization" } };
+}
+
+/**
  * Starts a checkout for upgrading `organization` to a target plan.
  * Returns a `{ url, provider, mode }` checkout handle.
  * - mock: returns the app-internal confirm URL carrying a signed-ish session id.
@@ -154,10 +402,13 @@ export async function createCheckout({
     if (provider === "paystack") {
         // Amount is charged in the account's base currency (NGN for most
         // Paystack accounts) as kobo. The plan prices are USD figures; a
-        // per-BASE-to-local rate is applied when configured.
+        // per-BASE-to-local rate is applied when configured. The full periodic
+        // amount is due up front: an ANNUAL checkout charges the whole year,
+        // MONTHLY charges the standard price.
         const pricing = previewPricing({ plan: planId, billingCycle, addOns });
+        const periodAmount = billingCycle === "ANNUAL" ? pricing.priceAnnual : pricing.priceMonthly;
         const amountInMinor = Math.round(
-            pricing.priceMonthly * (Number(process.env.PAYSTACK_TO_LOCAL_RATE) || 1) * 100,
+            periodAmount * (Number(process.env.PAYSTACK_TO_LOCAL_RATE) || 1) * 100,
         );
 
         const metadata = {
