@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { BarChart3, Bell, Building2, Check, ChevronDown, Command, CreditCard, LayoutGrid, Loader2, LogOut, Menu, Monitor, Plus, Search, Settings, Sparkles, User, X } from "lucide-react";
+import { Bell, Building2, Check, ChevronDown, Command, CreditCard, LayoutGrid, Loader2, LogOut, Menu, Monitor, Plus, Search, Settings, Sparkles, User, X } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -412,43 +412,6 @@ function MobileUserMenu() {
     );
 }
 
-// ── Mobile AI + Analytics quick-access stack ────────────────────────────────
-function MobileAiShortcuts() {
-    const { t } = useI18n();
-    const pathname = usePathname();
-    const aiActive = pathname === "/intelligence";
-    const analyticsActive = pathname === "/analytics";
-
-    return (
-        <div className="flex flex-col items-center md:hidden" role="navigation" aria-label="Quick access">
-            <Link
-                href="/intelligence"
-                aria-label={t("shell.nav.intelligence")}
-                title={t("shell.nav.intelligence")}
-                className={[
-                    "flex h-9 w-9 items-center justify-center rounded-xl transition-all",
-                    aiActive
-                        ? "bg-brand-600 text-white shadow-md shadow-brand-600/30"
-                        : "bg-brand-600/15 text-brand-600 ring-1 ring-brand-600/30 hover:bg-brand-600/25",
-                ].join(" ")}
-            >
-                <Sparkles className="h-5 w-5" strokeWidth={2.25} />
-            </Link>
-            <Link
-                href="/analytics"
-                aria-label={t("shell.nav.analytics")}
-                title={t("shell.nav.analytics")}
-                className={[
-                    "-mt-0.5 flex h-5 w-6 items-center justify-center rounded-md transition-colors",
-                    analyticsActive ? "text-brand-600" : "text-(--text-tertiary) hover:bg-(--bg-overlay) hover:text-(--text-primary)",
-                ].join(" ")}
-            >
-                <BarChart3 className="h-3.5 w-3.5" strokeWidth={2} />
-            </Link>
-        </div>
-    );
-}
-
 // ── TopBar ──────────────────────────────────────────────────────────────────
 export function TopBar({ onMenuClick }) {
     const { t } = useI18n();
@@ -567,9 +530,6 @@ export function TopBar({ onMenuClick }) {
                         <Plus className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">{t("shell.action.new")}</span>
                     </Link>
-
-                    {/* Mobile: AI + Analytics quick access */}
-                    <MobileAiShortcuts />
 
                     {/* Appearance / accessibility */}
                     <button

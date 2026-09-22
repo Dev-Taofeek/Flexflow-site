@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { MobileBottomTabs } from "@/components/layout/MobileBottomTabs";
+import { MobileAiDock } from "@/components/layout/MobileAiDock";
 import { ScrollToTop } from "@/components/layout/ScrollToTop";
 import { EnablePushBanner } from "@/components/notifications/EnablePushBanner";
 import { StepUpProvider } from "@/contexts/StepUpContext";
@@ -47,6 +48,7 @@ export function AppShell({ children }) {
                 </div>
 
                 <MobileBottomTabs />
+                <MobileAiDock />
             </div>
         </StepUpProvider>
     );
