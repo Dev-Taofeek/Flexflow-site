@@ -897,97 +897,102 @@ export default function BillingSettingsPage() {
 
             {/* Bank-transfer modal */}
             {transferIntent && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-lg rounded-2xl border border-(--border) bg-(--bg-elevated) p-6 shadow-2xl">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Banknote className="h-4.5 w-4.5 text-brand-500" />
-                                <h3 className="text-base font-semibold text-(--text-primary)">{t("settings.billing.transferTitle")}</h3>
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
+                    <div className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-(--border) bg-(--bg-elevated) shadow-2xl sm:max-h-[85dvh] sm:rounded-2xl">
+                        {/* Mobile sheet handle */}
+                        <span className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-(--border) sm:hidden" />
+
+                        <div className="overflow-y-auto p-4 pb-safe sm:p-6">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Banknote className="h-4.5 w-4.5 shrink-0 text-brand-500" />
+                                    <h3 className="text-base font-semibold text-(--text-primary)">{t("settings.billing.transferTitle")}</h3>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setTransferIntent(null)}
+                                    className="rounded-lg p-1.5 text-(--text-muted) transition-colors hover:bg-(--bg-sunken) hover:text-(--text-primary)"
+                                    aria-label="Close"
+                                >
+                                    <X className="h-4.5 w-4.5" />
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setTransferIntent(null)}
-                                className="rounded-lg p-1.5 text-(--text-muted) transition-colors hover:bg-(--bg-sunken) hover:text-(--text-primary)"
-                                aria-label="Close"
-                            >
-                                <X className="h-4.5 w-4.5" />
-                            </button>
-                        </div>
-                        <p className="mt-1 text-xs leading-relaxed text-(--text-muted)">{t("settings.billing.transferStepsHint")}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-(--text-muted)">{t("settings.billing.transferStepsHint")}</p>
 
-                        <div className="mt-5 rounded-xl border border-brand-500/30 bg-brand-500/5 p-4">
-                            <p className="text-xs text-(--text-muted)">{t("settings.billing.transferAmountLabel")}</p>
-                            <p className="mt-0.5 text-2xl font-bold text-(--text-primary)">
-                                ₦{((transferIntent.payment.amountMinor || 0) / 100).toLocaleString(locale)}
-                            </p>
-                        </div>
+                            <div className="mt-5 rounded-xl border border-brand-500/30 bg-brand-500/5 p-4">
+                                <p className="text-xs text-(--text-muted)">{t("settings.billing.transferAmountLabel")}</p>
+                                <p className="mt-0.5 text-2xl font-bold text-(--text-primary)">
+                                    ₦{((transferIntent.payment.amountMinor || 0) / 100).toLocaleString(locale)}
+                                </p>
+                            </div>
 
-                        <div className="mt-4 space-y-2.5">
-                            {(() => {
-                                const rows = (transferIntent.bankTransfer?.details || []).flatMap((detail) => [
-                                    { label: `${detail.name} — ${t("settings.billing.transferAccountLabel")}`, value: detail.accountName },
-                                    { label: `${detail.name} — ${t("settings.billing.transferAccountNumberLabel")}`, value: detail.accountNumber },
-                                ]);
-                                rows.push({ label: t("settings.billing.transferReferenceLabel"), value: transferIntent.payment.reference });
-                                return rows.map((row) => (
-                                    <div
-                                        key={`${row.label}-${row.value}`}
-                                        className="flex items-center justify-between gap-3 rounded-lg border border-(--border) bg-(--bg-sunken) px-3 py-2.5"
-                                    >
-                                        <div className="min-w-0">
-                                            <p className="text-[11px] uppercase tracking-wide text-(--text-muted)">{row.label}</p>
-                                            <p className="truncate text-sm font-medium text-(--text-primary)">{row.value}</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={copyText(row.value)}
-                                            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-(--border) px-2.5 py-1.5 text-xs font-medium text-(--text-secondary) transition-colors hover:text-(--text-primary)"
+                            <div className="mt-4 space-y-2.5">
+                                {(() => {
+                                    const rows = (transferIntent.bankTransfer?.details || []).flatMap((detail) => [
+                                        { label: `${detail.name} — ${t("settings.billing.transferAccountLabel")}`, value: detail.accountName },
+                                        { label: `${detail.name} — ${t("settings.billing.transferAccountNumberLabel")}`, value: detail.accountNumber },
+                                    ]);
+                                    rows.push({ label: t("settings.billing.transferReferenceLabel"), value: transferIntent.payment.reference });
+                                    return rows.map((row) => (
+                                        <div
+                                            key={`${row.label}-${row.value}`}
+                                            className="flex items-center justify-between gap-3 rounded-lg border border-(--border) bg-(--bg-sunken) px-3 py-2.5"
                                         >
-                                            <Copy className="h-3.5 w-3.5" />
-                                            {t("settings.billing.transferCopy")}
-                                        </button>
-                                    </div>
-                                ));
-                            })()}
-                            <p className="px-1 text-[11px] text-(--text-muted)">{t("settings.billing.transferReferenceHint")}</p>
-                        </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] uppercase tracking-wide text-(--text-muted)">{row.label}</p>
+                                                <p className="truncate text-sm font-medium text-(--text-primary)">{row.value}</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={copyText(row.value)}
+                                                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-(--border) px-2.5 py-1.5 text-xs font-medium text-(--text-secondary) transition-colors hover:text-(--text-primary)"
+                                            >
+                                                <Copy className="h-3.5 w-3.5" />
+                                                {t("settings.billing.transferCopy")}
+                                            </button>
+                                        </div>
+                                    ));
+                                })()}
+                                <p className="px-1 text-[11px] text-(--text-muted)">{t("settings.billing.transferReferenceHint")}</p>
+                            </div>
 
-                        <div className="mt-5">
-                            <p className="text-sm font-medium text-(--text-primary)">{t("settings.billing.transferUpload")}</p>
-                            <label className="mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-strong) bg-(--bg-sunken) px-4 py-6 text-center transition-colors hover:border-brand-500">
-                                <Upload className="h-5 w-5 text-(--text-muted)" />
-                                <span className="text-xs text-(--text-secondary)">
-                                    {receiptPreview ? receiptMime?.includes("pdf") ? "PDF" : "Image" : t("settings.billing.transferUploadHint")}
-                                </span>
-                                <input
-                                    type="file"
-                                    accept="image/png,image/jpeg,image/webp,application/pdf"
-                                    onChange={handleReceiptFileChange}
-                                    className="sr-only"
+                            <div className="mt-5">
+                                <p className="text-sm font-medium text-(--text-primary)">{t("settings.billing.transferUpload")}</p>
+                                <label className="mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-strong) bg-(--bg-sunken) px-4 py-6 text-center transition-colors hover:border-brand-500">
+                                    <Upload className="h-5 w-5 text-(--text-muted)" />
+                                    <span className="text-xs text-(--text-secondary)">
+                                        {receiptPreview ? receiptMime?.includes("pdf") ? "PDF" : "Image" : t("settings.billing.transferUploadHint")}
+                                    </span>
+                                    <input
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp,application/pdf"
+                                        onChange={handleReceiptFileChange}
+                                        className="sr-only"
+                                    />
+                                </label>
+                                {receiptPreview && !receiptMime?.includes("pdf") && (
+                                    // eslint-disable-next-line @next/next/no-img-element -- data-URL preview; next/image can't optimize blobs
+                                    <img
+                                        src={receiptPreview}
+                                        alt="Receipt preview"
+                                        className="mt-2 max-h-36 rounded-lg border border-(--border) object-contain"
+                                    />
+                                )}
+                            </div>
+
+                            <div className="mt-4">
+                                <p className="text-sm font-medium text-(--text-primary)">{t("settings.billing.transferNote")}</p>
+                                <textarea
+                                    value={transferNote}
+                                    onChange={(e) => setTransferNote(e.target.value)}
+                                    placeholder={t("settings.billing.transferNotePlaceholder")}
+                                    rows={2}
+                                    className="mt-2 w-full resize-none rounded-lg border border-(--border) bg-(--bg-sunken) px-3 py-2 text-sm text-(--text-primary) outline-none focus:border-brand-500"
                                 />
-                            </label>
-                            {receiptPreview && !receiptMime?.includes("pdf") && (
-                                // eslint-disable-next-line @next/next/no-img-element -- data-URL preview; next/image can't optimize blobs
-                                <img
-                                    src={receiptPreview}
-                                    alt="Receipt preview"
-                                    className="mt-2 max-h-36 rounded-lg border border-(--border) object-contain"
-                                />
-                            )}
+                            </div>
                         </div>
 
-                        <div className="mt-4">
-                            <p className="text-sm font-medium text-(--text-primary)">{t("settings.billing.transferNote")}</p>
-                            <textarea
-                                value={transferNote}
-                                onChange={(e) => setTransferNote(e.target.value)}
-                                placeholder={t("settings.billing.transferNotePlaceholder")}
-                                rows={2}
-                                className="mt-2 w-full resize-none rounded-lg border border-(--border) bg-(--bg-sunken) px-3 py-2 text-sm text-(--text-primary) outline-none focus:border-brand-500"
-                            />
-                        </div>
-
-                        <div className="mt-5 flex items-center justify-end gap-2">
+                        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-(--border) bg-(--bg-elevated) px-4 py-3 pb-safe sm:px-6">
                             <button
                                 type="button"
                                 onClick={() => setTransferIntent(null)}
