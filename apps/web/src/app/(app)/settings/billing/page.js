@@ -134,15 +134,54 @@ export default function BillingSettingsPage() {
         return undefined;
     }, [orgId, load]);
 
-    const customEstimate = useMemo(() => {
-        const addonTotal = selectedAddOns.reduce((sum, id) => sum + (CUSTOM_ADDONS[id]?.priceMonthly || 0), 0);
-        const monthly = CUSTOM_ENTERPRISE_BASE + addonTotal;
-        return { monthly, annual: annualize(monthly) };
-    }, [selectedAddOns]);
-
     const current = data?.planInfo || planInfo;
     const isAnnual = cycle === "ANNUAL";
+    const currentCycle = current?.billingCycle || "MONTHLY";
+
+    // Custom add-ons the org has ALREADY paid for — locked (included), never re-billed.
+    const purchasedAddOns = useMemo(
+        () => new Set((isCustom ? current?.addOns || [] : []).map((id) => String(id).toLowerCase())),
+        [isCustom, current?.addOns],
+    );
+
+    // Whether selecting this configuration re-buys what is already active.
+    const changeBlocked = useMemo(() => {
+        if (!isFree) return null;
+        if (isCustom && targetPlan !== "custom") return "PLAN_DOWNGRADE_NOT_ALLOWED";
+        if (targetPlan === "pro") {
+            if (cycle === currentCycle) return "SAME_PLAN_REPURCHASE_NOT_ALLOWED";
+            if (cycle === "MONTHLY" && currentCycle === "ANNUAL") return "CYCLE_DOWNGRADE_NOT_ALLOWED";
+            return null;
+        }
+        // targetPlan === "custom"
+        if (cycle === currentCycle) {
+            const hasNewAddOns = selectedAddOns.some((id) => !purchasedAddOns.has(String(id).toLowerCase()));
+            return hasNewAddOns ? null : "SAME_PLAN_REPURCHASE_NOT_ALLOWED";
+        }
+        if (cycle === "MONTHLY" && currentCycle === "ANNUAL") return "CYCLE_DOWNGRADE_NOT_ALLOWED";
+        return null;
+    }, [isFree, isCustom, targetPlan, cycle, currentCycle, selectedAddOns, purchasedAddOns]);
+
+    // Custom estimate. A live CUSTOM org staying on monthly only pays for the
+    // REMAINING add-ons (base + already-bought add-ons are never charged twice),
+    // so the monthly figure is the sum of newly selected add-ons. Annual always
+    // prices the full configuration (base + purchased + newly selected).
+    const customEstimate = useMemo(() => {
+        const sumPrice = (ids) => ids.reduce((total, id) => total + (CUSTOM_ADDONS[id]?.priceMonthly || 0), 0);
+        const selectedMonthly = sumPrice(selectedAddOns);
+        const includedMonthly = sumPrice([...purchasedAddOns, ...selectedAddOns.map((id) => String(id).toLowerCase())]);
+        const fullMonthly = CUSTOM_ENTERPRISE_BASE + includedMonthly;
+        const remainingMonthlyPath = isCustom && cycle === "MONTHLY";
+        // Remaining-features path bills only the NEW add-ons; fall back to the
+        // full configuration for display when nothing new is selected yet.
+        const monthly = remainingMonthlyPath && selectedMonthly > 0 ? selectedMonthly : fullMonthly;
+        const annual = annualize(fullMonthly);
+        return { monthly, annual, fullMonthly };
+    }, [selectedAddOns, purchasedAddOns, isCustom, cycle]);
+
     const customPrice = isAnnual ? Math.round(customEstimate.annual / 12) : customEstimate.monthly;
+    const proActiveConfig = isPro && targetPlan === "pro" && cycle === currentCycle;
+    const customActiveConfig = isCustom && targetPlan === "custom" && cycle === currentCycle && changeBlocked === "SAME_PLAN_REPURCHASE_NOT_ALLOWED";
 
     const canManageBilling = isOwner && !isFree;
 
@@ -344,7 +383,7 @@ export default function BillingSettingsPage() {
                         <p className="mt-1 text-sm text-(--text-secondary)">
                             {isFree
                                 ? t("settings.billing.freePlanDescription")
-                                : <>{fmtPrice(isAnnual ? annualize(planPrice(planInfo)) / 12 : planPrice(planInfo), cycle, t)} · {isAnnual ? t("settings.billing.billedAnnually") : t("settings.billing.billedMonthly")}{planInfo?.subscriptionEndAt ? ` · ${t("settings.billing.renewsOn", { date: new Date(planInfo.subscriptionEndAt).toLocaleDateString(locale) })}` : ""}</>}
+                                : <>{fmtPrice(isAnnual ? annualize(planPrice(planInfo)) / 12 : planPrice(planInfo), cycle, t)} · {isAnnual ? t("settings.billing.billedAnnually") : t("settings.billing.billedMonthly")}{data?.usdToLocalRate ? <> · ≈ ₦{Math.round((isAnnual ? annualize(planPrice(planInfo)) / 12 : planPrice(planInfo)) * data.usdToLocalRate).toLocaleString(locale)}{t("settings.billing.perMonthSuffix")}</> : ""}{planInfo?.subscriptionEndAt ? ` · ${t("settings.billing.renewsOn", { date: new Date(planInfo.subscriptionEndAt).toLocaleDateString(locale) })}` : ""}</>}
                         </p>
                     </div>
                 </div>
@@ -476,6 +515,7 @@ export default function BillingSettingsPage() {
                             targetPlan === "pro"
                                 ? "border-brand-500/60 bg-brand-500/5"
                                 : "border-(--border) hover:border-(--border-strong)",
+                            proActiveConfig ? "opacity-70 saturate-50" : "",
                         ].join(" ")}
                     >
                         <div className="flex items-center justify-between">
@@ -483,9 +523,9 @@ export default function BillingSettingsPage() {
                                 <Zap className="h-4.5 w-4.5 text-brand-500" />
                                 <h4 className="text-base font-semibold text-(--text-primary)">{t("settings.common.planPro")}</h4>
                             </div>
-                            {isPro && (
-                                <span className="rounded-full border border-brand-500/40 bg-brand-500/10 px-2.5 py-0.5 text-xs font-medium text-brand-500">
-                                    {t("settings.common.current")}
+                            {proActiveConfig && (
+                                <span className="rounded-full border border-(--border) bg-(--bg-overlay) px-2.5 py-0.5 text-xs font-medium text-(--text-muted)">
+                                    {t("settings.billing.statusActive")}
                                 </span>
                             )}
                         </div>
@@ -510,6 +550,7 @@ export default function BillingSettingsPage() {
                             targetPlan === "custom"
                                 ? "border-brand-500/60 bg-brand-500/5"
                                 : "border-(--border) hover:border-(--border-strong)",
+                            customActiveConfig ? "opacity-70 saturate-50" : "",
                         ].join(" ")}
                     >
                         <div className="flex items-center justify-between">
@@ -517,9 +558,9 @@ export default function BillingSettingsPage() {
                                 <Building2 className="h-4.5 w-4.5 text-brand-500" />
                                 <h4 className="text-base font-semibold text-(--text-primary)">{t("settings.common.planCustom")}</h4>
                             </div>
-                            {isCustom && (
-                                <span className="rounded-full border border-brand-500/40 bg-brand-500/10 px-2.5 py-0.5 text-xs font-medium text-brand-500">
-                                    {t("settings.common.current")}
+                            {customActiveConfig && (
+                                <span className="rounded-full border border-(--border) bg-(--bg-overlay) px-2.5 py-0.5 text-xs font-medium text-(--text-muted)">
+                                    {t("settings.billing.statusActive")}
                                 </span>
                             )}
                         </div>
@@ -541,34 +582,47 @@ export default function BillingSettingsPage() {
                         </div>
                         <div className="mt-4 grid gap-2.5 md:grid-cols-2">
                             {Object.values(CUSTOM_ADDONS).map((addon) => {
-                                const selected = selectedAddOns.includes(addon.id);
+                                const locked = purchasedAddOns.has(String(addon.id).toLowerCase());
+                                const selected = locked || selectedAddOns.includes(addon.id);
                                 return (
                                     <button
                                         key={addon.id}
                                         type="button"
-                                        onClick={() =>
+                                        onClick={() => {
+                                            if (locked) return;
                                             setSelectedAddOns((prev) =>
                                                 selected ? prev.filter((id) => id !== addon.id) : [...prev, addon.id],
-                                            )
-                                        }
+                                            );
+                                        }}
                                         aria-pressed={selected}
+                                        aria-disabled={locked}
                                         className={[
                                             "flex items-start gap-3 rounded-xl border p-3 text-left transition-colors",
-                                            selected ? "border-brand-500/50 bg-brand-500/5" : "border-(--border) hover:border-(--border-strong)",
+                                            locked
+                                                ? "opacity-70"
+                                                : selected
+                                                  ? "border-brand-500/50 bg-brand-500/5"
+                                                  : "border-(--border) hover:border-(--border-strong)",
                                         ].join(" ")}
                                     >
                                         <span
                                             className={[
                                                 "mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border",
-                                                selected ? "border-brand-600 bg-brand-600 text-white" : "border-(--border-strong)",
+                                                locked || selected
+                                                    ? "border-brand-600 bg-brand-600 text-white"
+                                                    : "border-(--border-strong)",
                                             ].join(" ")}
                                         >
-                                            {selected && <Check className="h-3 w-3" />}
+                                            {(locked || selected) && <Check className="h-3 w-3" />}
                                         </span>
                                         <span className="min-w-0">
                                             <span className="flex items-center gap-1.5 text-sm font-medium text-(--text-primary)">
                                                 {addon.name}
-                                                <span className="text-xs text-(--text-tertiary)">+{addon.priceMonthly}{t("settings.billing.perMonthSuffix")}</span>
+                                                {locked ? (
+                                                    <span className="text-xs font-medium text-success-600">{t("settings.billing.lockedAddOn")}</span>
+                                                ) : (
+                                                    <span className="text-xs text-(--text-tertiary)">+{addon.priceMonthly}{t("settings.billing.perMonthSuffix")}</span>
+                                                )}
                                             </span>
                                             <span className="mt-0.5 block text-xs leading-relaxed text-(--text-muted)">
                                                 {addon.description}
@@ -625,30 +679,44 @@ export default function BillingSettingsPage() {
                                 : t("settings.billing.transferMethodDescription")}
                         </p>
                     </div>
+                    {changeBlocked ? (
+                        <p className="flex items-center gap-2 rounded-xl border border-warning-500/30 bg-warning-500/5 px-4 py-3 text-xs leading-relaxed text-warning-600">
+                            <Lock className="h-3.5 w-3.5 shrink-0" />
+                            {changeBlocked === "SAME_PLAN_REPURCHASE_NOT_ALLOWED"
+                                ? t("settings.billing.blockedSameConfig")
+                                : changeBlocked === "CYCLE_DOWNGRADE_NOT_ALLOWED"
+                                  ? t("settings.billing.blockedCycleDowngrade")
+                                  : t("settings.billing.blockedPlanDowngrade")}
+                        </p>
+                    ) : null}
                     <div className="flex justify-end">
                         {method === "card" ? (
                             <button
                                 type="button"
                                 onClick={startCheckout}
-                                disabled={checkoutLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !isCustom)}
-                                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60"
+                                disabled={Boolean(changeBlocked) || checkoutLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !isCustom)}
+                                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60 disabled:saturate-0"
                             >
                                 {checkoutLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                                {checkoutLoading ? t("settings.common.redirecting") : isFree && targetPlan === "pro"
-                                    ? t("settings.billing.upgradeToPro", { price: `$${isAnnual ? Math.round(PLANS.pro.priceAnnual / 12) : PLANS.pro.priceMonthly}` })
-                                    : t("settings.billing.upgradeNow")}
-                                <ChevronRight className="h-4 w-4" />
+                                {checkoutLoading
+                                    ? t("settings.common.redirecting")
+                                    : changeBlocked
+                                      ? t("settings.billing.currentPlanButton")
+                                      : isFree && targetPlan === "pro"
+                                        ? t("settings.billing.upgradeToPro", { price: `$${isAnnual ? Math.round(PLANS.pro.priceAnnual / 12) : PLANS.pro.priceMonthly}` })
+                                        : t("settings.billing.upgradeNow")}
+                                {!changeBlocked && !checkoutLoading && <ChevronRight className="h-4 w-4" />}
                             </button>
                         ) : (
                             <button
                                 type="button"
                                 onClick={startTransfer}
-                                disabled={transferLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !isCustom)}
-                                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60"
+                                disabled={Boolean(changeBlocked) || transferLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !isCustom)}
+                                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60 disabled:saturate-0"
                             >
                                 {transferLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
-                                {transferLoading ? t("settings.common.processing") : t("settings.billing.startBankTransfer")}
-                                <ChevronRight className="h-4 w-4" />
+                                {transferLoading ? t("settings.common.processing") : changeBlocked ? t("settings.billing.currentPlanButton") : t("settings.billing.startBankTransfer")}
+                                {!changeBlocked && !transferLoading && <ChevronRight className="h-4 w-4" />}
                             </button>
                         )}
                     </div>
@@ -855,30 +923,32 @@ export default function BillingSettingsPage() {
                         </div>
 
                         <div className="mt-4 space-y-2.5">
-                            {[
-                                { label: t("settings.billing.transferBankLabel"), value: transferIntent.bankTransfer?.banks?.join(", ") },
-                                { label: t("settings.billing.transferAccountLabel"), value: transferIntent.bankTransfer?.accountName },
-                                { label: t("settings.billing.transferAccountNumberLabel"), value: transferIntent.bankTransfer?.accountNumber },
-                                { label: t("settings.billing.transferReferenceLabel"), value: transferIntent.payment.reference },
-                            ].map((row) => (
-                                <div
-                                    key={row.label}
-                                    className="flex items-center justify-between gap-3 rounded-lg border border-(--border) bg-(--bg-sunken) px-3 py-2.5"
-                                >
-                                    <div className="min-w-0">
-                                        <p className="text-[11px] uppercase tracking-wide text-(--text-muted)">{row.label}</p>
-                                        <p className="truncate text-sm font-medium text-(--text-primary)">{row.value}</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={copyText(row.value)}
-                                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-(--border) px-2.5 py-1.5 text-xs font-medium text-(--text-secondary) transition-colors hover:text-(--text-primary)"
+                            {(() => {
+                                const rows = (transferIntent.bankTransfer?.details || []).flatMap((detail) => [
+                                    { label: `${detail.name} — ${t("settings.billing.transferAccountLabel")}`, value: detail.accountName },
+                                    { label: `${detail.name} — ${t("settings.billing.transferAccountNumberLabel")}`, value: detail.accountNumber },
+                                ]);
+                                rows.push({ label: t("settings.billing.transferReferenceLabel"), value: transferIntent.payment.reference });
+                                return rows.map((row) => (
+                                    <div
+                                        key={`${row.label}-${row.value}`}
+                                        className="flex items-center justify-between gap-3 rounded-lg border border-(--border) bg-(--bg-sunken) px-3 py-2.5"
                                     >
-                                        <Copy className="h-3.5 w-3.5" />
-                                        {t("settings.billing.transferCopy")}
-                                    </button>
-                                </div>
-                            ))}
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] uppercase tracking-wide text-(--text-muted)">{row.label}</p>
+                                            <p className="truncate text-sm font-medium text-(--text-primary)">{row.value}</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={copyText(row.value)}
+                                            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-(--border) px-2.5 py-1.5 text-xs font-medium text-(--text-secondary) transition-colors hover:text-(--text-primary)"
+                                        >
+                                            <Copy className="h-3.5 w-3.5" />
+                                            {t("settings.billing.transferCopy")}
+                                        </button>
+                                    </div>
+                                ));
+                            })()}
                             <p className="px-1 text-[11px] text-(--text-muted)">{t("settings.billing.transferReferenceHint")}</p>
                         </div>
 

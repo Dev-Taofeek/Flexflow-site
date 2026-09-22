@@ -95,6 +95,11 @@ function normalizeCycle(cycle) {
     return String(cycle || "").toUpperCase() === "ANNUAL" ? "ANNUAL" : "MONTHLY";
 }
 
+function normalizeAddOns(addOns) {
+    if (!Array.isArray(addOns)) return [];
+    return [...new Set(addOns.map((a) => String(a).toLowerCase()).filter(Boolean))];
+}
+
 /** True when the org currently holds a live, unexpired paid subscription. */
 export function isSubscriptionLive(org, now = new Date()) {
     if (!isPaidPlan(org)) return false;
@@ -104,26 +109,54 @@ export function isSubscriptionLive(org, now = new Date()) {
 }
 
 /**
- * Classifies a requested plan/cycle change against the org's current state.
- * Returns `{ allowed, code }`. While a paid subscription is live:
+ * Classifies a requested plan/cycle/add-on change against the org's current
+ * state. Returns `{ allowed, code }`. While a paid subscription is live:
  *  - lower plan rank → refused (no downgrades),
  *  - same plan, annual → monthly → refused,
- *  - everything else (upgrades, monthly → annual, same-config renewals) allowed.
+ *  - same plan + same cycle (re-purchasing what is already active) → refused;
+ *    for CUSTOM the same config (or a strict subset of purchased add-ons) is
+ *    treated as a re-purchase — buying ADDITIONAL add-ons on the monthly cycle
+ *    is the sanctioned "stay monthly, pay for the remaining features" upgrade,
+ *  - everything else (upgrades, monthly → annual, custom with new add-ons)
+ *    allowed.
  */
-export function assessPlanChange(org, { planId, billingCycle } = {}, now = new Date()) {
+export function assessPlanChange(org, { planId, billingCycle, addOns = [] } = {}, now = new Date()) {
     if (!isSubscriptionLive(org, now)) return { allowed: true, code: null };
 
     const targetPlan = normalizePlan(planId);
     const currentPlan = normalizePlan(org?.plan);
     const targetCycle = normalizeCycle(billingCycle);
     const currentCycle = normalizeCycle(org?.billingCycle);
+    const targetAddOns = normalizeAddOns(addOns);
+    const currentAddOns = normalizeAddOns(org?.customAddOns);
 
+    // Downgrading to a lower-ranked plan is never allowed while live.
     if (PLAN_RANK[targetPlan] < PLAN_RANK[currentPlan]) {
         return { allowed: false, code: "PLAN_DOWNGRADE_NOT_ALLOWED" };
     }
-    if (PLAN_RANK[targetPlan] === PLAN_RANK[currentPlan] && CYCLE_RANK[targetCycle] < CYCLE_RANK[currentCycle]) {
-        return { allowed: false, code: "CYCLE_DOWNGRADE_NOT_ALLOWED" };
+
+    if (PLAN_RANK[targetPlan] === PLAN_RANK[currentPlan]) {
+        // Annual → monthly on the same plan is a cycle downgrade.
+        if (CYCLE_RANK[targetCycle] < CYCLE_RANK[currentCycle]) {
+            return { allowed: false, code: "CYCLE_DOWNGRADE_NOT_ALLOWED" };
+        }
+
+        if (targetCycle === currentCycle) {
+            if (targetPlan === "custom") {
+                // Same custom config or a subset of the purchased add-ons is a
+                // re-purchase. Purchasing NEW add-ons (the "complete the plan"
+                // monthly upgrade) is allowed.
+                const addsNewAddOns = targetAddOns.some((a) => !currentAddOns.includes(a));
+                if (!addsNewAddOns) {
+                    return { allowed: false, code: "SAME_PLAN_REPURCHASE_NOT_ALLOWED" };
+                }
+                return { allowed: true, code: null };
+            }
+            // Same Pro plan + same cycle is a re-purchase of an active plan.
+            return { allowed: false, code: "SAME_PLAN_REPURCHASE_NOT_ALLOWED" };
+        }
     }
+
     return { allowed: true, code: null };
 }
 

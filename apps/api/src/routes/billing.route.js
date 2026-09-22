@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+import { PLANS } from "@flexflow/plans";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requireOrgRole } from "../lib/permissions.js";
@@ -21,6 +22,7 @@ import {
     handleProviderWebhook,
     getBillingPortalUrl,
     getProvider,
+    getUsdToLocalRate,
     createTransferIntent,
     submitTransferReceipt,
     reviewTransferPayment,
@@ -60,7 +62,7 @@ router.get("/current/:orgId", requireOrgRole("OWNER", "ADMIN", "MEMBER", "VIEWER
         if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
 
         const entitlements = getOrgEntitlements(org);
-        const [apiUsage, intelligenceUsage, billingEvents, openAuditEvents, firstMonthFreeUsed, payments] = await Promise.all([
+        const [apiUsage, intelligenceUsage, billingEvents, openAuditEvents, firstMonthFreeUsed, payments, usdToLocalRate] = await Promise.all([
             getApiUsage(org.id),
             getIntelligenceUsage(org.id),
             prisma.billingEvent.findMany({
@@ -75,6 +77,7 @@ router.get("/current/:orgId", requireOrgRole("OWNER", "ADMIN", "MEMBER", "VIEWER
                 orderBy: { createdAt: "desc" },
                 take: 10,
             }),
+            getUsdToLocalRate("NGN"),
         ]);
 
         return res.status(200).json(successResponse({
@@ -122,6 +125,15 @@ router.get("/current/:orgId", requireOrgRole("OWNER", "ADMIN", "MEMBER", "VIEWER
                 pro: previewPricing({ plan: "pro" }),
                 customBase: previewPricing({ plan: "custom" }),
             },
+            currency: "NGN",
+            usdToLocalRate,
+            // Local-currency equivalents for the USD plan prices, computed with
+            // the same live rate used to charge the payer — so converting back
+            // always returns the exact USD figure.
+            pricingLocal: {
+                proMonthly: Math.round(PLANS.pro.priceMonthly * usdToLocalRate),
+                proAnnual: Math.round(PLANS.pro.priceAnnual * usdToLocalRate),
+            },
         }));
     } catch (error) {
         console.error(error);
@@ -152,11 +164,11 @@ router.post("/checkout", requireOrgRole("OWNER", "ADMIN"), requireTwoFactorStepU
         const org = await prisma.organization.findUnique({ where: { id: orgId } });
         if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
 
-        const assessment = assessPlanChange(org, { planId: plan, billingCycle });
+        const assessment = assessPlanChange(org, { planId: plan, billingCycle, addOns });
         if (!assessment.allowed) {
             return res.status(409).json({
                 ...errorResponse(assessment.code, "Your current subscription cannot be changed to a lower plan while it is active."),
-                data: { code: assessment.code, upgradeOnly: true },
+                data: { code: assessment.code, upgradeOnly: true, plan: plan?.toLowerCase?.(), billingCycle, addOns },
             });
         }
 
@@ -194,16 +206,22 @@ router.post("/confirm", requireOrgRole("OWNER", "ADMIN"), requireTwoFactorStepUp
         if (getProvider() !== "mock") {
             return res.status(403).json(errorResponse("FORBIDDEN", "Checkout confirmation is only available with the mock provider"));
         }
+        // The mock checkout was removed from the product: plans must never
+        // activate without real money being received. Development-only confirm
+        // is further hard-blocked in production so no deployment can "upgrade"
+        // someone for free.
+        if (process.env.NODE_ENV === "production") {
+            return res.status(503).json(errorResponse("PAYMENTS_NOT_CONFIGURED", "Card payments are not configured. Use bank transfer or contact support."));
+        }
 
         const { sessionId, plan = "PRO", billingCycle = "MONTHLY", addOns = [], organizationId, paymentConfirmed, paymentToken, cardLast4 } = req.body;
         const orgId = organizationId || req.params.orgId || req.body.orgId;
         if (!orgId) return res.status(422).json(errorResponse("VALIDATION_ERROR", "organizationId is required"));
 
-        // No free upgrades: even in mock mode the plan can only activate after a
-        // payment step has been completed on the checkout page. This is the page
-        // the mock provider redirects to, and the user must "pay" there first.
-        // Real providers (Stripe/Paystack) enforce payment by construction and
-        // finalize through their signed webhook — never through this endpoint.
+        // No free upgrades: even in dev the plan can only activate after a
+        // payment step has been completed on the checkout page. Real providers
+        // (Stripe/Paystack) enforce payment by construction and finalize
+        // through their signed webhook — never through this endpoint.
         if (!(paymentConfirmed === true && typeof paymentToken === "string" && paymentToken.length >= 8)) {
             return res.status(402).json(errorResponse("PAYMENT_REQUIRED", "Payment must be completed before the plan can be activated"));
         }
@@ -211,11 +229,11 @@ router.post("/confirm", requireOrgRole("OWNER", "ADMIN"), requireTwoFactorStepUp
         const org = await prisma.organization.findUnique({ where: { id: orgId } });
         if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
 
-        const assessment = assessPlanChange(org, { planId: plan, billingCycle });
+        const assessment = assessPlanChange(org, { planId: plan, billingCycle, addOns });
         if (!assessment.allowed) {
             return res.status(409).json({
                 ...errorResponse(assessment.code, "Your current subscription cannot be changed to a lower plan while it is active."),
-                data: { code: assessment.code, upgradeOnly: true },
+                data: { code: assessment.code, upgradeOnly: true, plan: plan?.toLowerCase?.(), billingCycle, addOns },
             });
         }
 
@@ -284,11 +302,11 @@ router.post("/transfer/intent", paymentRateLimiter, requireOrgRole("OWNER", "ADM
         const org = await prisma.organization.findUnique({ where: { id: orgId } });
         if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Organization not found"));
 
-        const assessment = assessPlanChange(org, { planId: plan, billingCycle });
+        const assessment = assessPlanChange(org, { planId: plan, billingCycle, addOns });
         if (!assessment.allowed) {
             return res.status(409).json({
                 ...errorResponse(assessment.code, "Your current subscription cannot be changed to a lower plan while it is active."),
-                data: { code: assessment.code, upgradeOnly: true },
+                data: { code: assessment.code, upgradeOnly: true, plan: plan?.toLowerCase?.(), billingCycle, addOns },
             });
         }
 

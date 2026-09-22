@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Building2, Check, ChevronDown, Command, CreditCard, LayoutGrid, Loader2, Menu, Monitor, Plus, Search, Sparkles, X } from "lucide-react";
+import { signOut } from "next-auth/react";
+import { BarChart3, Bell, Building2, Check, ChevronDown, Command, CreditCard, LayoutGrid, Loader2, LogOut, Menu, Monitor, Plus, Search, Settings, Sparkles, User, X } from "lucide-react";
 import { apiRequest } from "@/lib/api-client";
 import { useApp } from "@/contexts/AppContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -338,6 +340,115 @@ function NewWorkspacePopover() {
     );
 }
 
+// ── Mobile profile menu (mirrors the sidebar footer UserMenu) ───────────────
+function MobileUserMenu() {
+    const { t } = useI18n();
+    const { user } = useApp();
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+
+    useEffect(() => {
+        function handler(e) {
+            if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+        }
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, []);
+
+    const initials = user?.name
+        ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+        : "U";
+
+    return (
+        <div ref={ref} className="relative md:hidden">
+            <button
+                aria-label={t("shell.menu.profile")}
+                onClick={() => setOpen((o) => !o)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white ring-2 ring-transparent transition-all hover:ring-(--border-strong)"
+                title={user?.name || t("shell.menu.profile")}
+            >
+                {user?.image ? (
+                    <Image
+                        src={user.image}
+                        alt={user.name || t("shell.menu.profile")}
+                        width={1200}
+                        height={480}
+                        className="h-8 w-8 rounded-full object-cover"
+                    />
+                ) : (
+                    initials
+                )}
+            </button>
+
+            {open && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-(--border) bg-(--bg-elevated) py-1 shadow-lg">
+                    <div className="border-b border-(--border) px-3 py-2">
+                        <p className="truncate text-sm font-medium text-(--text-primary)">{user?.name || t("shell.user.fallback")}</p>
+                        <p className="truncate text-xs text-(--text-muted)">{user?.email}</p>
+                    </div>
+                    <Link
+                        href="/profile"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
+                    >
+                        <User className="h-4 w-4" /> {t("shell.menu.profile")}
+                    </Link>
+                    <Link
+                        href="/settings/profile"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
+                    >
+                        <Settings className="h-4 w-4" /> {t("shell.nav.settings")}
+                    </Link>
+                    <button
+                        onClick={() => signOut({ callbackUrl: "/login" })}
+                        className="text-danger-500 hover:bg-danger-50 flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors"
+                    >
+                        <LogOut className="h-4 w-4" /> {t("shell.menu.signOut")}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── Mobile AI + Analytics quick-access stack ────────────────────────────────
+function MobileAiShortcuts() {
+    const { t } = useI18n();
+    const pathname = usePathname();
+    const aiActive = pathname === "/intelligence";
+    const analyticsActive = pathname === "/analytics";
+
+    return (
+        <div className="flex flex-col items-center md:hidden" role="navigation" aria-label="Quick access">
+            <Link
+                href="/intelligence"
+                aria-label={t("shell.nav.intelligence")}
+                title={t("shell.nav.intelligence")}
+                className={[
+                    "flex h-9 w-9 items-center justify-center rounded-xl transition-all",
+                    aiActive
+                        ? "bg-brand-600 text-white shadow-md shadow-brand-600/30"
+                        : "bg-brand-600/15 text-brand-600 ring-1 ring-brand-600/30 hover:bg-brand-600/25",
+                ].join(" ")}
+            >
+                <Sparkles className="h-5 w-5" strokeWidth={2.25} />
+            </Link>
+            <Link
+                href="/analytics"
+                aria-label={t("shell.nav.analytics")}
+                title={t("shell.nav.analytics")}
+                className={[
+                    "-mt-0.5 flex h-5 w-6 items-center justify-center rounded-md transition-colors",
+                    analyticsActive ? "text-brand-600" : "text-(--text-tertiary) hover:bg-(--bg-overlay) hover:text-(--text-primary)",
+                ].join(" ")}
+            >
+                <BarChart3 className="h-3.5 w-3.5" strokeWidth={2} />
+            </Link>
+        </div>
+    );
+}
+
 // ── TopBar ──────────────────────────────────────────────────────────────────
 export function TopBar({ onMenuClick }) {
     const { t } = useI18n();
@@ -457,6 +568,9 @@ export function TopBar({ onMenuClick }) {
                         <span className="hidden sm:inline">{t("shell.action.new")}</span>
                     </Link>
 
+                    {/* Mobile: AI + Analytics quick access */}
+                    <MobileAiShortcuts />
+
                     {/* Appearance / accessibility */}
                     <button
                         aria-label={t("shell.appearance.label")}
@@ -483,6 +597,9 @@ export function TopBar({ onMenuClick }) {
                         </button>
                         <NotificationsPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
                     </div>
+
+                    {/* Mobile: profile menu (same actions as the sidebar footer) */}
+                    <MobileUserMenu />
                 </div>
             </header>
 

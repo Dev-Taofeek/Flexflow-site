@@ -46,6 +46,9 @@ router.get("/automations", async (req, res) => {
         const organizationId = await organizationForWorkspace(workspaceId);
         if (!organizationId) return res.status(403).json(errorResponse("FORBIDDEN", "Workspace not found"));
 
+        const gate = await enforceFeature(req, res, organizationId, "automation");
+        if (!gate) return;
+
         const rules = await prisma.automationRule.findMany({
             where: { organizationId, workspaceId },
             orderBy: { createdAt: "asc" },
@@ -67,6 +70,9 @@ router.post("/automations", requireWorkspaceRole("OWNER", "ADMIN"), async (req, 
         }
         const ws = await assertWorkspaceBelongsToOrg(workspaceId, organizationId);
         if (!ws) return res.status(422).json(errorResponse("VALIDATION_ERROR", "Workspace does not belong to the organization"));
+
+        const gate = await enforceFeature(req, res, organizationId, "automation");
+        if (!gate) return;
 
         // Forbids duplicate (provider, trigger) rules in a workspace.
         await prisma.automationRule.create({
@@ -110,6 +116,9 @@ router.patch("/automations/:id", requireWorkspaceRole("OWNER", "ADMIN"), async (
         const rule = await prisma.automationRule.findFirst({ where: { id: req.params.id, workspaceId } });
         if (!rule) return res.status(404).json(errorResponse("NOT_FOUND", "Automation not found"));
 
+        const gate = await enforceFeature(req, res, rule.organizationId, "automation");
+        if (!gate) return;
+
         const { action, actionConfig, condition, enabled, trigger } = req.body;
         if (action && !VALID_ACTIONS.includes(action)) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Invalid automation action"));
@@ -138,6 +147,9 @@ router.delete("/automations/:id", requireWorkspaceRole("OWNER", "ADMIN"), async 
 
         const rule = await prisma.automationRule.findFirst({ where: { id: req.params.id, workspaceId } });
         if (!rule) return res.status(404).json(errorResponse("NOT_FOUND", "Automation not found"));
+
+        const gate = await enforceFeature(req, res, rule.organizationId, "automation");
+        if (!gate) return;
 
         await prisma.automationRule.delete({ where: { id: rule.id } });
         return res.status(200).json(successResponse({ deleted: true }));

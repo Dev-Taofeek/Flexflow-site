@@ -367,6 +367,10 @@ const en = {
       confirmSubtitle: "Confirming your payment and activating your plan.",
       confirmSuccess: "Payment confirmed — your plan is now active.",
       confirmTitle: "Finalizing your upgrade",
+      confirmBackToBilling: "Go to Billing",
+      paymentsNotConfiguredTitle: "Card payments aren't configured",
+      paymentsNotConfiguredNote:
+        "FlexFlow never simulates payments. Your plan activates after real money is received — use the bank-transfer option in Billing, or contact support, to pay for this plan.",
       continueToCheckout: "Continue to checkout",
       currentPlan: "Current plan",
       customPlanDescription: "Mix a Pro base with the add-ons your organization needs.",
@@ -399,6 +403,14 @@ const en = {
       firstMonthFreeApplied: "First month free applied",
       upgradeOnlyNote:
         "Plan changes are upgrade-only while your subscription is active. You can switch monthly → annual or to a higher plan anytime.",
+      lockedAddOn: "Included",
+      currentPlanButton: "Current plan",
+      blockedSameConfig:
+        "You're already paying for this exact plan. Choose an upgrade instead, or cancel your subscription.",
+      blockedCycleDowngrade:
+        "Switching down to a monthly cycle isn't available while your subscription is active. You can cancel or keep upgrading.",
+      blockedPlanDowngrade:
+        "Downgrading to a lower plan isn't available while your subscription is active. You can cancel your subscription instead.",
       freePlanDescription: "Free forever for personal use",
       includedWithPlan: "Included with your plan",
       perMonthEstShort: "/mo est.",

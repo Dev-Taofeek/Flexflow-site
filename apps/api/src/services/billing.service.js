@@ -1,4 +1,4 @@
-import { computeCustomConfig, PLANS, getPlanLimits } from "@flexflow/plans";
+import { computeCustomConfig, PLANS, getPlanLimits, CUSTOM_ADDONS } from "@flexflow/plans";
 import { prisma } from "../lib/prisma.js";
 import { env } from "../config/env.js";
 import { secureEqual } from "../lib/secure-compare.js";
@@ -7,28 +7,46 @@ import {
     expiryWarningDedupeKey,
     requiredLifecycleTransition,
     hasUsedFirstMonthFree,
+    isSubscriptionLive,
 } from "../lib/billing-policy.js";
 import { notifyUser } from "./notification.service.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Billing service — provider abstraction.
 //
-// The app ships with a built-in "mock" provider so the full subscription flow
-// (checkout → confirm → active plan → usage limits) works end to end with zero
-// external dependencies. Point BILLING_PROVIDER at "stripe" or "paystack" (and
-// set the matching env vars) to swap in a real payment provider without
-// touching any route code.
+// Plans are paid for with REAL money only, through two sanctioned paths:
+//   • Card  → Stripe/Paystack hosted checkout; the signed provider webhook is
+//             the only thing that finalizes a subscription.
+//   • Bank transfer → the payer transfers to the FlexFlow OPay/PalmPay account
+//             and uploads a receipt; an org OWNER must verify the money landed
+//             and approve before entitlements are granted (manual review API).
+// There is NO simulation/mock path and no client-side way to grant a plan.
 //
 // Hard rules:
 //  - Prices are always recomputed server-side; client-provided amounts are
 //    never trusted.
 //  - An organization only ever gains paid entitlements through this service.
 //  - Webhook payloads are verified by signature (Stripe HMAC-header check,
-//    Paystack HMAC-SHA512 over the exact raw body).
+//    Paystack HMAC-SHA512 over the exact raw body). A [PAYSTACK/STRIPE]_SECRET
+//    guard is applied so unconfigured deployments refuse checkout outright.
+//  - USD plan prices are converted to the payer's currency with a live rate,
+//    and the same rate converts back to the exact USD figure.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getProvider() {
-    return (process.env.BILLING_PROVIDER || "mock").toLowerCase();
+    const explicit = (process.env.BILLING_PROVIDER || "").toLowerCase().trim();
+    if (explicit) return explicit === "stripe" || explicit === "paystack" ? explicit : explicit;
+    // No explicit provider set: auto-select a real payment path whenever one is
+    // configured so a deployed site never silently falls back to a free upgrade.
+    if (process.env.PAYSTACK_SECRET_KEY) return "paystack";
+    if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) return "stripe";
+    return "mock";
+}
+
+/** True when a real, money-moving payment provider is wired up. */
+export function hasLiveProvider() {
+    const provider = getProvider();
+    return provider === "stripe" || provider === "paystack";
 }
 
 export function isProvider(provider) {
@@ -40,6 +58,33 @@ function toPlanId(plan) {
     if (normalized === "PRO") return "pro";
     if (normalized === "CUSTOM") return "custom";
     return "free";
+}
+
+/** Lower-cases and de-dupes an add-on id list. */
+export function normalizeAddOnIds(addOns) {
+    if (!Array.isArray(addOns)) return [];
+    return [...new Set(addOns.map((a) => String(a).toLowerCase()).filter(Boolean))];
+}
+
+/**
+ * Detects the "complete your plan" upgrade: a LIVE CUSTOM monthly org paying
+ * for the REMAINING add-ons while staying on the same monthly cycle.
+ * Returns `{ newAddOns, deltaMonthly }` or null when it doesn't apply
+ * (the re-purchase case — no new add-ons — is refused upstream by policy).
+ */
+export function remainingMonthlyUpgrade(org, { plan = "PRO", billingCycle = "MONTHLY", addOns = [] } = {}) {
+    if (!org) return null;
+    if (org.plan !== "CUSTOM" || toPlanId(plan) !== "custom") return null;
+    if ((billingCycle || "MONTHLY").toUpperCase() !== "MONTHLY") return null;
+    if (!isSubscriptionLive(org)) return null;
+
+    const current = normalizeAddOnIds(org.customAddOns);
+    const target = normalizeAddOnIds(addOns);
+    const newAddOns = target.filter((a) => !current.includes(a));
+    if (newAddOns.length === 0) return null;
+
+    const deltaMonthly = newAddOns.reduce((sum, id) => sum + (CUSTOM_ADDONS[id]?.priceMonthly || 0), 0);
+    return { newAddOns, deltaMonthly };
 }
 
 /** Minimal Paystack REST client. All amounts are handled in kobo internally. */
@@ -116,23 +161,101 @@ export function previewPricing({ plan = "free", billingCycle = "MONTHLY", addOns
  */
 export function getBankTransferConfig() {
     const accountNumber = String(process.env.BANK_TRANSFER_ACCOUNT_NUMBER || "7048578739").replace(/\D/g, "").slice(0, 20);
-    const accountName = String(process.env.BANK_TRANSFER_ACCOUNT_NAME || "FlexFlow").slice(0, 120);
     const banks = String(process.env.BANK_TRANSFER_BANKS || "OPay,PalmPay")
         .split(",")
         .map((bank) => bank.trim())
         .filter(Boolean);
-    return { accountNumber, accountName, banks, currency: "NGN" };
+    const details = banks.map((name) => {
+        const upper = name.toUpperCase().replace(/[^A-Z]/g, "");
+        const envKey = `BANK_TRANSFER_ACCOUNT_NAME_${upper}`;
+        const fallback =
+            upper === "OPAY" || name.toLowerCase() === "opay"
+                ? "Obayomi Taofeekah Olamide"
+                : name.toLowerCase() === "palmpay"
+                  ? "Adeyanju Zainab"
+                  : "FlexFlow";
+        return {
+            name,
+            accountNumber,
+            accountName: String(process.env[envKey] || fallback).slice(0, 120),
+        };
+    });
+    return {
+        accountNumber,
+        accountName: details[0]?.accountName || "FlexFlow",
+        banks: details.map((d) => d.name),
+        // Per-bank settlement details — each row shows the account holder for
+        // that specific wallet so payers transfer to the correct name. The
+        // shared number is the FlexFlow OPay/PalmPay account; pin env vars to
+        // override the display names per bank.
+        details,
+        currency: "NGN",
+    };
 }
 
-/** Due amount (local + minor units) for a target plan/cycle/add-ons. */
-export function transferAmountMinor({ plan = "PRO", billingCycle = "MONTHLY", addOns = [] }) {
+/**
+ * USD → local-currency rate used to quote/charge bank transfers and Paystack
+ * checkout in the payer's currency. The same rate is used everywhere, so a
+ * charge converts back to the exact USD figure (e.g. $12/month stays $12).
+ *
+ * Resolution order:
+ *  1. PAYSTACK_TO_LOCAL_RATE env override (deployments pin it if they prefer).
+ *  2. A live rate fetched from a free FX API, cached for FX_RATE_TTL_MS.
+ *  3. A sensible fallback (NGN ~1500) only if the fetch fails outright, with a
+ *     console warning — the env override always wins and removes the gamble.
+ */
+const FX_RATE_TTL_MS = 60 * 60 * 1000;
+const FX_FALLBACK = 1500;
+let fxCache = { rate: null, fetchedAt: 0 };
+
+export async function getUsdToLocalRate(currency = "NGN") {
+    const base = String(currency || "NGN").toUpperCase();
+    if (base === "USD") return 1;
+
+    const override = Number(process.env.PAYSTACK_TO_LOCAL_RATE);
+    if (Number.isFinite(override) && override > 0) return override;
+
+    const now = Date.now();
+    if (fxCache.rate && now - fxCache.fetchedAt < FX_RATE_TTL_MS) return fxCache.rate;
+
+    try {
+        const res = await fetch(`https://open.er-api.com/v6/latest/USD`, {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) throw new Error(`FX API ${res.status}`);
+        const json = await res.json();
+        const rate = Number(json?.rates?.[base]);
+        if (!Number.isFinite(rate) || rate <= 0) throw new Error(`No rate for ${base}`);
+        fxCache = { rate, fetchedAt: now };
+        return rate;
+    } catch (error) {
+        console.warn(`[billing] Live FX rate unavailable for ${base} (${error.message}); using env override or fallback ${FX_FALLBACK}`);
+        fxCache = { rate: FX_FALLBACK, fetchedAt: now };
+        return FX_FALLBACK;
+    }
+}
+
+/**
+ * Due amount (local + minor units) for a target plan/cycle/add-ons.
+ * When `org` holds a LIVE CUSTOM subscription on the same MONTHLY cycle, only
+ * the REMAINING (new) add-ons are billed — the base and already-purchased
+ * add-ons are never charged twice. Every other configuration is billed in full.
+ */
+export async function transferAmountMinor({ plan = "PRO", billingCycle = "MONTHLY", addOns = [], org }) {
     const pricing = previewPricing({ plan, billingCycle, addOns });
-    const periodAmount = billingCycle === "ANNUAL" ? pricing.priceAnnual : pricing.priceMonthly;
-    const rate = Number(process.env.PAYSTACK_TO_LOCAL_RATE) || 1;
+    const remaining = remainingMonthlyUpgrade(org, { plan, billingCycle, addOns });
+    const periodAmount = remaining
+        ? remaining.deltaMonthly
+        : billingCycle === "ANNUAL" ? pricing.priceAnnual : pricing.priceMonthly;
+    const rate = await getUsdToLocalRate("NGN");
     return {
         pricing,
+        localCurrency: "NGN",
+        usdToLocalRate: rate,
         amountLocal: Math.round(periodAmount * rate),
         amountMinor: Math.round(periodAmount * rate * 100),
+        remainingUpgrade: remaining,
     };
 }
 
@@ -149,7 +272,17 @@ export async function createTransferIntent({ organizationId, userId, plan = "PRO
         throw err;
     }
     const normalizedCycle = billingCycle === "ANNUAL" ? "ANNUAL" : "MONTHLY";
+    const normalizedAddOns = normalizeAddOnIds(addOns);
 
+    const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!org) {
+        const err = new Error("Organization not found");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    // Reuse only an intent for the SAME config (identical plan + cycle + add-on
+    // set); an intent for a different add-on set would under-charge the upgrade.
     const existing = await prisma.payment.findFirst({
         where: {
             organizationId,
@@ -160,21 +293,24 @@ export async function createTransferIntent({ organizationId, userId, plan = "PRO
         },
         orderBy: { createdAt: "desc" },
     });
-    if (existing) {
+    if (existing && sameAddOnSet(existing.addOns, normalizedAddOns)) {
         return { payment: existing, bankTransfer: getBankTransferConfig(), reused: true };
     }
 
-    const { amountMinor } = transferAmountMinor({ plan, billingCycle: normalizedCycle, addOns });
+    const { amountMinor } = await transferAmountMinor({ plan, billingCycle: normalizedCycle, addOns: normalizedAddOns, org });
     const bank = getBankTransferConfig();
     const reference = `FF-${Date.now().toString(36).toUpperCase().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    // The stored add-on set is the FULL target configuration. When the amount
+    // was a remaining-add-ons delta, the org already holds the rest — so the
+    // owner approving this receipt must end with the complete custom config.
     const payment = await prisma.payment.create({
         data: {
             organizationId,
             userId,
             plan: planId === "custom" ? "CUSTOM" : "PRO",
             billingCycle: normalizedCycle,
-            addOns: addOns || [],
+            addOns: normalizedAddOns,
             amountMinor,
             method: "BANK_TRANSFER",
             provider: "manual",
@@ -187,6 +323,14 @@ export async function createTransferIntent({ organizationId, userId, plan = "PRO
     });
 
     return { payment, bankTransfer: bank, reused: false };
+}
+
+/** True when two add-on id lists contain exactly the same ids. */
+function sameAddOnSet(a, b) {
+    const aSet = normalizeAddOnIds(a);
+    const bSet = normalizeAddOnIds(b);
+    if (aSet.length !== bSet.length) return false;
+    return aSet.every((id) => bSet.includes(id));
 }
 
 const ALLOWED_RECEIPT_MIMES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
@@ -359,9 +503,10 @@ export async function reviewTransferPayment({ paymentId, organizationId, reviewe
 /**
  * Starts a checkout for upgrading `organization` to a target plan.
  * Returns a `{ url, provider, mode }` checkout handle.
- * - mock: returns the app-internal confirm URL carrying a signed-ish session id.
  * - stripe: creates a real Checkout Session (requires STRIPE_SECRET_KEY).
- * - paystack: creates an authorize URL (requires PAYSTACK_SECRET_KEY).
+ * - paystack: creates an authorize URL (requires PAYSTACK_SECRET_KEY + a
+ *   USD→local rate so the charge converts back to the exact USD price).
+ * - otherwise: throws — no simulation path, plans only activate after payment.
  */
 export async function createCheckout({
     organization,
@@ -401,21 +546,26 @@ export async function createCheckout({
 
     if (provider === "paystack") {
         // Amount is charged in the account's base currency (NGN for most
-        // Paystack accounts) as kobo. The plan prices are USD figures; a
-        // per-BASE-to-local rate is applied when configured. The full periodic
-        // amount is due up front: an ANNUAL checkout charges the whole year,
-        // MONTHLY charges the standard price.
+        // Paystack accounts) as kobo. Plan prices are USD figures; the live
+        // USD→local rate is applied so the charge converts back to the exact
+        // USD price (e.g. $12/month stays $12). The full periodic amount is
+        // due up front: an ANNUAL checkout charges the whole year, MONTHLY
+        // charges the standard price. A LIVE CUSTOM org completing its plan on
+        // the same monthly cycle is charged only for the REMAINING add-ons.
         const pricing = previewPricing({ plan: planId, billingCycle, addOns });
-        const periodAmount = billingCycle === "ANNUAL" ? pricing.priceAnnual : pricing.priceMonthly;
-        const amountInMinor = Math.round(
-            periodAmount * (Number(process.env.PAYSTACK_TO_LOCAL_RATE) || 1) * 100,
-        );
+        const remaining = remainingMonthlyUpgrade(organization, { plan: planId, billingCycle, addOns });
+        const periodAmount = remaining
+            ? remaining.deltaMonthly
+            : billingCycle === "ANNUAL" ? pricing.priceAnnual : pricing.priceMonthly;
+        const rate = await getUsdToLocalRate("NGN");
+        const amountInMinor = Math.round(periodAmount * rate * 100);
 
         const metadata = {
             organizationId: organization.id,
             planId,
             billingCycle,
             addOns: JSON.stringify(addOns),
+            usdToLocalRate: rate,
         };
 
         const data = await paystackRequest("transaction/initialize", {
@@ -430,34 +580,22 @@ export async function createCheckout({
         return { url: data.authorization_url, reference: data.reference, provider, mode: "payment" };
     }
 
-    // ── Mock provider ──────────────────────────────────────────────────────
-    const mockSessionId = `mock_${Buffer.from(JSON.stringify({
-        organizationId: organization.id,
-        planId,
-        billingCycle,
-        addOns,
-    })).toString("base64url")}`;
-
-    const query = new URLSearchParams({
-        provider: "mock",
-        session_id: mockSessionId,
-        plan: planId,
-        billingCycle,
-        addOns: JSON.stringify(addOns),
-        orgId: organization.id,
-    }).toString();
-
-    return {
-        url: `${successUrl || env.CLIENT_ORIGIN}/billing/confirm?${query}`,
-        provider,
-        mode: "subscription",
-    };
+    // ── No live payment provider configured ───────────────────────────────
+    // There is deliberately NO mock/simulation path anymore: a plan must never
+    // activate without real money being received. When this runs it means the
+    // deployment has no Stripe/Paystack keys wired up, so we refuse instead of
+    // granting a fake upgrade.
+    const err = new Error(
+        "Card payments are not configured for this deployment yet. Use bank transfer or contact support.",
+    );
+    err.statusCode = 503;
+    throw err;
 }
 
 /**
- * Completes a checkout. For the mock provider this promotes the org directly.
- * For Stripe this is the authoritative webhook path (`subscribed`/`invoice.paid`).
- * Returns `{ organization, entitlements }`.
+ * Completes a subscription activation. Only ever called after real money has
+ * moved: the Stripe/Paystack webhook paths, or an OWNER approving an uploaded
+ * bank-transfer receipt. Returns `{ organization, entitlements }`.
  */
 export async function finalizeSubscription({ organizationId, planId, billingCycle = "MONTHLY", addOns = [], providerRefs = {} }) {
     const normalizedPlanId = toPlanId(planId);
@@ -777,20 +915,9 @@ export async function handleProviderWebhook(req, rawBody) {
         return event.event;
     }
 
-    // ── Mock provider webhook — same shape the client confirm route uses. ──
-    const organizationId = req.body?.organizationId;
-    if (!organizationId) return null;
-
-    await persistBillingEvent({
-        organizationId,
-        provider: "mock",
-        providerEventId: req.body?.id || null,
-        eventType: req.body?.eventType || "webhook",
-        status: req.body?.status || null,
-        raw: req.body || null,
-    });
-
-    return req.body?.eventType || "webhook";
+    // No mock path. Webhook deliveries are only actionable for signed real
+    // providers (Stripe/Paystack) — there is no self-service "paid" shortcut.
+    return null;
 }
 
 /**
