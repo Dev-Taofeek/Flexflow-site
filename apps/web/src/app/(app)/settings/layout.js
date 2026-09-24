@@ -34,6 +34,7 @@ export default function SettingsLayout({ children }) {
         { href: "/settings/roles",        label: t("shell.settings.nav.roles"),        show: true },
         { href: "/settings/billing",      label: t("shell.settings.nav.billing"),      show: isAdmin },
         { href: "/settings/integrations", label: t("shell.settings.nav.integrations"), show: isAdmin },
+        { href: "/settings/automations",  label: t("shell.settings.nav.automations"),  show: isAdmin },
         { href: "/settings/audit-logs",   label: t("shell.settings.nav.auditLogs"),    show: isAdmin && can("audit_logs") },
     ].filter((n) => n.show);
 

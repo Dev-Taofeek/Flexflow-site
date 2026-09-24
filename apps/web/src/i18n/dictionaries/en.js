@@ -94,6 +94,7 @@ const en = {
         roles: "Roles & permissions",
         billing: "Billing",
         integrations: "Integrations",
+        automations: "Automations",
         auditLogs: "Audit logs",
       },
       accessRestricted: "Access restricted",
@@ -230,6 +231,14 @@ const en = {
       unlimited: "Unlimited",
       upload: "Upload",
       workspaces: "Workspaces",
+    },
+    automations: {
+      breadcrumb: "Settings",
+      title: "Automations",
+      description:
+        "Rules that fire on webhook events from your connected providers — automatically set task statuses, post comments, and notify your team.",
+      upgradeTitle: "Automations are available on Pro and above",
+      upgradeDescription: "Upgrade to create automation rules that react to provider events and keep work moving without manual follow-up.",
     },
     integrations: {
       breadcrumb: "Settings",
