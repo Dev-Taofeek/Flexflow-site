@@ -83,7 +83,7 @@ export default function BillingSettingsPage() {
     const { t, locale } = useI18n();
     const { runWithStepUp } = useStepUp();
     const { currentOrg, accessToken, refreshOrganizations } = useApp();
-    const { isFree, isPro, isCustom, planName, planInfo, limits, can } = useEntitlements();
+    const { planInfo, limits } = useEntitlements();
     const { isOwner } = useRole();
 
     const orgId = searchParams.get("orgId") || currentOrg?.id;
@@ -138,16 +138,32 @@ export default function BillingSettingsPage() {
     const isAnnual = cycle === "ANNUAL";
     const currentCycle = current?.billingCycle || "MONTHLY";
 
+    // Prefer the freshly-fetched billing snapshot (/billing/current) over the
+    // hook's org cache for EVERYTHING that describes the CURRENT plan. The org
+    // cache (useEntitlements → currentOrg.planInfo) only updates after
+    // refreshOrganizations(), so displaying from it here would keep showing the
+    // pre-payment plan (e.g. "Pro") until a full page reload even after an
+    // approval went through.
+    const currentPlanId = current?.plan;
+    const currentIsFree = currentPlanId === "free";
+    const currentIsPro = currentPlanId === "pro";
+    const currentIsCustom = currentPlanId === "custom";
+    const currentPlanLabel = current?.planLabel || "Free";
+
     // Custom add-ons the org has ALREADY paid for — locked (included), never re-billed.
     const purchasedAddOns = useMemo(
-        () => new Set((isCustom ? current?.addOns || [] : []).map((id) => String(id).toLowerCase())),
-        [isCustom, current?.addOns],
+        () => new Set((currentIsCustom ? current?.addOns || [] : []).map((id) => String(id).toLowerCase())),
+        [currentIsCustom, current?.addOns],
     );
 
-    // Whether selecting this configuration re-buys what is already active.
+    // Whether selecting this configuration would re-buy/re-downgrade what is
+    // already active (mirror of billing-policy). A FREE org is never blocked —
+    // any upgrade is allowed. A paid org cannot downgrade or re-purchase its
+    // exact active configuration; holding it at Custom + same cycle and adding
+    // NEW add-ons stays open.
     const changeBlocked = useMemo(() => {
-        if (!isFree) return null;
-        if (isCustom && targetPlan !== "custom") return "PLAN_DOWNGRADE_NOT_ALLOWED";
+        if (currentIsFree) return null;
+        if (currentIsCustom && targetPlan !== "custom") return "PLAN_DOWNGRADE_NOT_ALLOWED";
         if (targetPlan === "pro") {
             if (cycle === currentCycle) return "SAME_PLAN_REPURCHASE_NOT_ALLOWED";
             if (cycle === "MONTHLY" && currentCycle === "ANNUAL") return "CYCLE_DOWNGRADE_NOT_ALLOWED";
@@ -160,7 +176,7 @@ export default function BillingSettingsPage() {
         }
         if (cycle === "MONTHLY" && currentCycle === "ANNUAL") return "CYCLE_DOWNGRADE_NOT_ALLOWED";
         return null;
-    }, [isFree, isCustom, targetPlan, cycle, currentCycle, selectedAddOns, purchasedAddOns]);
+    }, [currentIsFree, currentIsCustom, targetPlan, cycle, currentCycle, selectedAddOns, purchasedAddOns]);
 
     // Custom estimate. A live CUSTOM org staying on monthly only pays for the
     // REMAINING add-ons (base + already-bought add-ons are never charged twice),
@@ -171,19 +187,19 @@ export default function BillingSettingsPage() {
         const selectedMonthly = sumPrice(selectedAddOns);
         const includedMonthly = sumPrice([...purchasedAddOns, ...selectedAddOns.map((id) => String(id).toLowerCase())]);
         const fullMonthly = CUSTOM_ENTERPRISE_BASE + includedMonthly;
-        const remainingMonthlyPath = isCustom && cycle === "MONTHLY";
+        const remainingMonthlyPath = currentIsCustom && cycle === "MONTHLY";
         // Remaining-features path bills only the NEW add-ons; fall back to the
         // full configuration for display when nothing new is selected yet.
         const monthly = remainingMonthlyPath && selectedMonthly > 0 ? selectedMonthly : fullMonthly;
         const annual = annualize(fullMonthly);
         return { monthly, annual, fullMonthly };
-    }, [selectedAddOns, purchasedAddOns, isCustom, cycle]);
+    }, [selectedAddOns, purchasedAddOns, currentIsCustom, cycle]);
 
     const customPrice = isAnnual ? Math.round(customEstimate.annual / 12) : customEstimate.monthly;
-    const proActiveConfig = isPro && targetPlan === "pro" && cycle === currentCycle;
-    const customActiveConfig = isCustom && targetPlan === "custom" && cycle === currentCycle && changeBlocked === "SAME_PLAN_REPURCHASE_NOT_ALLOWED";
+    const proActiveConfig = currentIsPro && targetPlan === "pro" && cycle === currentCycle;
+    const customActiveConfig = currentIsCustom && targetPlan === "custom" && cycle === currentCycle && changeBlocked === "SAME_PLAN_REPURCHASE_NOT_ALLOWED";
 
-    const canManageBilling = isOwner && !isFree;
+    const canManageBilling = isOwner && !currentIsFree;
 
     async function startCheckout() {
         if (!orgId || !accessToken) return;
@@ -327,6 +343,11 @@ export default function BillingSettingsPage() {
                 decision === "approve" ? t("settings.billing.transferApproved") : t("settings.billing.transferRejected"),
                 "success",
             );
+            // Refresh the org cache so the NEW plan/add-ons propagate to the whole
+            // app (plan badge, locked add-ons, every can() feature gate) — not just
+            // this page. Approval is the moment entitlements unlock, so waiting for
+            // a manual page reload here would leave the UI showing the old plan.
+            await refreshOrganizations();
             await load(orgId);
         } catch (err) {
             if (!err?.cancelled) addToast(err.message, "error");
@@ -353,7 +374,7 @@ export default function BillingSettingsPage() {
         }
     }
 
-    const currentPlanIsPaid = !isFree;
+    const currentPlanIsPaid = !currentIsFree;
 
     return (
         <div className="space-y-6">
@@ -367,23 +388,23 @@ export default function BillingSettingsPage() {
                         <p className="text-sm text-(--text-muted)">{t("settings.billing.currentPlan")}</p>
                         <div className="mt-0.5 flex items-center gap-2.5">
                             <h2 className="text-xl font-semibold tracking-tight text-(--text-primary)">
-                                {planName} {isCustom ? t("settings.billing.customSuffix") : ""}
+                                {currentPlanLabel} {currentIsCustom ? t("settings.billing.customSuffix") : ""}
                             </h2>
                             <span
                                 className={[
                                     "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                                    currentPlanIsPaid && planInfo?.subscriptionStatus === "ACTIVE"
+                                    currentPlanIsPaid && current?.subscriptionStatus === "ACTIVE"
                                         ? "bg-success-500/15 text-success-600"
                                         : "bg-(--bg-overlay) text-(--text-muted)",
                                 ].join(" ")}
                             >
-                                {planInfo?.subscriptionStatus ? statusLabel(planInfo.subscriptionStatus, t) : t("settings.billing.statusActive")}
+                                {current?.subscriptionStatus ? statusLabel(current.subscriptionStatus, t) : t("settings.billing.statusActive")}
                             </span>
                         </div>
                         <p className="mt-1 text-sm text-(--text-secondary)">
-                            {isFree
+                            {currentIsFree
                                 ? t("settings.billing.freePlanDescription")
-                                : <>{fmtPrice(isAnnual ? annualize(planPrice(planInfo)) / 12 : planPrice(planInfo), cycle, t)} · {isAnnual ? t("settings.billing.billedAnnually") : t("settings.billing.billedMonthly")}{data?.usdToLocalRate ? <> · ≈ ₦{Math.round((isAnnual ? annualize(planPrice(planInfo)) / 12 : planPrice(planInfo)) * data.usdToLocalRate).toLocaleString(locale)}{t("settings.billing.perMonthSuffix")}</> : ""}{planInfo?.subscriptionEndAt ? ` · ${t("settings.billing.renewsOn", { date: new Date(planInfo.subscriptionEndAt).toLocaleDateString(locale) })}` : ""}</>}
+                                : <>{fmtPrice(isAnnual ? annualize(planPrice(current)) / 12 : planPrice(current), cycle, t)} · {isAnnual ? t("settings.billing.billedAnnually") : t("settings.billing.billedMonthly")}{data?.usdToLocalRate ? <> · ≈ ₦{Math.round((isAnnual ? annualize(planPrice(current)) / 12 : planPrice(current)) * data.usdToLocalRate).toLocaleString(locale)}{t("settings.billing.perMonthSuffix")}</> : ""}{current?.subscriptionEndAt ? ` · ${t("settings.billing.renewsOn", { date: new Date(current.subscriptionEndAt).toLocaleDateString(locale) })}` : ""}</>}
                         </p>
                     </div>
                 </div>
@@ -489,7 +510,7 @@ export default function BillingSettingsPage() {
                     </div>
                 </div>
 
-                {isFree && data?.firstMonthFreeEligible ? (
+                {currentIsFree && data?.firstMonthFreeEligible ? (
                     <div className="mt-5 flex items-start gap-3 rounded-xl border border-brand-500/30 bg-brand-500/5 px-4 py-3">
                         <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
                         <div>
@@ -498,7 +519,7 @@ export default function BillingSettingsPage() {
                         </div>
                     </div>
                 ) : null}
-                {!isFree ? (
+                {!currentIsFree ? (
                     <p className="mt-5 rounded-xl border border-(--border) bg-(--bg-sunken) px-4 py-3 text-xs leading-relaxed text-(--text-muted)">
                         {t("settings.billing.upgradeOnlyNote")}
                     </p>
@@ -694,7 +715,7 @@ export default function BillingSettingsPage() {
                             <button
                                 type="button"
                                 onClick={startCheckout}
-                                disabled={Boolean(changeBlocked) || checkoutLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !isCustom)}
+                                disabled={Boolean(changeBlocked) || checkoutLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !currentIsCustom)}
                                 className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60 disabled:saturate-0"
                             >
                                 {checkoutLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
@@ -702,7 +723,7 @@ export default function BillingSettingsPage() {
                                     ? t("settings.common.redirecting")
                                     : changeBlocked
                                       ? t("settings.billing.currentPlanButton")
-                                      : isFree && targetPlan === "pro"
+                                      : currentIsFree && targetPlan === "pro"
                                         ? t("settings.billing.upgradeToPro", { price: `$${isAnnual ? Math.round(PLANS.pro.priceAnnual / 12) : PLANS.pro.priceMonthly}` })
                                         : t("settings.billing.upgradeNow")}
                                 {!changeBlocked && !checkoutLoading && <ChevronRight className="h-4 w-4" />}
@@ -711,7 +732,7 @@ export default function BillingSettingsPage() {
                             <button
                                 type="button"
                                 onClick={startTransfer}
-                                disabled={Boolean(changeBlocked) || transferLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !isCustom)}
+                                disabled={Boolean(changeBlocked) || transferLoading || (targetPlan === "custom" && selectedAddOns.length === 0 && !currentIsCustom)}
                                 className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60 disabled:saturate-0"
                             >
                                 {transferLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
@@ -731,7 +752,7 @@ export default function BillingSettingsPage() {
                         {t("settings.billing.includedWithPlan")}
                     </div>
                     <ul className="mt-3 space-y-2">
-                        {(isCustom
+                        {(currentIsCustom
                             ? [
                                 t("settings.billing.featureSSO"),
                                 t("settings.billing.featureWorkspaceIsolation"),
@@ -739,7 +760,7 @@ export default function BillingSettingsPage() {
                                 t("settings.billing.featureEnterpriseSupport"),
                                 t("settings.billing.featureConfigurableAddOns"),
                               ]
-                            : isPro
+                            : currentIsPro
                               ? [
                                 t("settings.billing.featureAdvancedRBAC"),
                                 t("settings.billing.featureAdvancedAnalytics"),
@@ -769,7 +790,7 @@ export default function BillingSettingsPage() {
                     <p className="mt-3 text-sm leading-relaxed text-(--text-secondary)">
                         {t("settings.billing.upgradeExplainDescription")}
                     </p>
-                    {isFree && (
+                    {currentIsFree && (
                         <Link
                             href="/pricing"
                             className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-500 hover:text-brand-400"

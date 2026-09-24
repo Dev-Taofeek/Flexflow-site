@@ -13,6 +13,7 @@ import {
     expiryWarningDedupeKey,
     assessPlanChange,
     isSubscriptionLive,
+    mergeAddOnSets,
 } from "./billing-policy.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -144,4 +145,17 @@ test("custom annual org cannot downgrade to monthly or re-buy identical config",
     assert.equal(assessPlanChange(customAnnual, { planId: "CUSTOM", billingCycle: "MONTHLY", addOns: ["sso"] }, now).allowed, false);
     assert.equal(assessPlanChange(customAnnual, { planId: "CUSTOM", billingCycle: "ANNUAL", addOns: ["sso"] }, now).allowed, false);
     assert.equal(assessPlanChange(customAnnual, { planId: "CUSTOM", billingCycle: "ANNUAL", addOns: ["sso", "audit_logs"] }, now).allowed, true);
+});
+
+// ── Granting (approval) add-on merge ─────────────────────────────────────────
+test("approving an add-on payment merges new add-ons into the existing set", () => {
+    // A live Custom org holding sso+audit_logs pays the REMAINING delta for
+    // data_retention; the grant must end with all three, not just the new one.
+    assert.deepEqual(mergeAddOnSets(["sso", "audit_logs"], ["data_retention"]), ["sso", "audit_logs", "data_retention"]);
+    assert.deepEqual(mergeAddOnSets([], ["data_retention"]), ["data_retention"]);
+    assert.deepEqual(mergeAddOnSets(["sso"], ["sso", "SSO", "data_retention"]), ["sso", "data_retention"]);
+    assert.deepEqual(mergeAddOnSets(null, ["data_retention"]), ["data_retention"]);
+    // An empty incoming set keeps what the org already holds untouched.
+    assert.deepEqual(mergeAddOnSets(["sso"], []), ["sso"]);
+    assert.deepEqual(mergeAddOnSets([], []), []);
 });

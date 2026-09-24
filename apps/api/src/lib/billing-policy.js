@@ -100,6 +100,17 @@ function normalizeAddOns(addOns) {
     return [...new Set(addOns.map((a) => String(a).toLowerCase()).filter(Boolean))];
 }
 
+/**
+ * Union of two add-on id sets (lower-cased, de-duped). Approving a "remaining
+ * add-ons" bank transfer only carries the NEWLY purchased add-ons, so granting
+ * must merge them into the org's existing set — never replace it — otherwise
+ * previously purchased features silently disappear.
+ */
+export function mergeAddOnSets(existing, incoming) {
+    if (!Array.isArray(existing) && !Array.isArray(incoming)) return [];
+    return [...new Set([...normalizeAddOns(existing), ...normalizeAddOns(incoming)])];
+}
+
 /** True when the org currently holds a live, unexpired paid subscription. */
 export function isSubscriptionLive(org, now = new Date()) {
     if (!isPaidPlan(org)) return false;

@@ -8,6 +8,7 @@ import {
     requiredLifecycleTransition,
     hasUsedFirstMonthFree,
     isSubscriptionLive,
+    mergeAddOnSets,
 } from "../lib/billing-policy.js";
 import { notifyUser } from "./notification.service.js";
 
@@ -64,6 +65,17 @@ function toPlanId(plan) {
 export function normalizeAddOnIds(addOns) {
     if (!Array.isArray(addOns)) return [];
     return [...new Set(addOns.map((a) => String(a).toLowerCase()).filter(Boolean))];
+}
+
+/**
+ * Union of the org's currently purchased CUSTOM add-ons and a target add-on set.
+ * Bank-transfer payments store only the NEWLY-selected add-ons (the monthly
+ * "complete the plan" upgrade bills the delta), so the entitlement granted on
+ * approval must always end with the org's FULL custom configuration — never a
+ * subset that would silently drop previously purchased features.
+ */
+function fullTargetAddOns(org, addOns) {
+    return normalizeAddOnIds([...(Array.isArray(org?.customAddOns) ? org.customAddOns : []), ...addOns]);
 }
 
 /**
@@ -243,7 +255,11 @@ export async function getUsdToLocalRate(currency = "NGN") {
  * add-ons are never charged twice. Every other configuration is billed in full.
  */
 export async function transferAmountMinor({ plan = "PRO", billingCycle = "MONTHLY", addOns = [], org }) {
-    const pricing = previewPricing({ plan, billingCycle, addOns });
+    // Price the org's FULL target configuration (already-purchased add-ons
+    // included) so an annual top-up is billed for what it grants. A LIVE CUSTOM
+    // org staying on the same MONTHLY cycle pays only the remaining-add-ons
+    // delta via remainingMonthlyUpgrade below.
+    const pricing = previewPricing({ plan, billingCycle, addOns: fullTargetAddOns(org, addOns) });
     const remaining = remainingMonthlyUpgrade(org, { plan, billingCycle, addOns });
     const periodAmount = remaining
         ? remaining.deltaMonthly
@@ -552,7 +568,9 @@ export async function createCheckout({
         // due up front: an ANNUAL checkout charges the whole year, MONTHLY
         // charges the standard price. A LIVE CUSTOM org completing its plan on
         // the same monthly cycle is charged only for the REMAINING add-ons.
-        const pricing = previewPricing({ plan: planId, billingCycle, addOns });
+        // Full target is priced (purchased + new) so annual top-ups bill for
+        // exactly what the approval will grant, never a subset.
+        const pricing = previewPricing({ plan: planId, billingCycle, addOns: fullTargetAddOns(organization, addOns) });
         const remaining = remainingMonthlyUpgrade(organization, { plan: planId, billingCycle, addOns });
         const periodAmount = remaining
             ? remaining.deltaMonthly
@@ -608,12 +626,15 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
 
     // Renewals extend from the current paid-through date instead of resetting
     // the clock, so a duplicate/mid-cycle webhook never shortens coverage.
+    // customAddOns is fetched so the approval MERGES the new add-ons into the
+    // org's existing set instead of overwriting it.
     const current = await prisma.organization.findUnique({
         where: { id: organizationId },
         select: {
             subscriptionEndAt: true,
             subscriptionStatus: true,
             subscriptionStartAt: true,
+            customAddOns: true,
         },
     });
     const base =
@@ -634,6 +655,14 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
     let endAt = new Date(base.getTime() + periodMs);
     if (firstMonthFree) endAt = new Date(endAt.getTime() + 30 * DAY_MS);
 
+    // Add-ons already held by a CUSTOM org are kept and unioned with the ones
+    // this payment activated. Bank-transfer intents store only the NEW add-ons
+    // (the monthly remaining-upgrade charges the delta), so replacing the set
+    // here would drop previously purchased features. Unioning is a no-op for
+    // fresh custom purchases (existing set is empty) and for PRO plans (which
+    // clear the list to []).
+    const mergedAddOns = mergeAddOnSets(current?.customAddOns, addOns);
+
     const org = await prisma.organization.update({
         where: { id: organizationId },
         data: {
@@ -642,7 +671,7 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
             subscriptionStatus: "ACTIVE",
             subscriptionStartAt: current?.subscriptionStartAt || now,
             subscriptionEndAt: endAt,
-            customAddOns: normalizedPlanId === "custom" ? addOns : [],
+            customAddOns: normalizedPlanId === "custom" ? mergedAddOns : [],
             ...(providerRefs.providerCustomerId ? { providerCustomerId: providerRefs.providerCustomerId } : {}),
             ...(providerRefs.providerSubscriptionId ? { providerSubscriptionId: providerRefs.providerSubscriptionId } : {}),
         },
@@ -657,7 +686,7 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
             raw: {
                 planId: normalizedPlanId,
                 billingCycle,
-                addOns,
+                addOns: mergedAddOns,
                 amountMonthly: PLANS[normalizedPlanId].priceMonthly,
                 firstMonthFree,
             },
