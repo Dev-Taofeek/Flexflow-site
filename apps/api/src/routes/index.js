@@ -18,7 +18,9 @@ import { organizationsRouter } from "./organizations.route.js";
 import { profileRouter } from "./profile.route.js";
 import { projectsRouter } from "./projects.route.js";
 import { rolesRouter } from "./roles.route.js";
+import { retentionRouter } from "./retention.route.js";
 import { searchRouter } from "./search.route.js";
+import { supportRouter } from "./support.route.js";
 import { teamRouter } from "./team.route.js";
 import { workspacesRouter } from "./workspaces.route.js";
 
@@ -37,6 +39,8 @@ router.use("/dashboard", dashboardRouter);
 router.use("/projects", projectsRouter);
 router.use("/roles", rolesRouter);
 router.use("/team", teamRouter);
+router.use("/retention", retentionRouter);
+router.use("/support", supportRouter);
 router.use("/analytics", analyticsRouter);
 router.use("/audit", auditRouter);
 router.use("/billing", billingRouter);

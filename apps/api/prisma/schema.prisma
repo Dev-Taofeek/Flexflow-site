@@ -119,6 +119,8 @@ model User {
   automationRules        AutomationRule[]
   payments               Payment[]               @relation("PaymentPayer")
   reviewedPayments       Payment[]               @relation("PaymentReviewer")
+  dataExports            DataExport[]
+  supportTickets         SupportTicket[]
 }
 
 model Organization {
@@ -147,7 +149,11 @@ model Organization {
   invites           Invite[]
   integrations      IntegrationConnection[]
   apiUsage          ApiUsage[]
+  automationUsage   AutomationUsage[]
   auditEvents       AuditEvent[]
+  retentionPolicy   DataRetentionPolicy?
+  dataExports       DataExport[]
+  supportTickets    SupportTicket[]
   knowledge         KnowledgeEntry[]
   connectorMappings ConnectorMapping[]
   connectorEvents   ConnectorEvent[]
@@ -185,6 +191,62 @@ model ApiUsage {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, month])
+}
+
+model AutomationUsage {
+  id             String @id @default(cuid())
+  organizationId String
+  month          String
+  runCount       Int    @default(0)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, month])
+}
+
+model DataRetentionPolicy {
+  id                String    @id @default(cuid())
+  organizationId    String    @unique
+  retentionDays     Int?
+  backupEnabled     Boolean   @default(false)
+  lastBackupAt      DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model DataExport {
+  id             String   @id @default(cuid())
+  organizationId String
+  requestedById  String
+  scope          String   @default("FULL")
+  status         String   @default("READY")
+  fileName       String
+  data           Json?
+  fileSize       Int?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy   User         @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+model SupportTicket {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  subject        String
+  message        String
+  status         String   @default("OPEN")
+  slaDueAt       DateTime?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
 }
 
 model AuditEvent {

@@ -1,14 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Check, LockKeyhole, ShieldCheck } from "lucide-react";
+import { Check, LockKeyhole, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/contexts/ToastContext";
 import { updatePermission } from "@/lib/roles-api";
 import { useI18n } from "@/i18n";
 
-export function PermissionMatrix({ workspaceId, token, roles, resources, initialPermissions, canEdit = true }) {
+export function PermissionMatrix({
+  workspaceId,
+  token,
+  roles,
+  resources,
+  initialPermissions,
+  canEdit = true,
+  roleMeta = {},
+  canDeleteRoles = false,
+  onDeleteRole,
+}) {
   const { addToast } = useToast();
   const { t } = useI18n();
   const [permissions, setPermissions] = useState(initialPermissions);
@@ -99,14 +109,29 @@ export function PermissionMatrix({ workspaceId, token, roles, resources, initial
                 {t("settings.roles.resourceActionColumn")}
               </th>
 
-              {roles.map((role) => (
-                <th
-                  key={role}
-                  className="text-muted-foreground dark:text-muted-foreground-dark px-4 py-4 text-left text-xs font-semibold tracking-wide uppercase"
-                >
-                  {role}
-                </th>
-              ))}
+              {roles.map((role) => {
+                const meta = roleMeta[role] || {};
+                return (
+                  <th
+                    key={role}
+                    className="text-muted-foreground dark:text-muted-foreground-dark px-4 py-4 text-left text-xs font-semibold tracking-wide uppercase"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>{role}</span>
+                      {!meta.isSystemRole && canDeleteRoles && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteRole?.(meta)}
+                          aria-label={t("settings.roles.deleteAria", { role })}
+                          className="text-muted-foreground hover:text-red-500 p-0.5 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
 

@@ -1,4 +1,4 @@
-import { computeCustomConfig, PLANS, getPlanLimits, CUSTOM_ADDONS } from "@flexflow/plans";
+import { computeCustomConfig, PLANS, getPlanLimits, CUSTOM_ADDONS, assertPurchasableAddOns } from "@flexflow/plans";
 import { prisma } from "../lib/prisma.js";
 import { env } from "../config/env.js";
 import { secureEqual } from "../lib/secure-compare.js";
@@ -290,6 +290,15 @@ export async function createTransferIntent({ organizationId, userId, plan = "PRO
     const normalizedCycle = billingCycle === "ANNUAL" ? "ANNUAL" : "MONTHLY";
     const normalizedAddOns = normalizeAddOnIds(addOns);
 
+    // Locked (not-yet-built) add-ons are refused at every money-moving path so
+    // customers can never pay real money for a feature that does not exist yet.
+    const blockedReason = assertPurchasableAddOns(normalizedAddOns);
+    if (blockedReason) {
+        const err = new Error(blockedReason);
+        err.statusCode = 422;
+        throw err;
+    }
+
     const org = await prisma.organization.findUnique({ where: { id: organizationId } });
     if (!org) {
         const err = new Error("Organization not found");
@@ -535,6 +544,14 @@ export async function createCheckout({
 }) {
     const planId = toPlanId(plan);
     const provider = getProvider();
+
+    // Refuse locked add-ons at the checkout path too (defense in depth).
+    const blockedReason = assertPurchasableAddOns(addOns);
+    if (blockedReason) {
+        const err = new Error(blockedReason);
+        err.statusCode = 422;
+        throw err;
+    }
 
     if (provider === "stripe") {
         const { default: Stripe } = await import("stripe");

@@ -44,7 +44,15 @@ export const CUSTOM_ENTERPRISE_BASE = 20;
  * Enterprise add-ons — each one unlocks a `minPlan: "custom"` feature and adds
  * to the monthly/estimated price. Priced per organization per month.
  * All add-ons together add exactly $100/mo (20 + 100 = 120 max).
+ *
+ * `purchasable: false` marks add-ons that are NOT yet sold (locked). They stay
+ * in the catalog so previously-purchased orgs keep their entitlement, but new
+ * checkouts refuse them and the billing builder shows them as "coming soon".
+ * An add-on is locked when the product feature behind it is not implemented;
+ * selling it would charge real money for nothing.
  */
+export const LOCKED_ADDONS = ["sso", "custom_integrations", "advanced_security"];
+
 export const CUSTOM_ADDONS = {
   sso: {
     id: "sso",
@@ -52,6 +60,7 @@ export const CUSTOM_ADDONS = {
     description: "Single sign-on with SAML, OIDC, and SCIM user provisioning.",
     value: "Centralize authentication and automatically provision/remove employees.",
     priceMonthly: 14,
+    purchasable: false,
   },
   audit_logs: {
     id: "audit_logs",
@@ -73,6 +82,7 @@ export const CUSTOM_ADDONS = {
     description: "Org-level security policies, IP allow-listing, and session controls.",
     value: "Meet internal security review requirements and reduce breach surface.",
     priceMonthly: 14,
+    purchasable: false,
   },
   dedicated_support: {
     id: "dedicated_support",
@@ -87,6 +97,7 @@ export const CUSTOM_ADDONS = {
     description: "Private API/webhook builds and connectors for your internal tools.",
     value: "Plug FlexFlow into the exact systems your organization already runs on.",
     priceMonthly: 12,
+    purchasable: false,
   },
   api_limit_scale: {
     id: "api_limit_scale",
@@ -110,6 +121,35 @@ export const CUSTOM_ADDONS = {
     priceMonthly: 10,
   },
 };
+
+/** True when an add-on id may be purchased on a new checkout. */
+export function isPurchasableAddOn(id) {
+  return CUSTOM_ADDONS[id]?.purchasable !== false;
+}
+
+/** Add-ons that are catalogued but not yet purchasable (feature not built). */
+export function lockedAddOns() {
+  return Object.values(CUSTOM_ADDONS).filter((addon) => addon.purchasable === false);
+}
+
+/**
+ * Throws (via returned error message) when a requested target add-on set
+ * contains a locked add-on. Purchased/grandfathered ids are fine — only the
+ * ids a customer is trying to BUY are validated.
+ */
+export function assertPurchasableAddOns(addOns = []) {
+  const blocked = normalizeIdList(addOns).filter((id) => !isPurchasableAddOn(id));
+  if (blocked.length === 0) return null;
+  const names = blocked
+    .map((id) => CUSTOM_ADDONS[id]?.name || id)
+    .join(", ");
+  return `"${names}" is not yet available for purchase. These add-ons are coming soon and cannot be bought yet.`;
+}
+
+function normalizeIdList(addOns) {
+  if (!Array.isArray(addOns)) return [];
+  return [...new Set(addOns.map((a) => String(a).toLowerCase()).filter(Boolean))];
+}
 
 /**
  * Feature catalog. `minPlan` is the cheapest plan that includes the feature.
@@ -530,7 +570,7 @@ export const PLANS = {
       tasksPerMonth: Infinity,
       storageMb: Infinity,
       apiRequestsPerMonth: 2000000,
-      automationRunsPerMonth: Infinity,
+      automationRunsPerMonth: 5000,
       teamIntelligenceQueriesPerDay: Infinity,
     },
     features: [
@@ -587,13 +627,19 @@ export function canAccessFeature(planId, addOns = [], featureKey, options = {}) 
 
 /**
  * Resolved limits for an organization. Custom api allowance grows if the
- * `api_limit_scale` add-on is purchased.
+ * `api_limit_scale` add-on is purchased; the automation monthly run allowance
+ * is only removed by the `enterprise_automation` add-on.
  */
 export function getPlanLimits(planId, addOns = []) {
   const plan = PLANS[planId] || PLANS.free;
   const limits = { ...plan.limits };
-  if (planId === "custom" && Array.isArray(addOns) && addOns.includes("api_limit_scale")) {
-    limits.apiRequestsPerMonth = PLANS.custom.limits.apiRequestsPerMonth * 10;
+  if (planId === "custom" && Array.isArray(addOns)) {
+    if (addOns.includes("api_limit_scale")) {
+      limits.apiRequestsPerMonth = PLANS.custom.limits.apiRequestsPerMonth * 10;
+    }
+    if (addOns.includes("enterprise_automation")) {
+      limits.automationRunsPerMonth = Infinity;
+    }
   }
   return limits;
 }
@@ -663,6 +709,7 @@ export default {
   PLANS,
   FEATURES,
   CUSTOM_ADDONS,
+  LOCKED_ADDONS,
   CUSTOM_ENTERPRISE_BASE,
   ANNUAL_DISCOUNT,
   DEMO_ORG_SLUG,
@@ -676,6 +723,9 @@ export default {
   getLockedFeatures,
   lowestPlanForFeature,
   computeCustomConfig,
+  isPurchasableAddOn,
+  lockedAddOns,
+  assertPurchasableAddOns,
   ONBOARDING_BREAKDOWN,
   annualize,
 };

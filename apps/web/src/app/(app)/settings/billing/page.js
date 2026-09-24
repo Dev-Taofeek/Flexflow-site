@@ -634,6 +634,7 @@ export default function BillingSettingsPage() {
                         </div>
                         <div className="mt-4 grid gap-2.5 md:grid-cols-2">
                             {Object.values(CUSTOM_ADDONS).map((addon) => {
+                                const disabled = addon.purchasable === false;
                                 const locked = purchasedAddOns.has(String(addon.id).toLowerCase());
                                 const selected = locked || selectedAddOns.includes(addon.id);
                                 return (
@@ -641,17 +642,17 @@ export default function BillingSettingsPage() {
                                         key={addon.id}
                                         type="button"
                                         onClick={() => {
-                                            if (locked) return;
+                                            if (locked || disabled) return;
                                             setSelectedAddOns((prev) =>
                                                 selected ? prev.filter((id) => id !== addon.id) : [...prev, addon.id],
                                             );
                                         }}
                                         aria-pressed={selected}
-                                        aria-disabled={locked}
+                                        aria-disabled={locked || disabled}
                                         className={[
                                             "flex items-start gap-3 rounded-xl border p-3 text-left transition-colors",
-                                            locked
-                                                ? "opacity-70"
+                                            locked || disabled
+                                                ? "opacity-60"
                                                 : selected
                                                   ? "border-brand-500/50 bg-brand-500/5"
                                                   : "border-(--border) hover:border-(--border-strong)",
@@ -672,6 +673,8 @@ export default function BillingSettingsPage() {
                                                 {addon.name}
                                                 {locked ? (
                                                     <span className="text-xs font-medium text-success-600">{t("settings.billing.lockedAddOn")}</span>
+                                                ) : disabled ? (
+                                                    <span className="text-xs font-medium text-(--text-tertiary)">{t("settings.billing.comingSoon")}</span>
                                                 ) : (
                                                     <span className="text-xs text-(--text-tertiary)">+{addon.priceMonthly}{t("settings.billing.perMonthSuffix")}</span>
                                                 )}

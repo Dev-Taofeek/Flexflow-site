@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma.js";
 import { decryptSecret } from "../lib/crypto.js";
 import { extractTaskKeys } from "../lib/task-key.js";
 import { notifyUser } from "./notification.service.js";
+import { isAutomationLimitReached, recordAutomationRuns } from "../lib/usage.js";
 
 /**
  * Connector service — webhook ingestion, task-key linking, and automation
@@ -135,6 +136,14 @@ export async function applyAutomations({ provider, trigger, event, mapping, text
     });
     if (rules.length === 0) return { applied: [], notifyIds: [] };
 
+    // Plan gating: each enabled rule that matches is one automation run. Once
+    // the org's monthly allowance (free: 100, pro: 5 000) is consumed, further
+    // runs are skipped — buying `enterprise_automation` lifts the cap.
+    const limitReached = await isAutomationLimitReached(mapping.organizationId);
+    if (limitReached) {
+        return { applied: [], notifyIds: [], skipped: rules.length, limitReached: true };
+    }
+
     const notifyIds = new Set();
     const applied = [];
 
@@ -181,7 +190,12 @@ export async function applyAutomations({ provider, trigger, event, mapping, text
         }
     }
 
-    return { applied, notifyIds: [...notifyIds] };
+    // Record the runs consumed this event (one per applied rule).
+    if (applied.length > 0) {
+        await recordAutomationRuns(mapping.organizationId, applied.length);
+    }
+
+    return { applied, notifyIds: [...notifyIds], limitReached: false };
 }
 
 /** Notify users about a connector event (deduped per event + user). */
