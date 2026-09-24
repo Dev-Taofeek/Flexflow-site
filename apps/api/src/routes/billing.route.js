@@ -17,6 +17,7 @@ import {
     createCheckout,
     finalizeSubscription,
     cancelSubscription,
+    reactivateSubscription,
     downgradeToFree,
     previewPricing,
     handleProviderWebhook,
@@ -475,6 +476,33 @@ router.get("/portal/:orgId", requireOrgRole("OWNER", "ADMIN"), async (req, res) 
     } catch (error) {
         console.error(error);
         return res.status(500).json(errorResponse("SERVER_ERROR", "Failed to open billing portal"));
+    }
+});
+
+// POST /api/billing/reactivate/:orgId — bring a cancelled subscription back to
+// ACTIVE. No charge is made: cancellation only flags the org, and paid access
+// through the already-billed window was never interrupted.
+router.post("/reactivate/:orgId", requireOrgRole("OWNER"), async (req, res) => {
+    try {
+        const org = await reactivateSubscription(req.params.orgId);
+        await recordAudit({
+            organizationId: req.params.orgId,
+            actorId: req.user.id,
+            action: "billing.subscription_reactivated",
+            resource: "billing",
+            ipAddress: clientIpFrom(req),
+        });
+        await notifyUser(req.user.id, {
+            title: "Subscription reactivated",
+            message: `${org.name} is active again${org.subscriptionEndAt ? ` until ${org.subscriptionEndAt.toISOString().slice(0, 10)}` : ""}.`,
+            type: "SYSTEM",
+            url: `/settings/billing?orgId=${req.params.orgId}`,
+            dedupeKey: `billing.reactivate.${req.params.orgId}`,
+        });
+        return res.status(200).json(successResponse({ organization: org }));
+    } catch (error) {
+        console.error(error);
+        return res.status(error.statusCode || 500).json(errorResponse(error.statusCode ? "VALIDATION_ERROR" : "SERVER_ERROR", error.message));
     }
 });
 

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-    Banknote, Building2, Check, CheckCircle2, ChevronRight, Copy, CreditCard, Loader2, Lock, ShieldCheck, Sparkles, Upload, X, Zap,
+    Banknote, Building2, Check, CheckCircle2, ChevronRight, Copy, CreditCard, Loader2, Lock, RefreshCcw, ShieldCheck, Sparkles, Upload, X, Zap,
 } from "lucide-react";
 
 import { PLANS, CUSTOM_ADDONS, CUSTOM_ENTERPRISE_BASE, annualize } from "@flexflow/plans";
@@ -92,6 +92,7 @@ export default function BillingSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [checkoutLoading, setCheckoutLoading] = useState(false);
     const [cancelLoading, setCancelLoading] = useState(false);
+    const [reactivating, setReactivating] = useState(false);
     const [confirmCancel, setConfirmCancel] = useState(false);
 
     // Upgrade builder state
@@ -374,7 +375,27 @@ export default function BillingSettingsPage() {
         }
     }
 
+    // A cancelled-but-paid org flipped back to ACTIVE; no charge is made because
+    // the paid window (and the money for it) was never interrupted.
+    async function handleReactivate() {
+        if (!orgId || !accessToken) return;
+        setReactivating(true);
+        try {
+            await apiRequest(`/billing/reactivate/${orgId}`, { method: "POST", token: accessToken, toast: false });
+            await refreshOrganizations();
+            await load(orgId);
+            addToast(t("settings.billing.reactivatedToast"), "success");
+        } catch (err) {
+            addToast(err.message, "error");
+        } finally {
+            setReactivating(false);
+        }
+    }
+
     const currentPlanIsPaid = !currentIsFree;
+    // A paid plan that was cancelled but still inside its billed window — this is
+    // where the cancel button flips into a "Reactivate" action.
+    const isCancelled = currentPlanIsPaid && current?.subscriptionStatus === "CANCELLED";
 
     return (
         <div className="space-y-6">
@@ -404,14 +425,24 @@ export default function BillingSettingsPage() {
                         <p className="mt-1 text-sm text-(--text-secondary)">
                             {currentIsFree
                                 ? t("settings.billing.freePlanDescription")
-                                : <>{fmtPrice(isAnnual ? annualize(planPrice(current)) / 12 : planPrice(current), cycle, t)} · {isAnnual ? t("settings.billing.billedAnnually") : t("settings.billing.billedMonthly")}{data?.usdToLocalRate ? <> · ≈ ₦{Math.round((isAnnual ? annualize(planPrice(current)) / 12 : planPrice(current)) * data.usdToLocalRate).toLocaleString(locale)}{t("settings.billing.perMonthSuffix")}</> : ""}{current?.subscriptionEndAt ? ` · ${t("settings.billing.renewsOn", { date: new Date(current.subscriptionEndAt).toLocaleDateString(locale) })}` : ""}</>}
+                                : <>{fmtPrice(isAnnual ? annualize(planPrice(current)) / 12 : planPrice(current), cycle, t)} · {isAnnual ? t("settings.billing.billedAnnually") : t("settings.billing.billedMonthly")}{data?.usdToLocalRate ? <> · ≈ ₦{Math.round((isAnnual ? annualize(planPrice(current)) / 12 : planPrice(current)) * data.usdToLocalRate).toLocaleString(locale)}{t("settings.billing.perMonthSuffix")}</> : ""}{current?.subscriptionEndAt ? ` · ${t(isCancelled ? "settings.billing.accessUntil" : "settings.billing.renewsOn", { date: new Date(current.subscriptionEndAt).toLocaleDateString(locale) })}` : ""}</>}
                         </p>
                     </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
                     {canManageBilling &&
-                        (confirmCancel ? (
+                        (isCancelled ? (
+                            <button
+                                type="button"
+                                onClick={handleReactivate}
+                                disabled={reactivating}
+                                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:opacity-60"
+                            >
+                                {reactivating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+                                {reactivating ? t("settings.common.processing") : t("settings.billing.reactivateSubscription")}
+                            </button>
+                        ) : confirmCancel ? (
                             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-danger-500/30 bg-danger-500/5 px-4 py-2.5">
                                 <p className="text-sm text-(--text-secondary)">{t("settings.billing.cancelConfirm")}</p>
                                 <div className="flex items-center gap-2">

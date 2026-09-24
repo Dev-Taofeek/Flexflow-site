@@ -696,6 +696,44 @@ export async function finalizeSubscription({ organizationId, planId, billingCycl
     return { organization: org, firstMonthFree };
 }
 
+/**
+ * Re-activates a currently-cancelled paid subscription. Cancellation only flags
+ * the subscription; paid access through the billed window never stops (the paid
+ * plan is kept), so reactivation is a status flip with no money moving. Refused
+ * unless the org sits on a live paid plan that is cancelled — an expired org
+ * (already downgraded to FREE) must re-purchase instead.
+ */
+export async function reactivateSubscription(organizationId) {
+    const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!org) {
+        const err = new Error("Organization not found");
+        err.statusCode = 404;
+        throw err;
+    }
+    if (org.subscriptionStatus !== "CANCELLED" || !isSubscriptionLive(org)) {
+        const err = new Error("Only a paid subscription that is currently cancelled can be reactivated");
+        err.statusCode = 409;
+        throw err;
+    }
+
+    const updated = await prisma.organization.update({
+        where: { id: organizationId },
+        data: { subscriptionStatus: "ACTIVE" },
+    });
+
+    await prisma.billingEvent.create({
+        data: {
+            organizationId,
+            provider: getProvider(),
+            eventType: "subscription.reactivated",
+            status: "ACTIVE",
+            raw: { reactivatedAt: new Date().toISOString() },
+        },
+    });
+
+    return updated;
+}
+
 /** Cancel a subscription — paid access continues until the end of the window. */
 export async function cancelSubscription(organizationId) {
     if (isProvider("paystack")) {

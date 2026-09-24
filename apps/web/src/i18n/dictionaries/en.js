@@ -355,10 +355,13 @@ const en = {
       viewPlan: "View plans",
     },
     billing: {
+      accessUntil: "Access until {date}",
       billedAnnually: "billed annually",
       billedMonthly: "billed monthly",
       cancelConfirm: "Cancel this subscription? Members keep access until the end of the billing period.",
       cancelSubscription: "Cancel subscription",
+      reactivateSubscription: "Reactivate subscription",
+      reactivatedToast: "Subscription reactivated",
       comparePlans: "Compare plans",
       confirmBack: "Go to billing",
       confirmError: "We couldn't confirm your checkout.",
