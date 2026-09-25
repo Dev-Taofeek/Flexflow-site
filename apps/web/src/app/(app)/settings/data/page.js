@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download, HardDrive, Loader2 } from "lucide-react";
 
-import { apiRequest, apiUrl } from "@/lib/api-client";
+import { apiRequest } from "@/lib/api-client";
+import { apiUrl } from "@/lib/api-url";
 import { UpgradePrompt } from "@/components/billing/UpgradePrompt";
 import { useApp } from "@/contexts/AppContext";
 import { useEntitlements } from "@/hooks/useEntitlements";
