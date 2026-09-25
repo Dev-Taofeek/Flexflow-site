@@ -282,6 +282,8 @@ const en = {
       guidedStepToken: "Generate an access token in {provider} using the link below.",
       guidedStepScopes: "Grant these scopes: {scopes}.",
       guidedStepPaste: "Paste the token and optional webhook secret below, then click Connect.",
+      guidedStepWebhook:
+        "Add a webhook in {provider} and paste the Webhook URL above when it asks for a Payload URL (GitHub), Request URL (Slack), or webhook endpoint (Figma).",
       tokenScopesLabel: "Required scopes",
       createToken: "Create a token",
       viaOauth: "OAuth",
@@ -312,6 +314,8 @@ const en = {
       webhookHintFigma:
         "Optional: set a passcode here and append ?passcode=… when you create the webhook in Figma to verify requests.",
       webhookUrlLabel: "Webhook URL",
+      webhookUrlExplain:
+        "When you create a webhook in {provider}, this is the URL it delivers events to — GitHub calls it the Payload URL, Slack the Request URL, Figma the Webhook URL.",
       copyWebhookUrl: "Copy URL",
       webhookCopied: "Webhook URL copied to your clipboard.",
       copyFailed: "Could not copy the URL.",

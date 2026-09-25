@@ -347,6 +347,13 @@ export default function IntegrationsSettingsPage() {
                                                             </li>
                                                         ) : null}
                                                         <li>{t("settings.integrations.guidedStepPaste")}</li>
+                                                        {meta.webhookPath ? (
+                                                            <li>
+                                                                {t("settings.integrations.guidedStepWebhook", {
+                                                                    provider: t(meta.labelKey),
+                                                                })}
+                                                            </li>
+                                                        ) : null}
                                                     </ol>
                                                     {providerMeta[provider]?.tokenHelpUrl ? (
                                                         <a
@@ -360,6 +367,28 @@ export default function IntegrationsSettingsPage() {
                                                         </a>
                                                     ) : null}
                                                 </details>
+                                                {meta.webhookPath ? (
+                                                    <div className="flex flex-col gap-2 rounded-lg border border-(--border) bg-(--bg) p-3">
+                                                        <p className="text-xs leading-relaxed text-(--text-muted)">
+                                                            {t("settings.integrations.webhookUrlExplain", {
+                                                                provider: t(meta.labelKey),
+                                                            })}
+                                                        </p>
+                                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                                            <code className="min-w-0 flex-1 break-all font-mono text-xs text-(--text-secondary)">
+                                                                {webhookUrlFor(provider)}
+                                                            </code>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => copyWebhookUrl(provider)}
+                                                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm font-medium text-(--text-secondary) transition-colors hover:bg-(--bg-overlay)"
+                                                            >
+                                                                <Copy className="h-4 w-4" />
+                                                                {t("settings.integrations.copyWebhookUrl")}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : null}
                                             </div>
                                         ) : (
                                             <div className="space-y-4">
