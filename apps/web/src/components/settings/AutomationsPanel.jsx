@@ -259,6 +259,14 @@ export function AutomationsPanel() {
                                         <label className="text-xs font-medium text-(--text-muted)">
                                             {t("settings.integrations.automationTrigger")}
                                         </label>
+                                        {PROVIDERS[automationForm.provider]?.freeTextTrigger ? (
+                                        <input
+                                            value={automationForm.trigger}
+                                            onChange={(e) => setAutomationForm((s) => ({ ...s, trigger: e.target.value }))}
+                                            placeholder="task.created"
+                                            className="mt-1 w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 font-mono text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none"
+                                        />
+                                    ) : (
                                         <select
                                             value={automationForm.trigger}
                                             onChange={(e) => setAutomationForm((s) => ({ ...s, trigger: e.target.value }))}
@@ -268,6 +276,7 @@ export function AutomationsPanel() {
                                                 <option key={tg} value={tg}>{triggerLabel(tg)}</option>
                                             ))}
                                         </select>
+                                    )}
                                     </div>
                                     <div>
                                         <label className="text-xs font-medium text-(--text-muted)">
@@ -420,9 +429,11 @@ export function AutomationsPanel() {
                                             onChange={(e) => changeMappingProvider(e.target.value)}
                                             className="mt-1 w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none"
                                         >
-                                            {Object.entries(PROVIDERS).map(([p, meta]) => (
-                                                <option key={p} value={p}>{t(meta.labelKey)}</option>
-                                            ))}
+                                            {Object.entries(PROVIDERS)
+                                                .filter(([, meta]) => !meta.freeTextTrigger)
+                                                .map(([p, meta]) => (
+                                                    <option key={p} value={p}>{t(meta.labelKey)}</option>
+                                                ))}
                                         </select>
                                     </div>
                                     <div>

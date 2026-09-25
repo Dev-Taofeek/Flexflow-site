@@ -100,6 +100,7 @@ model User {
   updatedAt           DateTime   @updatedAt
 
   organizations     OrganizationMember[]
+  sessions          UserSession[]
   workspaces        WorkspaceMember[]
   assignedTasks     Task[]               @relation("AssignedTasks")
   taskAssignments   TaskAssignee[]       @relation("TaskAssignees")
@@ -143,6 +144,7 @@ model Organization {
   providerCustomerId     String?
   providerSubscriptionId String?
   requireTwoFactor       Boolean            @default(false)
+  customIncomingToken    String?            @unique
 
   workspaces        Workspace[]
   members           OrganizationMember[]
@@ -161,6 +163,9 @@ model Organization {
   billingEvents     BillingEvent[]
   intelligenceUsage IntelligenceUsage[]
   payments          Payment[]
+  sso               OrganizationSso?
+  securityPolicy    OrgSecurityPolicy?
+  outboundWebhooks  OutboundWebhook[]
 
   @@index([subscriptionStatus, subscriptionEndAt])
 }
@@ -697,4 +702,70 @@ model AutomationRule {
 
   @@unique([workspaceId, provider, trigger])
   @@index([organizationId, workspaceId, enabled])
+}
+
+model UserSession {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String
+  deviceName String?
+  ipAddress  String?
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lastUsedAt])
+  @@index([tokenHash])
+}
+
+model OrganizationSso {
+  id                   String   @id @default(cuid())
+  organizationId       String   @unique
+  provider             String   @default("oidc")
+  discoveryUrl         String
+  clientId             String
+  clientSecret         String
+  domain               String   @unique
+  authorizeRedirectUri String?
+  enabled              Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([domain])
+}
+
+model OrgSecurityPolicy {
+  id                 String    @id @default(cuid())
+  organizationId     String    @unique
+  ipAllowlistEnabled Boolean   @default(false)
+  ipAllowlist        String[]  @default([])
+  sessionMaxAgeDays  Int       @default(30)
+  passwordMinLength  Int       @default(8)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model OutboundWebhook {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  url            String
+  events         String[]  @default([])
+  secret         String?
+  enabled        Boolean   @default(true)
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lastDeliveryAt DateTime?
+  lastStatus     String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, enabled])
 }

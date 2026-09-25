@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -58,6 +58,20 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const isSsoFlow = searchParams.get("sso") === "1";
+  const ssoGrant = isSsoFlow ? searchParams.get("grant") : null;
+  const ssoHandled = useRef(false);
+
+  function grantEmail(grant) {
+    try {
+      const base64 = grant.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+      const payload = JSON.parse(atob(padded));
+      return typeof payload.email === "string" ? payload.email : "";
+    } catch {
+      return "";
+    }
+  }
 
   const ERROR_MESSAGES = {
     CredentialsSignin: t("auth.invalidCredentials"),
@@ -83,6 +97,83 @@ function LoginForm() {
     error: "",
   });
   const [enrollCode, setEnrollCode] = useState("");
+  const [sso, setSso] = useState({ email: "", error: "", loading: false });
+
+  async function completeSsoImport(grant, email) {
+    const result = await signIn("sso-import", { grant, email, redirect: false });
+    if (!result?.error) {
+      addToast(t("auth.signedIn"), "success");
+      router.push(callbackUrl);
+      return true;
+    }
+    return false;
+  }
+
+  async function startSso(e) {
+    e.preventDefault();
+    if (sso.loading || !sso.email.includes("@")) return;
+    setSso((s) => ({ ...s, loading: true, error: "" }));
+    try {
+      const res = await fetch(apiUrl("/auth/sso/start"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: sso.email }),
+      });
+      const json = await res.json();
+      if (json.success && json.data?.found && json.data.url) {
+        window.location.href = json.data.url;
+        return;
+      }
+      setSso((s) => ({ ...s, loading: false, error: t("auth.sso.notFound") }));
+    } catch {
+      setSso((s) => ({ ...s, loading: false, error: t("auth.sso.failed") }));
+    }
+  }
+
+  useEffect(() => {
+    if (!isSsoFlow || !ssoGrant || ssoHandled.current) return;
+    ssoHandled.current = true;
+    const email = grantEmail(ssoGrant);
+    if (!email) {
+      setAuthError(t("auth.sso.grantInvalid"));
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await fetch(apiUrl("/auth/sso/status"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grant: ssoGrant, email }),
+        });
+        const json = await res.json();
+        if (!json.success) {
+          setAuthError(t("auth.sso.grantExpired"));
+          return;
+        }
+        if (json.data?.requiresTwoFactorSetup) {
+          setPending({ ssoImport: true, ssoGrant, ssoEmail: email });
+          setEnroll({
+            token: json.data.enrollmentToken || "",
+            organizations: json.data.organizations || [],
+            qrCode: "",
+            secret: "",
+            loading: false,
+            verifying: false,
+            error: "",
+          });
+          setEnrollCode("");
+          setStep("enroll");
+          startEnrollment(json.data.enrollmentToken);
+          return;
+        }
+        const ok = await completeSsoImport(ssoGrant, email);
+        if (!ok) setAuthError(t("auth.sso.grantExpired"));
+      } catch {
+        setAuthError(t("auth.sso.failed"));
+      }
+    })();
+  }, [isSsoFlow, ssoGrant, t]);
 
   const {
     register,
@@ -164,6 +255,15 @@ function LoginForm() {
       });
       addToast(t("auth.twoFactor.enrolledToast"), "success");
 
+      if (pending?.ssoImport) {
+        const ok = await completeSsoImport(pending.ssoGrant, pending.ssoEmail);
+        if (!ok) {
+          setAuthError(t("auth.sso.grantExpired"));
+          router.replace("/login");
+        }
+        return;
+      }
+
       const result = await signIn("credentials", {
         email: pending?.email,
         password: pending?.password,
@@ -213,6 +313,10 @@ function LoginForm() {
   }
 
   function backToPasswordStep() {
+    if (pending?.ssoImport) {
+      router.replace("/login");
+      return;
+    }
     setStep("password");
     setPending(null);
     setTwoFactorCode("");
@@ -364,6 +468,31 @@ return (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
             {authError}
           </div>
+        )}
+
+        {!isSsoFlow && (
+          <form onSubmit={startSso} className="space-y-2.5 rounded-xl border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark">
+            <p className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase dark:text-muted-foreground-dark">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {t("auth.sso.title")}
+            </p>
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                placeholder={t("auth.workEmail")}
+                value={sso.email}
+                onChange={(e) => setSso((s) => ({ ...s, email: e.target.value, error: "" }))}
+              />
+              <Button type="submit" variant="secondary" className="shrink-0" isLoading={sso.loading}>
+                {t("auth.sso.continue")}
+              </Button>
+            </div>
+            {sso.error ? (
+              <p className="text-sm text-red-500">{sso.error}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground dark:text-muted-foreground-dark">{t("auth.sso.helper")}</p>
+            )}
+          </form>
         )}
 
         <OAuthButtons callbackUrl={callbackUrl} />

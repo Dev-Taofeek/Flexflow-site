@@ -2,7 +2,6 @@ import {
     CUSTOM_ADDONS,
     LOCKED_ADDONS,
     isPurchasableAddOn,
-    lockedAddOns,
     assertPurchasableAddOns,
     canAccessFeature,
     getPlanLimits,
@@ -14,12 +13,11 @@ describe("custom add-on catalog", () => {
         expect(Object.keys(CUSTOM_ADDONS)).toEqual(expect.arrayContaining(LOCKED_ADDONS));
     });
 
-    test("non-implemented add-ons are locked for purchase", () => {
-        expect(LOCKED_ADDONS).toEqual(["sso", "custom_integrations", "advanced_security"]);
-        for (const id of LOCKED_ADDONS) {
-            expect(isPurchasableAddOn(id)).toBe(false);
+    test("the three shipped add-ons are now purchasable", () => {
+        expect(LOCKED_ADDONS).toEqual([]);
+        for (const id of ["sso", "custom_integrations", "advanced_security"]) {
+            expect(isPurchasableAddOn(id)).toBe(true);
         }
-        expect(lockedAddOns().map((a) => a.id)).toEqual(expect.arrayContaining(LOCKED_ADDONS));
         expect(isPurchasableAddOn("audit_logs")).toBe(true);
         expect(isPurchasableAddOn("custom_roles")).toBe(true);
         expect(isPurchasableAddOn("data_retention")).toBe(true);
@@ -28,9 +26,9 @@ describe("custom add-on catalog", () => {
         expect(isPurchasableAddOn("api_limit_scale")).toBe(true);
     });
 
-    test("assertPurchasableAddOns rejects locked ids and accepts new purchases", () => {
-        expect(assertPurchasableAddOns(["sso"])).toMatch(/not yet available/);
-        expect(assertPurchasableAddOns(["custom_integrations", "audit_logs"])).toMatch(/not yet available/);
+    test("assertPurchasableAddOns accepts the three shipped add-ons for purchase", () => {
+        expect(assertPurchasableAddOns(["sso"])).toBeNull();
+        expect(assertPurchasableAddOns(["custom_integrations", "advanced_security"])).toBeNull();
         expect(assertPurchasableAddOns(["audit_logs", "enterprise_automation"])).toBeNull();
         expect(assertPurchasableAddOns([])).toBeNull();
         expect(assertPurchasableAddOns(["not-an-add-on"])).toBeNull();

@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { passwordMinLengthForUser } from "../lib/sessions.js";
 import { twoFactorRateLimiter } from "../middleware/rate-limit.middleware.js";
 import { requireTwoFactorStepUp } from "../middleware/stepup-2fa.middleware.js";
 import {
@@ -75,8 +76,9 @@ router.patch("/password", requireTwoFactorStepUp, async (req, res) => {
         if (!currentPassword || !newPassword) {
             return res.status(422).json(errorResponse("VALIDATION_ERROR", "Both current and new password are required"));
         }
-        if (newPassword.length < 8) {
-            return res.status(422).json(errorResponse("VALIDATION_ERROR", "New password must be at least 8 characters"));
+        const minLength = await passwordMinLengthForUser(req.user.id);
+        if (newPassword.length < minLength) {
+            return res.status(422).json(errorResponse("VALIDATION_ERROR", `New password must be at least ${minLength} characters`));
         }
 
         const user = await prisma.user.findUnique({

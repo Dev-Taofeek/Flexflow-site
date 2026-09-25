@@ -14,6 +14,7 @@ import {
     notifyConnectorUsers,
 } from "../services/connector.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
+import { enforceFeature } from "../lib/entitlements.js";
 
 const router = Router();
 
@@ -320,6 +321,101 @@ router.post("/webhooks/figma", async (req, res) => {
         await markEventProcessed(ingested.event.id, error.message);
         console.error("[webhook] figma processing failed:", error);
         return ack(res);
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom — org-scoped inbound webhook authenticated by a per-org bearer token.
+// The caller posts a JSON event with `event_type` + `workspace_id`; matching
+// `custom` automation rules run against that workspace.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/webhooks/custom/:token", async (req, res) => {
+    const payload = parseRaw(req);
+    if (!payload) return res.status(400).json(errorResponse("BAD_PAYLOAD", "Invalid JSON payload"));
+
+    const org = await prisma.organization.findFirst({
+        where: { customIncomingToken: String(req.params.token || "") },
+        select: { id: true, customAddOns: true, plan: true },
+    });
+    if (!org) return res.status(404).json(errorResponse("NOT_FOUND", "Unknown webhook token"));
+
+    const entitlements = await enforceFeature(req, res, org.id, "custom_integrations");
+    if (!entitlements) return;
+
+    const eventType = String(payload.event_type || "").trim();
+    const workspaceId = String(payload.workspace_id || "").trim();
+    if (!eventType || !workspaceId) {
+        return res.status(422).json(errorResponse("VALIDATION_ERROR", "event_type and workspace_id are required"));
+    }
+
+    const workspace = await prisma.workspace.findFirst({
+        where: { id: workspaceId, organizationId: org.id },
+        select: { id: true },
+    });
+    if (!workspace) return res.status(422).json(errorResponse("VALIDATION_ERROR", "workspace_id does not belong to this organization"));
+
+    const resourceType = String(payload.resource_type || "custom").slice(0, 60);
+    const resourceId = String(payload.resource_id || "default").slice(0, 120);
+
+    let mapping = await prisma.connectorMapping.findFirst({
+        where: { provider: "custom", externalResourceType: "webhook", externalResourceId: String(req.params.token) },
+    });
+    if (!mapping) {
+        mapping = await prisma.connectorMapping.create({
+            data: {
+                organizationId: org.id,
+                workspaceId: workspace.id,
+                provider: "custom",
+                externalResourceType: "webhook",
+                externalResourceId: String(req.params.token),
+            },
+        });
+    }
+
+    const externalEventId = String(
+        payload.external_event_id ||
+        `${eventType}:${resourceId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+    );
+
+    const ingested = await ingestConnectorEvent({
+        provider: "custom",
+        externalEventId,
+        eventType,
+        externalResourceType: resourceType,
+        externalResourceId: resourceId,
+        externalUserId: payload.external_user_id || null,
+        payload,
+        occurredAt: new Date(payload.occurred_at || Date.now()),
+    });
+
+    if (!ingested.handled || ingested.duplicate || !ingested.event) {
+        return res.status(200).json(successResponse({ handled: ingested.handled, duplicate: Boolean(ingested.duplicate) }));
+    }
+
+    try {
+        const text = String(payload.text || payload.message || payload.title || "");
+        const { notifyIds } = await applyAutomations({
+            provider: "custom",
+            trigger: eventType,
+            event: ingested.event,
+            mapping,
+            text,
+        });
+        await notifyConnectorUsers({
+            userIds: notifyIds,
+            provider: "custom",
+            eventId: ingested.event.id,
+            title: "Custom webhook automation",
+            message: `Automations ran for ${eventType}.`,
+        });
+
+        await markEventProcessed(ingested.event.id);
+        return res.status(200).json(successResponse({ handled: true, trigger: eventType }));
+    } catch (error) {
+        await markEventProcessed(ingested.event.id, error.message);
+        console.error("[webhook] custom processing failed:", error);
+        return res.status(200).json(successResponse({ handled: true, error: "processing_failed" }));
     }
 });
 

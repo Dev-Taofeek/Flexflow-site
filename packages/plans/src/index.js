@@ -28,6 +28,9 @@ export const DEMO_UNLOCKED_FEATURES = new Set([
   "advanced_analytics",
   "team_intelligence_limited",
   "team_intelligence_full",
+  "sso",
+  "advanced_security",
+  "custom_integrations",
 ]);
 
 export function isDemoOrg(org) {
@@ -51,16 +54,15 @@ export const CUSTOM_ENTERPRISE_BASE = 20;
  * An add-on is locked when the product feature behind it is not implemented;
  * selling it would charge real money for nothing.
  */
-export const LOCKED_ADDONS = ["sso", "custom_integrations", "advanced_security"];
+export const LOCKED_ADDONS = [];
 
 export const CUSTOM_ADDONS = {
   sso: {
     id: "sso",
     name: "SSO / SAML",
-    description: "Single sign-on with SAML, OIDC, and SCIM user provisioning.",
-    value: "Centralize authentication and automatically provision/remove employees.",
+    description: "Single sign-on with OpenID Connect (Google Workspace, Microsoft Entra, Okta, Auth0, Keycloak).",
+    value: "Centralize authentication and let teammates sign in with their IdP.",
     priceMonthly: 14,
-    purchasable: false,
   },
   audit_logs: {
     id: "audit_logs",
@@ -79,10 +81,9 @@ export const CUSTOM_ADDONS = {
   advanced_security: {
     id: "advanced_security",
     name: "Advanced Security",
-    description: "Org-level security policies, IP allow-listing, and session controls.",
+    description: "Org-level security policies, IP allow-listing, session controls, and session inventory.",
     value: "Meet internal security review requirements and reduce breach surface.",
     priceMonthly: 14,
-    purchasable: false,
   },
   dedicated_support: {
     id: "dedicated_support",
@@ -94,10 +95,9 @@ export const CUSTOM_ADDONS = {
   custom_integrations: {
     id: "custom_integrations",
     name: "Custom Integrations",
-    description: "Private API/webhook builds and connectors for your internal tools.",
+    description: "Inbound webhooks, outbound webhook delivery, and private connectors for your internal tools.",
     value: "Plug FlexFlow into the exact systems your organization already runs on.",
     priceMonthly: 12,
-    purchasable: false,
   },
   api_limit_scale: {
     id: "api_limit_scale",

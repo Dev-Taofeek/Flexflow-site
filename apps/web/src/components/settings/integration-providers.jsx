@@ -23,6 +23,17 @@ export function FigmaIcon({ className = "h-5 w-5" }) {
     );
 }
 
+export function CustomIcon({ className = "h-5 w-5" }) {
+    return (
+        <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="6" width="13" height="5" rx="1" />
+            <rect x="14" y="13" width="7" height="5" rx="1" />
+            <path d="M9 11v2a2 2 0 0 0 2 2h3" />
+            <path d="M3 17h7" />
+        </svg>
+    );
+}
+
 /**
  * Single source of truth for the connected-provider catalog shared by the
  * Integrations (connection management) and Automations (rules + mappings)
@@ -70,5 +81,21 @@ export const PROVIDERS = {
         defaultResourceType: "file",
         triggerOptions: ["figma.comment", "figma.file_update", "figma.var_publish"],
         defaultTrigger: "figma.comment",
+    },
+    // The "custom" provider is managed from the settings/custom-integrations
+    // page (incoming token + outbound webhooks); it renders no connector card
+    // here, but its events can still power automation rules. Triggers are
+    // free-form event names (e.g. "task.created") rather than a fixed list.
+    custom: {
+        feature: "custom_integrations",
+        labelKey: "settings.integrations.customLabel",
+        descKey: "settings.integrations.customDescription",
+        icon: CustomIcon,
+        managedElsewhere: true,
+        freeTextTrigger: true,
+        triggerOptions: [],
+        defaultTrigger: "task.created",
+        resourceTypes: [],
+        defaultResourceType: "webhook",
     },
 };

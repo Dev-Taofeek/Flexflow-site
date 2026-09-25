@@ -160,6 +160,37 @@ async function oauthLogin({ email, name, image }) {
     }
 }
 
+// One-time SSO exchange: turns a short-lived `grant` (issued by the IdP
+// callback) into a normal session. Only reachable from the server so the
+// grant-to-session flow stays behind x-internal-secret.
+async function ssoImport(credentials) {
+    try {
+        const res = await fetch(apiUrl("/auth/sso/import"), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-internal-secret": process.env.INTERNAL_SECRET,
+            },
+            body: JSON.stringify({ grant: credentials?.grant, email: credentials?.email }),
+        });
+        if (!res.ok) return null;
+        const json = await res.json();
+        if (!json.success || !json.data) return null;
+
+        const { user, accessToken } = json.data;
+        return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            image: user.avatarUrl || null,
+            accessToken,
+            onboarded: user.onboarded,
+        };
+    } catch {
+        return null;
+    }
+}
+
 async function refreshAccessToken(token) {
     try {
         // Old cookies (before DB migration) still carry refreshToken — use it directly.
@@ -219,6 +250,15 @@ export const authOptions = {
             },
             authorize,
         }),
+        Credentials({
+            id: "sso-import",
+            name: "SSO",
+            credentials: {
+                grant: { label: "Grant", type: "text" },
+                email: { label: "Email", type: "email" },
+            },
+            authorize: ssoImport,
+        }),
     ],
     callbacks: {
         async jwt({ token, user, account, trigger, session }) {
@@ -228,8 +268,8 @@ export const authOptions = {
                 return compactToken(token);
             }
 
-            // ── Initial credentials login ──────────────────────────────────
-            if (user && account?.provider === "credentials") {
+            // ── Initial credentials / SSO-import login ─────────────────────
+            if (user && (account?.provider === "credentials" || account?.provider === "sso-import")) {
                 return compactToken({
                     ...compactToken(token),
                     accessToken: user.accessToken,

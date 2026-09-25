@@ -6,6 +6,7 @@ import { authorize } from "../middleware/rbac.middleware.js";
 import { notifyTaskUsers } from "../services/task-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
 import { enforceMinLimit } from "../lib/entitlements.js";
+import { deliverOutboundWebhooks } from "../services/outbound.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -165,6 +166,23 @@ router.post("/", authorize("tasks", "create"), async (req, res) => {
                 actionText: "Open task",
             });
         }
+
+        deliverOutboundWebhooks({
+            organizationId: workspace.organizationId,
+            eventType: "task.created",
+            payload: {
+                task: {
+                    id: task.id,
+                    key: task.key,
+                    title: task.title,
+                    status: task.status,
+                    priority: task.priority,
+                    projectId: task.projectId,
+                    workspaceId: workspace.id,
+                },
+                actor: { id: req.user.id, name: req.user.name },
+            },
+        }).catch(() => {});
 
         return res.status(201).json(successResponse(task));
     } catch (error) {

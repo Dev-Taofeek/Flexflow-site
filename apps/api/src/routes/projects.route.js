@@ -9,6 +9,7 @@ import { enforceMinLimit } from "../lib/entitlements.js";
 import { nextTaskKey } from "../lib/task-key.js";
 import { notifyTaskParticipants, notifyTaskUsers } from "../services/task-notification.service.js";
 import { notifyUser } from "../services/notification.service.js";
+import { deliverOutboundWebhooks } from "../services/outbound.service.js";
 import { successResponse, errorResponse } from "../utils/api-response.js";
 
 const router = Router();
@@ -126,6 +127,15 @@ router.post("/", authorize("projects", "create"), async (req, res) => {
             message: `${project.name} was created.`,
             type: "SYSTEM",
         });
+
+        deliverOutboundWebhooks({
+            organizationId: workspace.organizationId,
+            eventType: "project.created",
+            payload: {
+                project: { id: project.id, name: project.name, workspaceId: workspace.id },
+                actor: { id: req.user.id, name: req.user.name },
+            },
+        }).catch(() => {});
 
         return res.status(201).json(successResponse({ ...project, totalTasks: 0, completedTasks: 0, progress: 0 }));
     } catch (error) {
@@ -549,6 +559,23 @@ router.post("/:projectId/tasks/:taskId/comments", authorize("comments", "create"
         });
 
         emitToProject(req.app.get("io"), req.params.projectId, "task:comment-created", { projectId: req.params.projectId, taskId: task.id, comment, activity });
+
+        const commentOrg = await prisma.workspace.findUnique({
+            where: { id: task.project.workspaceId },
+            select: { organizationId: true },
+        });
+        if (commentOrg) {
+            deliverOutboundWebhooks({
+                organizationId: commentOrg.organizationId,
+                eventType: "comment.created",
+                payload: {
+                    task: { id: task.id, key: task.key, title: task.title },
+                    comment: { id: comment.id, content: comment.content },
+                    author: { id: comment.authorId, name: req.user.name },
+                },
+            }).catch(() => {});
+        }
+
         return res.status(201).json(successResponse(comment));
     } catch (error) {
         console.error(error);

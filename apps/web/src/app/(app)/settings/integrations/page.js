@@ -232,7 +232,9 @@ export default function IntegrationsSettingsPage() {
                 <div className="h-60 animate-pulse rounded-3xl border border-(--border) bg-(--bg-elevated)" />
             ) : (
                 <div className="space-y-4">
-                    {Object.entries(PROVIDERS).map(([provider, meta]) => {
+                    {Object.entries(PROVIDERS)
+                        .filter(([, meta]) => !meta.managedElsewhere)
+                        .map(([provider, meta]) => {
                         const Icon = meta.icon;
                         const conn = connectionFor(provider);
                         const canFeature = can(meta.feature);
@@ -299,40 +301,44 @@ export default function IntegrationsSettingsPage() {
                                                         </p>
                                                     </div>
                                                 ) : null}
-                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                                                    <input
-                                                        type="password"
-                                                        autoComplete="off"
-                                                        placeholder={t("settings.integrations.tokenPlaceholder")}
-                                                        value={tokens[provider]}
-                                                        disabled={!canFeature}
-                                                        onChange={(e) => setTokens((s) => ({ ...s, [provider]: e.target.value }))}
-                                                        className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none disabled:opacity-40"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleConnect(provider)}
-                                                        disabled={busy[`connect:${provider}`] || !canFeature}
-                                                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-40"
-                                                    >
-                                                        {busy[`connect:${provider}`] ? (
-                                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                                        ) : (
-                                                            <Plug className="h-4 w-4" />
-                                                        )}
-                                                        {t("settings.integrations.connect")}
-                                                    </button>
+                                                <div className="flex flex-col gap-3">
+                                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                                        <input
+                                                            type="password"
+                                                            autoComplete="off"
+                                                            placeholder={t("settings.integrations.tokenPlaceholder")}
+                                                            value={tokens[provider]}
+                                                            disabled={!canFeature}
+                                                            onChange={(e) => setTokens((s) => ({ ...s, [provider]: e.target.value }))}
+                                                            className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none disabled:opacity-40"
+                                                        />
+                                                        <input
+                                                            type="password"
+                                                            autoComplete="off"
+                                                            placeholder={t(meta.webhookSecretLabelKey)}
+                                                            value={secrets[provider]}
+                                                            disabled={!canFeature}
+                                                            onChange={(e) => setSecrets((s) => ({ ...s, [provider]: e.target.value }))}
+                                                            className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none disabled:opacity-40"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                        <p className="text-xs text-(--text-muted)">{t(meta.webhookHintKey)}</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleConnect(provider)}
+                                                            disabled={busy[`connect:${provider}`] || !canFeature}
+                                                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                                        >
+                                                            {busy[`connect:${provider}`] ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <Plug className="h-4 w-4" />
+                                                            )}
+                                                            {t("settings.integrations.connect")}
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <input
-                                                    type="password"
-                                                    autoComplete="off"
-                                                    placeholder={t(meta.webhookSecretLabelKey)}
-                                                    value={secrets[provider]}
-                                                    disabled={!canFeature}
-                                                    onChange={(e) => setSecrets((s) => ({ ...s, [provider]: e.target.value }))}
-                                                    className="w-full rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--text-primary) focus:border-brand-500 focus:outline-none disabled:opacity-40"
-                                                />
-                                                <p className="text-xs text-(--text-muted)">{t(meta.webhookHintKey)}</p>
                                                 <details className="rounded-lg border border-(--border) bg-(--bg) p-3">
                                                     <summary className="cursor-pointer text-xs font-medium text-(--text-secondary)">
                                                         {t("settings.integrations.guidedTitle")}

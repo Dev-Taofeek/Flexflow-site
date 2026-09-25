@@ -63,8 +63,9 @@ export async function apiRequest(
     // automatically on the next session read. Only sign out if the refresh token
     // is also gone (session.error === "RefreshAccessTokenError" set in AppContext).
     if (res.status === 401) {
-        if (toast) emitToast("Session expired. Please sign in again.", "error");
-        throw Object.assign(new Error("Unauthorized"), { status: 401 });
+        const message = json.error?.message || "Session expired. Please sign in again.";
+        if (toast) emitToast(message, "error");
+        throw Object.assign(new Error(message), { status: 401, code: json.error?.code });
     }
 
     if (!res.ok || !json.success) {

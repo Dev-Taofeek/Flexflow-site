@@ -8,6 +8,15 @@ import { prisma } from "../lib/prisma.js";
 import { planInfoForOrg } from "../lib/entitlements.js";
 import { secureEqual } from "../lib/secure-compare.js";
 import { verifyTotp, matchRecoveryCode, readTotpSecret } from "../lib/twofa.js";
+import {
+    createSession,
+    ensureSessionForToken,
+    hashSessionToken,
+    ipBlockedForUser,
+    maxSessionAgeForUser,
+    passwordMinLengthForUser,
+} from "../lib/sessions.js";
+import { clientIpFrom } from "../lib/audit.js";
 import { authRateLimiter } from "../middleware/rate-limit.middleware.js";
 import { signEnrollmentToken } from "../middleware/enrollment.middleware.js";
 import { sendTransactionalEmail } from "../services/email.service.js";
@@ -35,6 +44,63 @@ function signRefreshToken(userId, remember = false) {
         expiresIn: remember ? REMEMBERED_SESSION_TTL : DEFAULT_SESSION_TTL,
         jwtid: crypto.randomBytes(16).toString("hex"),
     });
+}
+
+function sessionDevice(req) {
+    return typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null;
+}
+
+async function recordLoginSession({ userId, refreshToken, remember, req }) {
+    const maxAge = await maxSessionAgeForUser(userId);
+    await createSession({
+        userId,
+        token: refreshToken,
+        remember,
+        deviceName: sessionDevice(req),
+        ipAddress: clientIpFrom(req),
+        sessionMaxAgeDays: maxAge,
+    }).catch((e) => {
+        console.warn("session save skipped (run prisma db push):", e.message);
+    });
+}
+
+// Rotates the refresh token while keeping activity on the same session row and
+// enforcing the org's security policy (session max age + IP allow-list).
+async function rotateSessionForUser({ user, req }) {
+    const session = await ensureSessionForToken({
+        token: user.refreshToken,
+        userId: user.id,
+        deviceName: sessionDevice(req),
+        ipAddress: clientIpFrom(req),
+    });
+
+    if (session && session.expiresAt && session.expiresAt < new Date()) {
+        await prisma.userSession.delete({ where: { id: session.id } }).catch(() => {});
+        await prisma.user.update({ where: { id: user.id }, data: { refreshToken: null } }).catch(() => {});
+        throw new Error("session_expired");
+    }
+
+    const ip = clientIpFrom(req);
+    if (await ipBlockedForUser(user.id, ip)) {
+        if (session) await prisma.userSession.delete({ where: { id: session.id } }).catch(() => {});
+        await prisma.user.update({ where: { id: user.id }, data: { refreshToken: null } }).catch(() => {});
+        throw new Error("ip_blocked");
+    }
+
+    const decoded = jwt.verify(user.refreshToken, env.JWT_REFRESH_SECRET);
+    const newRefreshToken = signRefreshToken(user.id, decoded.remember);
+
+    await prisma.$transaction([
+        prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefreshToken } }),
+        ...(session
+            ? [prisma.userSession.update({
+                where: { id: session.id },
+                data: { tokenHash: hashSessionToken(newRefreshToken), lastUsedAt: new Date() },
+            })]
+            : []),
+    ]).catch(() => {});
+
+    return { accessToken: signAccessToken(user.id), refreshToken: newRefreshToken };
 }
 
 // Roles with org-level visibility across every workspace in the org.
@@ -139,6 +205,8 @@ router.post("/oauth", authRateLimiter, async (req, res) => {
             console.warn("refreshToken save skipped (run prisma migrate):", e.message);
         });
 
+        await recordLoginSession({ userId: user.id, refreshToken, remember: true, req });
+
         return res.status(200).json(successResponse({
             user,
             accessToken,
@@ -203,6 +271,8 @@ router.post("/register", authRateLimiter, async (req, res) => {
         await prisma.user.update({ where: { id: user.id }, data: { refreshToken } }).catch((e) => {
             console.warn("refreshToken save skipped (run prisma migrate):", e.message);
         });
+
+        await recordLoginSession({ userId: user.id, refreshToken, remember: false, req });
 
         return res.status(201).json(successResponse({ user, accessToken, refreshToken }));
     } catch (error) {
@@ -307,12 +377,22 @@ router.post("/login", authRateLimiter, async (req, res) => {
             }
         }
 
+        const clientIp = clientIpFrom(req);
+        if (await ipBlockedForUser(user.id, clientIp)) {
+            return res.status(403).json(errorResponse(
+                "IP_BLOCKED",
+                "Your IP address is not allowed by your organization's security policy. Contact your admin.",
+            ));
+        }
+
         const accessToken = signAccessToken(user.id);
         const refreshToken = signRefreshToken(user.id, rememberMe);
 
         await prisma.user.update({ where: { id: user.id }, data: { refreshToken } }).catch((e) => {
             console.warn("refreshToken save skipped (run prisma migrate):", e.message);
         });
+
+        await recordLoginSession({ userId: user.id, refreshToken, remember: rememberMe, req });
 
         return res.status(200).json(successResponse({
             user: safeUser,
@@ -345,15 +425,8 @@ router.post("/refresh", authRateLimiter, async (req, res) => {
                 return res.status(401).json(errorResponse("UNAUTHORIZED", "Invalid session"));
             }
 
-            const decoded = jwt.verify(user.refreshToken, env.JWT_REFRESH_SECRET);
-            const accessToken = signAccessToken(user.id);
-
-            // Rotate the refresh token so the session slides forward on
-            // activity, preserving the user's "remember me" choice.
-            const newRefreshToken = signRefreshToken(user.id, decoded.remember);
-            await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefreshToken } }).catch(() => {});
-
-            return res.status(200).json(successResponse({ accessToken }));
+            const rotated = await rotateSessionForUser({ user, req });
+            return res.status(200).json(successResponse({ accessToken: rotated.accessToken }));
         }
 
         // Legacy: refresh token passed in body (old cookies still in the wild)
@@ -372,13 +445,12 @@ router.post("/refresh", authRateLimiter, async (req, res) => {
             return res.status(401).json(errorResponse("UNAUTHORIZED", "Invalid session"));
         }
 
-        const accessToken = signAccessToken(user.id);
+        const rotated = await rotateSessionForUser({ user, req });
+        return res.status(200).json(successResponse({
+            accessToken: rotated.accessToken,
+            refreshToken: rotated.refreshToken,
+        }));
 
-        // Rotate the refresh token so an absorbed token cannot be replayed.
-        const newRefreshToken = signRefreshToken(user.id, decoded.remember);
-        await prisma.user.update({ where: { id: user.id }, data: { refreshToken: newRefreshToken } }).catch(() => {});
-
-        return res.status(200).json(successResponse({ accessToken, refreshToken: newRefreshToken }));
     } catch {
         return res.status(401).json(errorResponse("UNAUTHORIZED", "Invalid or expired refresh token"));
     }
@@ -489,6 +561,11 @@ router.post("/reset-password", authRateLimiter, async (req, res) => {
         const user = await prisma.user.findUnique({ where: { passwordResetToken: token } });
         if (!user || !user.passwordResetExpiry || user.passwordResetExpiry < new Date()) {
             return res.status(400).json(errorResponse("INVALID_TOKEN", "Reset link is invalid or has expired"));
+        }
+
+        const minLength = await passwordMinLengthForUser(user.id);
+        if (password.length < minLength) {
+            return res.status(422).json(errorResponse("VALIDATION_ERROR", `Password must be at least ${minLength} characters`));
         }
 
         const hash = await bcrypt.hash(password, 12);
